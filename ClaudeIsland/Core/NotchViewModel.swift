@@ -52,6 +52,7 @@ class NotchViewModel: ObservableObject {
 
     let geometry: NotchGeometry
     let spacing: CGFloat = 12
+    let hasPhysicalNotch: Bool
 
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
@@ -100,12 +101,13 @@ class NotchViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init(deviceNotchRect: CGRect, screenRect: CGRect, windowHeight: CGFloat) {
+    init(deviceNotchRect: CGRect, screenRect: CGRect, windowHeight: CGFloat, hasPhysicalNotch: Bool) {
         self.geometry = NotchGeometry(
             deviceNotchRect: deviceNotchRect,
             screenRect: screenRect,
             windowHeight: windowHeight
         )
+        self.hasPhysicalNotch = hasPhysicalNotch
         setupEventHandlers()
     }
 
