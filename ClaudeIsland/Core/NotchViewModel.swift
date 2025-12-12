@@ -26,14 +26,12 @@ enum NotchOpenReason {
 enum NotchContentType: Equatable {
     case instances
     case menu
-    case soundSelection
     case chat(SessionState)
 
     var id: String {
         switch self {
         case .instances: return "instances"
         case .menu: return "menu"
-        case .soundSelection: return "soundSelection"
         case .chat(let session): return "chat-\(session.sessionId)"
         }
     }
@@ -51,6 +49,7 @@ class NotchViewModel: ObservableObject {
     // MARK: - Dependencies
 
     private let screenSelector = ScreenSelector.shared
+    private let soundSelector = SoundSelector.shared
 
     // MARK: - Geometry
 
@@ -75,13 +74,7 @@ class NotchViewModel: ObservableObject {
             // Compact size for settings menu
             return CGSize(
                 width: min(screenRect.width * 0.4, 480),
-                height: 420 + screenSelector.expandedPickerHeight
-            )
-        case .soundSelection:
-            // Taller size for sound selection list
-            return CGSize(
-                width: min(screenRect.width * 0.4, 480),
-                height: 500
+                height: 420 + screenSelector.expandedPickerHeight + soundSelector.expandedPickerHeight
             )
         case .instances:
             return CGSize(
@@ -113,11 +106,15 @@ class NotchViewModel: ObservableObject {
         )
         self.hasPhysicalNotch = hasPhysicalNotch
         setupEventHandlers()
-        observeScreenSelector()
+        observeSelectors()
     }
 
-    private func observeScreenSelector() {
+    private func observeSelectors() {
         screenSelector.$isPickerExpanded
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        soundSelector.$isPickerExpanded
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
     }

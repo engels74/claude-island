@@ -356,8 +356,6 @@ struct NotchView: View {
                 )
             case .menu:
                 NotchMenuView(viewModel: viewModel)
-            case .soundSelection:
-                SoundSelectionView(viewModel: viewModel)
             case .chat(let session):
                 ChatView(
                     sessionId: session.sessionId,
