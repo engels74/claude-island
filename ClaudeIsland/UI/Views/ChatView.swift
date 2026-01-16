@@ -188,7 +188,7 @@ struct ChatView: View {
     // MARK: - Keyboard Event Monitoring
 
     /// Logger for image paste operations
-    private static let logger = Logger(subsystem: "com.claude-island", category: "ChatView")
+    private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ChatView")
 
     @State private var inputText = ""
     @State private var history: [ChatHistoryItem] = []
@@ -663,7 +663,18 @@ struct ChatView: View {
         // Need either text or image to send
         guard !text.isEmpty || image != nil else { return }
 
-        // Clear input state
+        // Try to save image first (if present)
+        var imagePath: String?
+        if let image {
+            imagePath = self.saveImageToTemp(image)
+            // If we only have an image (no text) and saving failed, don't proceed
+            if text.isEmpty && imagePath == nil {
+                Self.logger.warning("Image save failed and no text provided - not sending")
+                return
+            }
+        }
+
+        // Clear input state (only after confirming we have something to send)
         self.inputText = ""
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             self.pendingImage = nil
@@ -675,7 +686,7 @@ struct ChatView: View {
 
         // Build the message, including image path if present
         var messageToSend = text
-        if let image, let imagePath = self.saveImageToTemp(image) {
+        if let imagePath {
             // Prepend image path to message
             if text.isEmpty {
                 messageToSend = imagePath
