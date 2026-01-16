@@ -40,6 +40,6 @@ struct TmuxTarget: Sendable {
     let pane: String
 
     nonisolated var targetString: String {
-        "\(session):\(window).\(pane)"
+        "\(self.session):\(self.window).\(self.pane)"
     }
 }

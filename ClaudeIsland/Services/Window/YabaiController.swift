@@ -28,14 +28,14 @@ actor YabaiController {
         let windows = await WindowFinder.shared.getAllWindows()
         let tree = ProcessTreeBuilder.shared.buildTree()
 
-        return await focusTmuxInstance(claudePID: claudePID, tree: tree, windows: windows)
+        return await self.focusTmuxInstance(claudePID: claudePID, tree: tree, windows: windows)
     }
 
     /// Focus the terminal window for a given working directory (tmux only, fallback)
     func focusWindow(forWorkingDirectory workingDirectory: String) async -> Bool {
         guard await WindowFinder.shared.isYabaiAvailable() else { return false }
 
-        return await focusWindow(forWorkingDir: workingDirectory)
+        return await self.focusWindow(forWorkingDir: workingDirectory)
     }
 
     // MARK: Private
@@ -63,7 +63,7 @@ actor YabaiController {
         let windows = await WindowFinder.shared.getAllWindows()
         let tree = ProcessTreeBuilder.shared.buildTree()
 
-        return await focusTmuxPane(forWorkingDir: workingDir, tree: tree, windows: windows)
+        return await self.focusTmuxPane(forWorkingDir: workingDir, tree: tree, windows: windows)
     }
 
     // MARK: - Tmux Helpers
@@ -86,7 +86,7 @@ actor YabaiController {
                 var currentPID = clientPID
                 while currentPID > 1 {
                     guard let info = tree[currentPID] else { break }
-                    if isTerminalProcess(info.command) && windowPIDs.contains(currentPID) {
+                    if self.isTerminalProcess(info.command) && windowPIDs.contains(currentPID) {
                         return currentPID
                     }
                     currentPID = info.ppid

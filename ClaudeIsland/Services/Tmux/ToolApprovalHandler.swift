@@ -23,25 +23,25 @@ actor ToolApprovalHandler {
 
     /// Approve a tool once (sends '1' + Enter)
     func approveOnce(target: TmuxTarget) async -> Bool {
-        await sendKeys(to: target, keys: "1", pressEnter: true)
+        await self.sendKeys(to: target, keys: "1", pressEnter: true)
     }
 
     /// Approve a tool always (sends '2' + Enter)
     func approveAlways(target: TmuxTarget) async -> Bool {
-        await sendKeys(to: target, keys: "2", pressEnter: true)
+        await self.sendKeys(to: target, keys: "2", pressEnter: true)
     }
 
     /// Reject a tool with optional message
     func reject(target: TmuxTarget, message: String? = nil) async -> Bool {
         // First send 'n' + Enter to reject
-        guard await sendKeys(to: target, keys: "n", pressEnter: true) else {
+        guard await self.sendKeys(to: target, keys: "n", pressEnter: true) else {
             return false
         }
 
         // If there's a message, send it after a brief delay
         if let message, !message.isEmpty {
             try? await Task.sleep(for: .milliseconds(100))
-            return await sendKeys(to: target, keys: message, pressEnter: true)
+            return await self.sendKeys(to: target, keys: message, pressEnter: true)
         }
 
         return true
@@ -49,7 +49,7 @@ actor ToolApprovalHandler {
 
     /// Send a message to a tmux target
     func sendMessage(_ message: String, to target: TmuxTarget) async -> Bool {
-        await sendKeys(to: target, keys: message, pressEnter: true)
+        await self.sendKeys(to: target, keys: message, pressEnter: true)
     }
 
     // MARK: Private

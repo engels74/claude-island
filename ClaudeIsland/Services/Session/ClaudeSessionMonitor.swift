@@ -26,7 +26,7 @@ final class ClaudeSessionMonitor {
             .sink { [weak self] sessions in
                 self?.updateFromSessions(sessions)
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
 
         InterruptWatcherManager.shared.delegate = self
     }
@@ -49,7 +49,7 @@ final class ClaudeSessionMonitor {
                     let task = Task {
                         await SessionStore.shared.process(.hookReceived(event))
                     }
-                    trackTask(task)
+                    self.trackTask(task)
 
                     if event.sessionPhase == .processing {
                         let watchTask = Task { @MainActor in
@@ -58,14 +58,14 @@ final class ClaudeSessionMonitor {
                                 cwd: event.cwd
                             )
                         }
-                        trackTask(watchTask)
+                        self.trackTask(watchTask)
                     }
 
                     if event.status == "ended" {
                         let stopTask = Task { @MainActor in
                             InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
                         }
-                        trackTask(stopTask)
+                        self.trackTask(stopTask)
                     }
 
                     if event.event == "Stop" {
@@ -87,14 +87,14 @@ final class ClaudeSessionMonitor {
                             .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
                         )
                     }
-                    trackTask(task)
+                    self.trackTask(task)
                 }
             }
         )
     }
 
     func stopMonitoring() {
-        cancelAllTasks()
+        self.cancelAllTasks()
         HookSocketServer.shared.stop()
     }
 
@@ -167,25 +167,25 @@ final class ClaudeSessionMonitor {
     /// Track a task for cancellation on stop
     private func trackTask(_ task: Task<Void, Never>) {
         let id = UUID()
-        tasksLock.lock()
-        activeTasks[id] = task
-        tasksLock.unlock()
+        self.tasksLock.lock()
+        self.activeTasks[id] = task
+        self.tasksLock.unlock()
 
         // Auto-remove when task completes
         Task {
             _ = await task.result
-            tasksLock.lock()
-            activeTasks.removeValue(forKey: id)
-            tasksLock.unlock()
+            self.tasksLock.lock()
+            self.activeTasks.removeValue(forKey: id)
+            self.tasksLock.unlock()
         }
     }
 
     /// Cancel all tracked tasks
     private func cancelAllTasks() {
-        tasksLock.lock()
-        let tasks = activeTasks.values
-        activeTasks.removeAll()
-        tasksLock.unlock()
+        self.tasksLock.lock()
+        let tasks = self.activeTasks.values
+        self.activeTasks.removeAll()
+        self.tasksLock.unlock()
 
         for task in tasks {
             task.cancel()
@@ -195,8 +195,8 @@ final class ClaudeSessionMonitor {
     // MARK: - State Update
 
     private func updateFromSessions(_ sessions: [SessionState]) {
-        instances = sessions
-        pendingInstances = sessions.filter(\.needsAttention)
+        self.instances = sessions
+        self.pendingInstances = sessions.filter(\.needsAttention)
     }
 }
 

@@ -47,7 +47,7 @@ enum TerminalVisibilityDetector {
     /// - Returns: true if the session's terminal is frontmost and (for tmux) the pane is active
     static func isSessionFocused(sessionPID: Int) async -> Bool {
         // If no terminal is frontmost, session is definitely not focused
-        guard isTerminalFrontmost() else {
+        guard self.isTerminalFrontmost() else {
             return false
         }
 

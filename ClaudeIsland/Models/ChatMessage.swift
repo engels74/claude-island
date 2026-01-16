@@ -17,7 +17,7 @@ struct ChatMessage: Identifiable, Equatable, Sendable {
 
     /// Plain text content combined
     var textContent: String {
-        content
+        self.content
             .compactMap { block in
                 if case let .text(text) = block {
                     return text
@@ -93,6 +93,6 @@ struct ToolUseBlock: Equatable, Sendable {
         if let pattern = input["pattern"] {
             return pattern
         }
-        return input.values.first.map { String($0.prefix(50)) } ?? ""
+        return self.input.values.first.map { String($0.prefix(50)) } ?? ""
     }
 }

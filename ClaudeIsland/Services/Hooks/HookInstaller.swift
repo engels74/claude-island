@@ -32,7 +32,7 @@ enum HookInstaller {
             )
         }
 
-        updateSettings(at: settings)
+        self.updateSettings(at: settings)
     }
 
     /// Check if hooks are currently installed
@@ -125,7 +125,7 @@ enum HookInstaller {
             json = existing
         }
 
-        let python = detectPython()
+        let python = self.detectPython()
         let command = "\(python) ~/.claude/hooks/claude-island-state.py"
         let hookEntry: [[String: Any]] = [["type": "command", "command": command]]
         let hookEntryWithTimeout: [[String: Any]] = [["type": "command", "command": command, "timeout": 86400]]

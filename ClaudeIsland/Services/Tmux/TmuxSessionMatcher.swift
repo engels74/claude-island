@@ -31,7 +31,7 @@ actor TmuxSessionMatcher {
             return nil
         }
 
-        let snippets = extractSnippets(from: paneContent)
+        let snippets = self.extractSnippets(from: paneContent)
         guard snippets.count >= 2 else {
             return nil
         }
@@ -51,7 +51,7 @@ actor TmuxSessionMatcher {
 
         for sessionURL in sessionFiles {
             let sessionID = sessionURL.deletingPathExtension().lastPathComponent
-            let score = countMatchingSnippets(snippets: snippets, inFile: sessionURL)
+            let score = self.countMatchingSnippets(snippets: snippets, inFile: sessionURL)
 
             if score > 0 {
                 if let existing = bestMatch {

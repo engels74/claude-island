@@ -62,7 +62,7 @@ class NotchWindowController: NSWindowController {
         // Dynamically toggle mouse event handling based on notch state:
         // - Closed: ignoresMouseEvents = true (clicks pass through to menu bar/apps)
         // - Opened: ignoresMouseEvents = false (buttons inside panel work)
-        viewModel.statusPublisher
+        self.viewModel.statusPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak notchWindow, weak viewModel] (status: NotchStatus) in
                 switch status {
@@ -80,7 +80,7 @@ class NotchWindowController: NSWindowController {
                     notchWindow?.ignoresMouseEvents = true
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
 
         // Start with ignoring mouse events (closed state)
         notchWindow.ignoresMouseEvents = true

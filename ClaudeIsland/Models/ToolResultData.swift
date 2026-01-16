@@ -39,7 +39,7 @@ struct ReadResult: Equatable, Sendable {
     let totalLines: Int
 
     var filename: String {
-        URL(fileURLWithPath: filePath).lastPathComponent
+        URL(fileURLWithPath: self.filePath).lastPathComponent
     }
 }
 
@@ -54,7 +54,7 @@ struct EditResult: Equatable, Sendable {
     let structuredPatch: [PatchHunk]?
 
     var filename: String {
-        URL(fileURLWithPath: filePath).lastPathComponent
+        URL(fileURLWithPath: self.filePath).lastPathComponent
     }
 }
 
@@ -82,7 +82,7 @@ struct WriteResult: Equatable, Sendable {
     let structuredPatch: [PatchHunk]?
 
     var filename: String {
-        URL(fileURLWithPath: filePath).lastPathComponent
+        URL(fileURLWithPath: self.filePath).lastPathComponent
     }
 }
 
@@ -97,15 +97,15 @@ struct BashResult: Equatable, Sendable {
     let backgroundTaskID: String?
 
     var hasOutput: Bool {
-        !stdout.isEmpty || !stderr.isEmpty
+        !self.stdout.isEmpty || !self.stderr.isEmpty
     }
 
     var displayOutput: String {
-        if !stdout.isEmpty {
-            return stdout
+        if !self.stdout.isEmpty {
+            return self.stdout
         }
-        if !stderr.isEmpty {
-            return stderr
+        if !self.stderr.isEmpty {
+            return self.stderr
         }
         return "(No content)"
     }
@@ -288,7 +288,7 @@ struct ToolStatusDisplay {
         guard let result else {
             return Self(text: "Completed", isRunning: false)
         }
-        return Self(text: completedStatusText(for: result), isRunning: false)
+        return Self(text: self.completedStatusText(for: result), isRunning: false)
     }
 
     // MARK: Private
@@ -307,7 +307,7 @@ struct ToolStatusDisplay {
         if let simple = simpleRunningStatus[toolName] {
             return simple
         }
-        return inputBasedRunningStatus(for: toolName, input: input)
+        return self.inputBasedRunningStatus(for: toolName, input: input)
     }
 
     private static func inputBasedRunningStatus(for toolName: String, input: [String: String]) -> String? {
@@ -329,17 +329,17 @@ struct ToolStatusDisplay {
     private static func completedStatusText(for result: ToolResultData) -> String {
         switch result {
         case let .read(readRes):
-            formatReadStatus(readRes)
+            self.formatReadStatus(readRes)
         case let .edit(editRes):
             "Edited \(editRes.filename)"
         case let .write(writeRes):
             "\(writeRes.type == .create ? "Created" : "Wrote") \(writeRes.filename)"
         case let .bash(bashRes):
-            formatBashStatus(bashRes)
+            self.formatBashStatus(bashRes)
         case let .grep(grepRes):
-            formatCountStatus("Found", grepRes.numFiles, "file")
+            self.formatCountStatus("Found", grepRes.numFiles, "file")
         case let .glob(globRes):
-            globRes.numFiles == 0 ? "No files found" : formatCountStatus("Found", globRes.numFiles, "file")
+            globRes.numFiles == 0 ? "No files found" : self.formatCountStatus("Found", globRes.numFiles, "file")
         case .todoWrite:
             "Updated todos"
         case let .task(taskRes):
@@ -347,7 +347,7 @@ struct ToolStatusDisplay {
         case let .webFetch(fetchRes):
             "\(fetchRes.code) \(fetchRes.codeText)"
         case let .webSearch(searchRes):
-            formatSearchStatus(searchRes)
+            self.formatSearchStatus(searchRes)
         case .askUserQuestion:
             "Answered"
         case let .bashOutput(outputRes):

@@ -41,7 +41,7 @@ actor SessionStore {
 
     /// Public publisher for UI subscription
     nonisolated var sessionsPublisher: AnyPublisher<[SessionState], Never> {
-        sessionsSubject.eraseToAnyPublisher()
+        self.sessionsSubject.eraseToAnyPublisher()
     }
 
     // MARK: - Event Processing
@@ -51,41 +51,41 @@ actor SessionStore {
         Self.logger.debug("Processing: \(String(describing: event), privacy: .public)")
 
         // Record to audit trail
-        recordAuditEntry(event: event)
+        self.recordAuditEntry(event: event)
 
         switch event {
         case let .hookReceived(hookEvent):
-            await processHookEvent(hookEvent)
+            await self.processHookEvent(hookEvent)
 
         case let .permissionApproved(sessionID, toolUseID):
-            await processPermissionApproved(sessionID: sessionID, toolUseID: toolUseID)
+            await self.processPermissionApproved(sessionID: sessionID, toolUseID: toolUseID)
 
         case let .permissionDenied(sessionID, toolUseID, reason):
-            await processPermissionDenied(sessionID: sessionID, toolUseID: toolUseID, reason: reason)
+            await self.processPermissionDenied(sessionID: sessionID, toolUseID: toolUseID, reason: reason)
 
         case let .permissionSocketFailed(sessionID, toolUseID):
-            await processSocketFailure(sessionID: sessionID, toolUseID: toolUseID)
+            await self.processSocketFailure(sessionID: sessionID, toolUseID: toolUseID)
 
         case let .fileUpdated(payload):
-            await processFileUpdate(payload)
+            await self.processFileUpdate(payload)
 
         case let .interruptDetected(sessionID):
-            await processInterrupt(sessionID: sessionID)
+            await self.processInterrupt(sessionID: sessionID)
 
         case let .clearDetected(sessionID):
-            await processClearDetected(sessionID: sessionID)
+            await self.processClearDetected(sessionID: sessionID)
 
         case let .sessionEnded(sessionID):
-            await processSessionEnd(sessionID: sessionID)
+            await self.processSessionEnd(sessionID: sessionID)
 
         case let .loadHistory(sessionID, cwd):
-            await loadHistoryFromFile(sessionID: sessionID, cwd: cwd)
+            await self.loadHistoryFromFile(sessionID: sessionID, cwd: cwd)
 
         case let .historyLoaded(payload):
-            await processHistoryLoaded(payload)
+            await self.processHistoryLoaded(payload)
 
         case let .toolCompleted(sessionID, toolUseID, result):
-            await processToolCompleted(sessionID: sessionID, toolUseID: toolUseID, result: result)
+            await self.processToolCompleted(sessionID: sessionID, toolUseID: toolUseID, result: result)
 
         // MARK: - Subagent Events
 
@@ -106,14 +106,14 @@ actor SessionStore {
             break
         }
 
-        publishState()
+        self.publishState()
     }
 
     // MARK: - Queries
 
     /// Get a specific session
     func session(for sessionID: String) -> SessionState? {
-        sessions[sessionID]
+        self.sessions[sessionID]
     }
 
     /// Check if there's an active permission for a session
@@ -127,12 +127,12 @@ actor SessionStore {
 
     /// Get all current sessions
     func allSessions() -> [SessionState] {
-        Array(sessions.values)
+        Array(self.sessions.values)
     }
 
     /// Get recent events for debugging (most recent first)
     func recentEvents(limit: Int = 20) -> [(timestamp: Date, event: String, sessionID: String?)] {
-        eventAuditTrail.suffix(limit).reversed().map {
+        self.eventAuditTrail.suffix(limit).reversed().map {
             (timestamp: $0.timestamp, event: $0.event, sessionID: $0.sessionID)
         }
     }
@@ -177,11 +177,11 @@ actor SessionStore {
             sessionID: event.sessionID
         )
 
-        eventAuditTrail.append(entry)
+        self.eventAuditTrail.append(entry)
 
         // Trim if over limit (ring buffer)
-        if eventAuditTrail.count > maxAuditEntries {
-            eventAuditTrail.removeFirst(eventAuditTrail.count - maxAuditEntries)
+        if self.eventAuditTrail.count > self.maxAuditEntries {
+            self.eventAuditTrail.removeFirst(self.eventAuditTrail.count - self.maxAuditEntries)
         }
     }
 
@@ -189,8 +189,8 @@ actor SessionStore {
 
     private func processHookEvent(_ event: HookEvent) async {
         let sessionID = event.sessionID
-        let isNewSession = sessions[sessionID] == nil
-        var session = sessions[sessionID] ?? createSession(from: event)
+        let isNewSession = self.sessions[sessionID] == nil
+        var session = self.sessions[sessionID] ?? self.createSession(from: event)
 
         // Track new session in Mixpanel
         if isNewSession {
@@ -208,8 +208,8 @@ actor SessionStore {
         session.lastActivity = Date()
 
         if event.status == "ended" {
-            sessions.removeValue(forKey: sessionID)
-            cancelPendingSync(sessionID: sessionID)
+            self.sessions.removeValue(forKey: sessionID)
+            self.cancelPendingSync(sessionID: sessionID)
             return
         }
 
@@ -226,21 +226,21 @@ actor SessionStore {
 
         if event.event == "PermissionRequest", let toolUseID = event.toolUseID {
             Self.logger.debug("Setting tool \(toolUseID.prefix(12), privacy: .public) status to waitingForApproval")
-            updateToolStatus(in: &session, toolID: toolUseID, status: .waitingForApproval)
+            self.updateToolStatus(in: &session, toolID: toolUseID, status: .waitingForApproval)
         }
 
-        processToolTracking(event: event, session: &session)
+        self.processToolTracking(event: event, session: &session)
         trackSubagent(event: event, session: &session)
 
         if event.event == "Stop" {
             session.subagentState = SubagentState()
         }
 
-        sessions[sessionID] = session
-        publishState()
+        self.sessions[sessionID] = session
+        self.publishState()
 
         if event.shouldSyncFile {
-            scheduleFileSync(sessionID: sessionID, cwd: event.cwd)
+            self.scheduleFileSync(sessionID: sessionID, cwd: event.cwd)
         }
     }
 
@@ -340,7 +340,7 @@ actor SessionStore {
         guard var session = sessions[sessionID] else { return }
 
         // Update tool status in chat history first
-        updateToolStatus(in: &session, toolID: toolUseID, status: .running)
+        self.updateToolStatus(in: &session, toolID: toolUseID, status: .running)
 
         // Check if there are other tools still waiting for approval
         if let nextPending = findNextPendingTool(in: session, excluding: toolUseID) {
@@ -370,7 +370,7 @@ actor SessionStore {
             }
         }
 
-        sessions[sessionID] = session
+        self.sessions[sessionID] = session
     }
 
     // MARK: - Tool Completion Processing
@@ -427,7 +427,7 @@ actor SessionStore {
             }
         }
 
-        sessions[sessionID] = session
+        self.sessions[sessionID] = session
     }
 
     /// Find the next tool waiting for approval (excluding a specific tool ID)
@@ -445,7 +445,7 @@ actor SessionStore {
         guard var session = sessions[sessionID] else { return }
 
         // Update tool status in chat history first
-        updateToolStatus(in: &session, toolID: toolUseID, status: .error)
+        self.updateToolStatus(in: &session, toolID: toolUseID, status: .error)
 
         // Check if there are other tools still waiting for approval
         if let nextPending = findNextPendingTool(in: session, excluding: toolUseID) {
@@ -474,14 +474,14 @@ actor SessionStore {
             }
         }
 
-        sessions[sessionID] = session
+        self.sessions[sessionID] = session
     }
 
     private func processSocketFailure(sessionID: String, toolUseID: String) async {
         guard var session = sessions[sessionID] else { return }
 
         // Mark the failed tool's status as error
-        updateToolStatus(in: &session, toolID: toolUseID, status: .error)
+        self.updateToolStatus(in: &session, toolID: toolUseID, status: .error)
 
         // Check if there are other tools still waiting for approval
         if let nextPending = findNextPendingTool(in: session, excluding: toolUseID) {
@@ -506,7 +506,7 @@ actor SessionStore {
             }
         }
 
-        sessions[sessionID] = session
+        self.sessions[sessionID] = session
     }
 
     // MARK: - File Update Processing
@@ -555,7 +555,7 @@ actor SessionStore {
             Self.logger.debug("Clear reconciliation: kept \(session.chatItems.count) of \(previousCount) items")
         }
 
-        processMessages(
+        self.processMessages(
             from: payload,
             into: &session
         )
@@ -566,15 +566,15 @@ actor SessionStore {
 
         session.toolTracker.lastSyncTime = Date()
 
-        await populateSubagentToolsFromAgentFiles(
+        await self.populateSubagentToolsFromAgentFiles(
             session: &session,
             cwd: payload.cwd,
             structuredResults: payload.structuredResults
         )
 
-        sessions[payload.sessionID] = session
+        self.sessions[payload.sessionID] = session
 
-        await emitToolCompletionEvents(
+        await self.emitToolCompletionEvents(
             sessionID: payload.sessionID,
             session: session,
             completedToolIDs: payload.completedToolIDs,
@@ -668,7 +668,7 @@ actor SessionStore {
                     name: info.name,
                     input: info.input,
                     status: info.isCompleted ? .success : .running,
-                    timestamp: parseTimestamp(info.timestamp) ?? Date()
+                    timestamp: self.parseTimestamp(info.timestamp) ?? Date()
                 )
             }
 
@@ -706,7 +706,7 @@ actor SessionStore {
             )
 
             // Process the completion event (this will update state and phase consistently)
-            await process(.toolCompleted(sessionID: sessionID, toolUseID: item.id, result: result))
+            await self.process(.toolCompleted(sessionID: sessionID, toolUseID: item.id, result: result))
         }
     }
 
@@ -757,7 +757,7 @@ actor SessionStore {
             session.phase = .idle
         }
 
-        sessions[sessionID] = session
+        self.sessions[sessionID] = session
     }
 
     // MARK: - Clear Processing
@@ -770,7 +770,7 @@ actor SessionStore {
         // Mark that a clear happened - the next fileUpdated will reconcile
         // by removing items that no longer exist in the parser's state
         session.needsClearReconciliation = true
-        sessions[sessionID] = session
+        self.sessions[sessionID] = session
 
         Self.logger.info("/clear processed for session \(sessionID.prefix(8), privacy: .public) - marked for reconciliation")
     }
@@ -778,8 +778,8 @@ actor SessionStore {
     // MARK: - Session End Processing
 
     private func processSessionEnd(sessionID: String) async {
-        sessions.removeValue(forKey: sessionID)
-        cancelPendingSync(sessionID: sessionID)
+        self.sessions.removeValue(forKey: sessionID)
+        self.cancelPendingSync(sessionID: sessionID)
     }
 
     // MARK: - History Loading
@@ -801,7 +801,7 @@ actor SessionStore {
         )
 
         // Process loaded history
-        await process(.historyLoaded(HistoryLoadedPayload(
+        await self.process(.historyLoaded(HistoryLoadedPayload(
             sessionID: sessionID,
             messages: messages,
             completedTools: completedTools,
@@ -844,23 +844,23 @@ actor SessionStore {
         // Sort by timestamp
         session.chatItems.sort { $0.timestamp < $1.timestamp }
 
-        sessions[payload.sessionID] = session
+        self.sessions[payload.sessionID] = session
     }
 
     // MARK: - File Sync Scheduling
 
     private func scheduleFileSync(sessionID: String, cwd: String) {
         // Cancel existing sync
-        cancelPendingSync(sessionID: sessionID)
+        self.cancelPendingSync(sessionID: sessionID)
 
         // Schedule new debounced sync
         // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
-        pendingSyncs[sessionID] = Task {
+        self.pendingSyncs[sessionID] = Task {
             try? await Task.sleep(nanoseconds: self.syncDebounceNs)
             guard !Task.isCancelled else { return }
 
             // Revalidate session still exists after sleep (actor reentrancy protection)
-            guard sessions[sessionID] != nil else { return }
+            guard self.sessions[sessionID] != nil else { return }
 
             // Parse incrementally - only get NEW messages since last call
             let result = await ConversationParser.shared.parseIncremental(
@@ -872,7 +872,7 @@ actor SessionStore {
             guard !Task.isCancelled else { return }
 
             if result.clearDetected {
-                await process(.clearDetected(sessionID: sessionID))
+                await self.process(.clearDetected(sessionID: sessionID))
                 // Recheck cancellation after clear processing
                 guard !Task.isCancelled else { return }
             }
@@ -882,7 +882,7 @@ actor SessionStore {
             }
 
             // Revalidate session still exists before processing file update
-            guard sessions[sessionID] != nil else { return }
+            guard self.sessions[sessionID] != nil else { return }
 
             let payload = FileUpdatePayload(
                 sessionID: sessionID,
@@ -894,19 +894,19 @@ actor SessionStore {
                 structuredResults: result.structuredResults
             )
 
-            await process(.fileUpdated(payload))
+            await self.process(.fileUpdated(payload))
         }
     }
 
     private func cancelPendingSync(sessionID: String) {
-        pendingSyncs[sessionID]?.cancel()
-        pendingSyncs.removeValue(forKey: sessionID)
+        self.pendingSyncs[sessionID]?.cancel()
+        self.pendingSyncs.removeValue(forKey: sessionID)
     }
 
     // MARK: - State Publishing
 
     private func publishState() {
         let sortedSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
-        sessionsSubject.send(sortedSessions)
+        self.sessionsSubject.send(sortedSessions)
     }
 }

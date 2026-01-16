@@ -166,7 +166,7 @@ enum SessionPhase: Sendable {
 
     /// Attempt to transition to a new phase, returns the new phase if valid
     nonisolated func transition(to next: Self) -> Self? {
-        canTransition(to: next) ? next : nil
+        self.canTransition(to: next) ? next : nil
     }
 
     // MARK: Private

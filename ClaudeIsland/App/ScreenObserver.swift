@@ -12,7 +12,7 @@ class ScreenObserver {
 
     init(onScreenChange: @escaping () -> Void) {
         self.onScreenChange = onScreenChange
-        startObserving()
+        self.startObserving()
     }
 
     deinit {
@@ -30,7 +30,7 @@ class ScreenObserver {
     private let debounceInterval: TimeInterval = 0.5
 
     private func startObserving() {
-        observer = NotificationCenter.default.addObserver(
+        self.observer = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
@@ -40,21 +40,21 @@ class ScreenObserver {
     }
 
     private func scheduleScreenChange() {
-        pendingWork?.cancel()
+        self.pendingWork?.cancel()
 
         let work = DispatchWorkItem { [weak self] in
             self?.onScreenChange()
         }
-        pendingWork = work
+        self.pendingWork = work
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + debounceInterval,
+            deadline: .now() + self.debounceInterval,
             execute: work
         )
     }
 
     private func stopObserving() {
-        pendingWork?.cancel()
+        self.pendingWork?.cancel()
         if let observer {
             NotificationCenter.default.removeObserver(observer)
         }

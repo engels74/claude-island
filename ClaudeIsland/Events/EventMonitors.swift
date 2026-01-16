@@ -16,7 +16,7 @@ final class EventMonitors {
     // MARK: Lifecycle
 
     private init() {
-        setupMonitors()
+        self.setupMonitors()
     }
 
     // MARK: Internal
@@ -36,25 +36,25 @@ final class EventMonitors {
         // Note: Apple documents that NSEvent monitor handlers run on the main thread.
         // Using DispatchQueue.main.async provides defensive safety in case this ever changes,
         // avoiding potential crashes from MainActor.assumeIsolated violations.
-        mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
+        self.mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.mouseLocation.send(NSEvent.mouseLocation)
             }
         }
-        mouseMoveMonitor?.start()
+        self.mouseMoveMonitor?.start()
 
-        mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
+        self.mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
             DispatchQueue.main.async {
                 self?.mouseDown.send(event)
             }
         }
-        mouseDownMonitor?.start()
+        self.mouseDownMonitor?.start()
 
-        mouseDraggedMonitor = EventMonitor(mask: .leftMouseDragged) { [weak self] _ in
+        self.mouseDraggedMonitor = EventMonitor(mask: .leftMouseDragged) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.mouseLocation.send(NSEvent.mouseLocation)
             }
         }
-        mouseDraggedMonitor?.start()
+        self.mouseDraggedMonitor?.start()
     }
 }

@@ -50,10 +50,10 @@ final class NotchActivityCoordinator {
     /// Current expanding activity (expands notch to sides)
     var expandingActivity: ExpandingActivity = .empty {
         didSet {
-            if expandingActivity.show {
-                scheduleActivityHide()
+            if self.expandingActivity.show {
+                self.scheduleActivityHide()
             } else {
-                activityTask?.cancel()
+                self.activityTask?.cancel()
             }
         }
     }
@@ -66,10 +66,10 @@ final class NotchActivityCoordinator {
         value: CGFloat = 0,
         duration: TimeInterval = 0
     ) {
-        activityDuration = duration
+        self.activityDuration = duration
 
         withAnimation(.smooth) {
-            expandingActivity = ExpandingActivity(
+            self.expandingActivity = ExpandingActivity(
                 show: true,
                 type: type,
                 value: value
@@ -80,16 +80,16 @@ final class NotchActivityCoordinator {
     /// Hide the current activity
     func hideActivity() {
         withAnimation(.smooth) {
-            expandingActivity = .empty
+            self.expandingActivity = .empty
         }
     }
 
     /// Toggle activity visibility
     func toggleActivity(type: NotchActivityType, value: CGFloat = 0) {
-        if expandingActivity.show && expandingActivity.type == type {
-            hideActivity()
+        if self.expandingActivity.show && self.expandingActivity.type == type {
+            self.hideActivity()
         } else {
-            showActivity(type: type, value: value)
+            self.showActivity(type: type, value: value)
         }
     }
 
@@ -98,19 +98,19 @@ final class NotchActivityCoordinator {
     private var activityTask: Task<Void, Never>?
 
     private func scheduleActivityHide() {
-        activityTask?.cancel()
+        self.activityTask?.cancel()
 
         // Duration of 0 means manual control - don't auto-hide
-        guard activityDuration > 0 else { return }
+        guard self.activityDuration > 0 else { return }
 
-        let currentType = expandingActivity.type
-        activityTask = Task { [weak self] in
+        let currentType = self.expandingActivity.type
+        self.activityTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(self?.activityDuration ?? 3))
             guard let self, !Task.isCancelled else { return }
 
             // Only hide if still showing the same type
-            if expandingActivity.type == currentType {
-                hideActivity()
+            if self.expandingActivity.type == currentType {
+                self.hideActivity()
             }
         }
     }

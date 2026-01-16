@@ -31,7 +31,7 @@ actor TmuxPathFinder {
         ]
 
         if let foundPath = possiblePaths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
-            cachedPath = foundPath
+            self.cachedPath = foundPath
             return foundPath
         }
 
@@ -40,7 +40,7 @@ actor TmuxPathFinder {
 
     /// Check if tmux is available
     func isTmuxAvailable() -> Bool {
-        getTmuxPath() != nil
+        self.getTmuxPath() != nil
     }
 
     // MARK: Private

@@ -22,7 +22,7 @@ final class ChatHistoryManager {
             .sink { [weak self] sessions in
                 self?.updateFromSessions(sessions)
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
     }
 
     // MARK: Internal
@@ -35,16 +35,16 @@ final class ChatHistoryManager {
     // MARK: - Public API
 
     func history(for sessionID: String) -> [ChatHistoryItem] {
-        histories[sessionID] ?? []
+        self.histories[sessionID] ?? []
     }
 
     func isLoaded(sessionID: String) -> Bool {
-        loadedSessions.contains(sessionID)
+        self.loadedSessions.contains(sessionID)
     }
 
     func loadFromFile(sessionID: String, cwd: String) async {
-        guard !loadedSessions.contains(sessionID) else { return }
-        loadedSessions.insert(sessionID)
+        guard !self.loadedSessions.contains(sessionID) else { return }
+        self.loadedSessions.insert(sessionID)
         await SessionStore.shared.process(.loadHistory(sessionID: sessionID, cwd: cwd))
     }
 
@@ -71,8 +71,8 @@ final class ChatHistoryManager {
     }
 
     func clearHistory(for sessionID: String) {
-        loadedSessions.remove(sessionID)
-        histories.removeValue(forKey: sessionID)
+        self.loadedSessions.remove(sessionID)
+        self.histories.removeValue(forKey: sessionID)
         Task {
             await SessionStore.shared.process(.sessionEnded(sessionID: sessionID))
         }
@@ -91,13 +91,13 @@ final class ChatHistoryManager {
         var newHistories: [String: [ChatHistoryItem]] = [:]
         var newAgentDescriptions: [String: [String: String]] = [:]
         for session in sessions {
-            let filteredItems = filterOutSubagentTools(session.chatItems)
+            let filteredItems = self.filterOutSubagentTools(session.chatItems)
             newHistories[session.sessionID] = filteredItems
             newAgentDescriptions[session.sessionID] = session.subagentState.agentDescriptions
-            loadedSessions.insert(session.sessionID)
+            self.loadedSessions.insert(session.sessionID)
         }
-        histories = newHistories
-        agentDescriptions = newAgentDescriptions
+        self.histories = newHistories
+        self.agentDescriptions = newAgentDescriptions
     }
 
     private func filterOutSubagentTools(_ items: [ChatHistoryItem]) -> [ChatHistoryItem] {
@@ -167,24 +167,24 @@ struct ToolCallItem: Equatable, Sendable {
             return url
         }
         if let agentID = input["agentId"] {
-            let blocking = input["block"] == "true"
+            let blocking = self.input["block"] == "true"
             return blocking ? "Waiting..." : "Checking \(agentID.prefix(8))..."
         }
-        return input.values.first.map { String($0.prefix(60)) } ?? ""
+        return self.input.values.first.map { String($0.prefix(60)) } ?? ""
     }
 
     /// Status display text for the tool
     var statusDisplay: ToolStatusDisplay {
-        if status == .running {
-            return ToolStatusDisplay.running(for: name, input: input)
+        if self.status == .running {
+            return ToolStatusDisplay.running(for: self.name, input: self.input)
         }
-        if status == .waitingForApproval {
+        if self.status == .waitingForApproval {
             return ToolStatusDisplay(text: "Waiting for approval...", isRunning: true)
         }
-        if status == .interrupted {
+        if self.status == .interrupted {
             return ToolStatusDisplay(text: "Interrupted", isRunning: false)
         }
-        return ToolStatusDisplay.completed(for: name, result: structuredResult)
+        return ToolStatusDisplay.completed(for: self.name, result: self.structuredResult)
     }
 
     /// Custom Equatable implementation to handle structuredResult
@@ -248,7 +248,7 @@ struct SubagentToolCall: Equatable, Identifiable, Sendable {
 
     /// Short description for display
     var displayText: String {
-        switch name {
+        switch self.name {
         case "Read":
             if let path = input["file_path"] {
                 return URL(fileURLWithPath: path).lastPathComponent
@@ -294,7 +294,7 @@ struct SubagentToolCall: Equatable, Identifiable, Sendable {
             }
             return "Searching web..."
         default:
-            return name
+            return self.name
         }
     }
 }

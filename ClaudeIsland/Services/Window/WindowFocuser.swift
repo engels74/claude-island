@@ -35,12 +35,12 @@ actor WindowFocuser {
     func focusTmuxWindow(terminalPID: Int, windows: [YabaiWindow]) async -> Bool {
         // Try to find actual tmux window
         if let tmuxWindow = WindowFinder.shared.findTmuxWindow(forTerminalPID: terminalPID, windows: windows) {
-            return await focusWindow(id: tmuxWindow.id)
+            return await self.focusWindow(id: tmuxWindow.id)
         }
 
         // Fall back to any non-Claude window
         if let window = WindowFinder.shared.findNonClaudeWindow(forTerminalPID: terminalPID, windows: windows) {
-            return await focusWindow(id: window.id)
+            return await self.focusWindow(id: window.id)
         }
 
         return false

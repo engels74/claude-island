@@ -42,7 +42,7 @@ struct ProcessResult: Sendable {
     let exitCode: Int32
     let stderr: String?
 
-    var isSuccess: Bool { exitCode == 0 }
+    var isSuccess: Bool { self.exitCode == 0 }
 }
 
 // MARK: - ProcessExecuting
@@ -212,7 +212,7 @@ extension ProcessExecutor {
 
     /// Run a command synchronously, returning nil on failure (backwards compatible)
     nonisolated func runSyncOrNil(_ executable: String, arguments: [String]) -> String? {
-        switch runSync(executable, arguments: arguments) {
+        switch self.runSync(executable, arguments: arguments) {
         case let .success(output):
             output
         case .failure:

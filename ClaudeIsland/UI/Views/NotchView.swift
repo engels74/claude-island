@@ -36,73 +36,73 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             // Outer container does NOT receive hits - only the notch content does
             VStack(spacing: 0) {
-                notchLayout
+                self.notchLayout
                     .frame(
-                        maxWidth: viewModel.status == .opened ? notchSize.width : nil,
+                        maxWidth: self.viewModel.status == .opened ? self.notchSize.width : nil,
                         alignment: .top
                     )
                     .padding(
                         .horizontal,
-                        viewModel.status == .opened
+                        self.viewModel.status == .opened
                             ? cornerRadiusInsets.opened.top
                             : cornerRadiusInsets.closed.bottom
                     )
-                    .padding([.horizontal, .bottom], viewModel.status == .opened ? 12 : 0)
+                    .padding([.horizontal, .bottom], self.viewModel.status == .opened ? 12 : 0)
                     .background(.black)
-                    .clipShape(currentNotchShape)
+                    .clipShape(self.currentNotchShape)
                     .overlay(alignment: .top) {
                         Rectangle()
                             .fill(.black)
                             .frame(height: 1)
-                            .padding(.horizontal, topCornerRadius)
+                            .padding(.horizontal, self.topCornerRadius)
                     }
                     .shadow(
-                        color: (viewModel.status == .opened || isHovering) ? .black.opacity(0.7) : .clear,
+                        color: (self.viewModel.status == .opened || self.isHovering) ? .black.opacity(0.7) : .clear,
                         radius: 6
                     )
                     .frame(
-                        maxWidth: viewModel.status == .opened ? notchSize.width : nil,
-                        maxHeight: viewModel.status == .opened ? notchSize.height : nil,
+                        maxWidth: self.viewModel.status == .opened ? self.notchSize.width : nil,
+                        maxHeight: self.viewModel.status == .opened ? self.notchSize.height : nil,
                         alignment: .top
                     )
-                    .animation(viewModel.status == .opened ? openAnimation : closeAnimation, value: viewModel.status)
-                    .animation(openAnimation, value: notchSize) // Animate container size changes between content types
-                    .animation(.smooth, value: activityCoordinator.expandingActivity)
-                    .animation(.smooth, value: hasPendingPermission)
-                    .animation(.smooth, value: hasWaitingForInput)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isBouncing)
+                    .animation(self.viewModel.status == .opened ? self.openAnimation : self.closeAnimation, value: self.viewModel.status)
+                    .animation(self.openAnimation, value: self.notchSize) // Animate container size changes between content types
+                    .animation(.smooth, value: self.activityCoordinator.expandingActivity)
+                    .animation(.smooth, value: self.hasPendingPermission)
+                    .animation(.smooth, value: self.hasWaitingForInput)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: self.isBouncing)
                     .contentShape(Rectangle())
                     .onHover { hovering in
                         withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
-                            isHovering = hovering
+                            self.isHovering = hovering
                         }
                     }
                     .onTapGesture {
-                        if viewModel.status != .opened {
-                            viewModel.notchOpen(reason: .click)
+                        if self.viewModel.status != .opened {
+                            self.viewModel.notchOpen(reason: .click)
                         }
                     }
             }
         }
-        .opacity(isVisible ? 1 : 0)
+        .opacity(self.isVisible ? 1 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .preferredColorScheme(.dark)
         .onAppear {
-            sessionMonitor.startMonitoring()
+            self.sessionMonitor.startMonitoring()
             // On non-notched devices, keep visible so users have a target to interact with
-            if !viewModel.hasPhysicalNotch {
-                isVisible = true
+            if !self.viewModel.hasPhysicalNotch {
+                self.isVisible = true
             }
         }
-        .onChange(of: viewModel.status) { oldStatus, newStatus in
-            handleStatusChange(from: oldStatus, to: newStatus)
+        .onChange(of: self.viewModel.status) { oldStatus, newStatus in
+            self.handleStatusChange(from: oldStatus, to: newStatus)
         }
-        .onChange(of: sessionMonitor.pendingInstances) { _, sessions in
-            handlePendingSessionsChange(sessions)
+        .onChange(of: self.sessionMonitor.pendingInstances) { _, sessions in
+            self.handlePendingSessionsChange(sessions)
         }
-        .onChange(of: sessionMonitor.instances) { _, instances in
-            handleProcessingChange()
-            handleWaitingForInputChange(instances)
+        .onChange(of: self.sessionMonitor.instances) { _, instances in
+            self.handleProcessingChange()
+            self.handleWaitingForInputChange(instances)
         }
     }
 
@@ -135,12 +135,12 @@ struct NotchView: View {
 
     /// Whether any Claude session is currently processing or compacting
     private var isAnyProcessing: Bool {
-        sessionMonitor.instances.contains { $0.phase == .processing || $0.phase == .compacting }
+        self.sessionMonitor.instances.contains { $0.phase == .processing || $0.phase == .compacting }
     }
 
     /// Whether any Claude session has a pending permission request
     private var hasPendingPermission: Bool {
-        sessionMonitor.instances.contains { $0.phase.isWaitingForApproval }
+        self.sessionMonitor.instances.contains { $0.phase.isWaitingForApproval }
     }
 
     /// Whether any Claude session is waiting for user input (done/ready state) within the display window
@@ -148,7 +148,7 @@ struct NotchView: View {
         let now = Date()
         let displayDuration: TimeInterval = 30 // Show checkmark for 30 seconds
 
-        return sessionMonitor.instances.contains { session in
+        return self.sessionMonitor.instances.contains { session in
             guard session.phase == .waitingForInput else { return false }
             // Only show if within the 30-second display window
             if let enteredAt = waitingForInputTimestamps[session.stableID] {
@@ -162,21 +162,21 @@ struct NotchView: View {
 
     private var closedNotchSize: CGSize {
         CGSize(
-            width: viewModel.deviceNotchRect.width,
-            height: viewModel.deviceNotchRect.height
+            width: self.viewModel.deviceNotchRect.width,
+            height: self.viewModel.deviceNotchRect.height
         )
     }
 
     /// Extra width for expanding activities (like Dynamic Island)
     private var expansionWidth: CGFloat {
         // Permission indicator adds width on left side only
-        let permissionIndicatorWidth: CGFloat = hasPendingPermission ? 18 : 0
+        let permissionIndicatorWidth: CGFloat = self.hasPendingPermission ? 18 : 0
 
         // Expand for processing activity
-        if activityCoordinator.expandingActivity.show {
-            switch activityCoordinator.expandingActivity.type {
+        if self.activityCoordinator.expandingActivity.show {
+            switch self.activityCoordinator.expandingActivity.type {
             case .claude:
-                let baseWidth = 2 * max(0, closedNotchSize.height - 12) + 20
+                let baseWidth = 2 * max(0, self.closedNotchSize.height - 12) + 20
                 return baseWidth + permissionIndicatorWidth
             case .none:
                 break
@@ -184,79 +184,79 @@ struct NotchView: View {
         }
 
         // Expand for pending permissions (left indicator) or waiting for input (checkmark on right)
-        if hasPendingPermission {
-            return 2 * max(0, closedNotchSize.height - 12) + 20 + permissionIndicatorWidth
+        if self.hasPendingPermission {
+            return 2 * max(0, self.closedNotchSize.height - 12) + 20 + permissionIndicatorWidth
         }
 
         // Waiting for input just shows checkmark on right, no extra left indicator
-        if hasWaitingForInput {
-            return 2 * max(0, closedNotchSize.height - 12) + 20
+        if self.hasWaitingForInput {
+            return 2 * max(0, self.closedNotchSize.height - 12) + 20
         }
 
         return 0
     }
 
     private var notchSize: CGSize {
-        switch viewModel.status {
+        switch self.viewModel.status {
         case .closed,
              .popping:
-            closedNotchSize
+            self.closedNotchSize
         case .opened:
-            viewModel.openedSize
+            self.viewModel.openedSize
         }
     }
 
     /// Width of the closed content (notch + any expansion)
     private var closedContentWidth: CGFloat {
-        closedNotchSize.width + expansionWidth
+        self.closedNotchSize.width + self.expansionWidth
     }
 
     // MARK: - Corner Radii
 
     private var topCornerRadius: CGFloat {
-        viewModel.status == .opened
+        self.viewModel.status == .opened
             ? cornerRadiusInsets.opened.top
             : cornerRadiusInsets.closed.top
     }
 
     private var bottomCornerRadius: CGFloat {
-        viewModel.status == .opened
+        self.viewModel.status == .opened
             ? cornerRadiusInsets.opened.bottom
             : cornerRadiusInsets.closed.bottom
     }
 
     private var currentNotchShape: NotchShape {
         NotchShape(
-            topCornerRadius: topCornerRadius,
-            bottomCornerRadius: bottomCornerRadius
+            topCornerRadius: self.topCornerRadius,
+            bottomCornerRadius: self.bottomCornerRadius
         )
     }
 
     // MARK: - Notch Layout
 
     private var isProcessing: Bool {
-        activityCoordinator.expandingActivity.show && activityCoordinator.expandingActivity.type == .claude
+        self.activityCoordinator.expandingActivity.show && self.activityCoordinator.expandingActivity.type == .claude
     }
 
     /// Whether to show the expanded closed state (processing, pending permission, or waiting for input)
     private var showClosedActivity: Bool {
-        isProcessing || hasPendingPermission || hasWaitingForInput
+        self.isProcessing || self.hasPendingPermission || self.hasWaitingForInput
     }
 
     private var sideWidth: CGFloat {
-        max(0, closedNotchSize.height - 12) + 10
+        max(0, self.closedNotchSize.height - 12) + 10
     }
 
     @ViewBuilder private var notchLayout: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row - always present, contains crab and spinner that persist across states
-            headerRow
-                .frame(height: max(24, closedNotchSize.height))
+            self.headerRow
+                .frame(height: max(24, self.closedNotchSize.height))
 
             // Main content only when opened
-            if viewModel.status == .opened {
-                contentView
-                    .frame(width: notchSize.width - 24) // Fixed width to prevent reflow
+            if self.viewModel.status == .opened {
+                self.contentView
+                    .frame(width: self.notchSize.width - 24) // Fixed width to prevent reflow
                     .transition(
                         .asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .top)
@@ -274,52 +274,52 @@ struct NotchView: View {
     @ViewBuilder private var headerRow: some View {
         HStack(spacing: 0) {
             // Left side - crab + optional permission indicator (visible when processing, pending, or waiting for input)
-            if showClosedActivity {
+            if self.showClosedActivity {
                 HStack(spacing: 4) {
-                    ClaudeCrabIcon(size: 14, animateLegs: isProcessing)
-                        .matchedGeometryEffect(id: "crab", in: activityNamespace, isSource: showClosedActivity)
+                    ClaudeCrabIcon(size: 14, animateLegs: self.isProcessing)
+                        .matchedGeometryEffect(id: "crab", in: self.activityNamespace, isSource: self.showClosedActivity)
 
                     // Permission indicator only (amber) - waiting for input shows checkmark on right
-                    if hasPendingPermission {
+                    if self.hasPendingPermission {
                         PermissionIndicatorIcon(size: 14, color: Color(red: 0.85, green: 0.47, blue: 0.34))
-                            .matchedGeometryEffect(id: "status-indicator", in: activityNamespace, isSource: showClosedActivity)
+                            .matchedGeometryEffect(id: "status-indicator", in: self.activityNamespace, isSource: self.showClosedActivity)
                     }
                 }
-                .frame(width: viewModel.status == .opened ? nil : sideWidth + (hasPendingPermission ? 18 : 0))
-                .padding(.leading, viewModel.status == .opened ? 8 : 0)
+                .frame(width: self.viewModel.status == .opened ? nil : self.sideWidth + (self.hasPendingPermission ? 18 : 0))
+                .padding(.leading, self.viewModel.status == .opened ? 8 : 0)
             }
 
             // Center content
-            if viewModel.status == .opened {
+            if self.viewModel.status == .opened {
                 // Opened: show header content
-                openedHeaderContent
-            } else if !showClosedActivity {
+                self.openedHeaderContent
+            } else if !self.showClosedActivity {
                 // Closed without activity: empty space
                 Rectangle()
                     .fill(.clear)
-                    .frame(width: closedNotchSize.width - 20)
+                    .frame(width: self.closedNotchSize.width - 20)
             } else {
                 // Closed with activity: black spacer (with optional bounce)
                 Rectangle()
                     .fill(.black)
-                    .frame(width: closedNotchSize.width - cornerRadiusInsets.closed.top + (isBouncing ? 16 : 0))
+                    .frame(width: self.closedNotchSize.width - cornerRadiusInsets.closed.top + (self.isBouncing ? 16 : 0))
             }
 
             // Right side - spinner when processing/pending, checkmark when waiting for input
-            if showClosedActivity {
-                if isProcessing || hasPendingPermission {
+            if self.showClosedActivity {
+                if self.isProcessing || self.hasPendingPermission {
                     ProcessingSpinner()
-                        .matchedGeometryEffect(id: "spinner", in: activityNamespace, isSource: showClosedActivity)
-                        .frame(width: viewModel.status == .opened ? 20 : sideWidth)
-                } else if hasWaitingForInput {
+                        .matchedGeometryEffect(id: "spinner", in: self.activityNamespace, isSource: self.showClosedActivity)
+                        .frame(width: self.viewModel.status == .opened ? 20 : self.sideWidth)
+                } else if self.hasWaitingForInput {
                     // Checkmark for waiting-for-input on the right side
                     ReadyForInputIndicatorIcon(size: 14, color: TerminalColors.green)
-                        .matchedGeometryEffect(id: "spinner", in: activityNamespace, isSource: showClosedActivity)
-                        .frame(width: viewModel.status == .opened ? 20 : sideWidth)
+                        .matchedGeometryEffect(id: "spinner", in: self.activityNamespace, isSource: self.showClosedActivity)
+                        .frame(width: self.viewModel.status == .opened ? 20 : self.sideWidth)
                 }
             }
         }
-        .frame(height: closedNotchSize.height)
+        .frame(height: self.closedNotchSize.height)
     }
 
     // MARK: - Opened Header Content
@@ -328,9 +328,9 @@ struct NotchView: View {
         HStack(spacing: 12) {
             // Show static crab only if not showing activity in headerRow
             // (headerRow handles crab + indicator when showClosedActivity is true)
-            if !showClosedActivity {
+            if !self.showClosedActivity {
                 ClaudeCrabIcon(size: 14)
-                    .matchedGeometryEffect(id: "crab", in: activityNamespace, isSource: !showClosedActivity)
+                    .matchedGeometryEffect(id: "crab", in: self.activityNamespace, isSource: !self.showClosedActivity)
                     .padding(.leading, 8)
             }
 
@@ -339,21 +339,21 @@ struct NotchView: View {
             // Menu toggle
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.toggleMenu()
-                    if viewModel.contentType == .menu {
-                        updateManager.markUpdateSeen()
+                    self.viewModel.toggleMenu()
+                    if self.viewModel.contentType == .menu {
+                        self.updateManager.markUpdateSeen()
                     }
                 }
             } label: {
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: viewModel.contentType == .menu ? "xmark" : "line.3.horizontal")
+                    Image(systemName: self.viewModel.contentType == .menu ? "xmark" : "line.3.horizontal")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.4))
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
 
                     // Green dot for unseen update
-                    if updateManager.hasUnseenUpdate && viewModel.contentType != .menu {
+                    if self.updateManager.hasUnseenUpdate && self.viewModel.contentType != .menu {
                         Circle()
                             .fill(TerminalColors.green)
                             .frame(width: 6, height: 6)
@@ -369,53 +369,53 @@ struct NotchView: View {
 
     @ViewBuilder private var contentView: some View {
         Group {
-            switch viewModel.contentType {
+            switch self.viewModel.contentType {
             case .instances:
                 ClaudeInstancesView(
-                    sessionMonitor: sessionMonitor,
-                    viewModel: viewModel
+                    sessionMonitor: self.sessionMonitor,
+                    viewModel: self.viewModel
                 )
             case .menu:
-                NotchMenuView(viewModel: viewModel)
+                NotchMenuView(viewModel: self.viewModel)
             case let .chat(session):
                 ChatView(
                     sessionID: session.sessionID,
                     initialSession: session,
-                    sessionMonitor: sessionMonitor,
-                    viewModel: viewModel
+                    sessionMonitor: self.sessionMonitor,
+                    viewModel: self.viewModel
                 )
             }
         }
-        .frame(width: notchSize.width - 24) // Fixed width to prevent text reflow
+        .frame(width: self.notchSize.width - 24) // Fixed width to prevent text reflow
         // Removed .id() - was causing view recreation and performance issues
     }
 
     // MARK: - Event Handlers
 
     private func handleProcessingChange() {
-        if isAnyProcessing || hasPendingPermission {
+        if self.isAnyProcessing || self.hasPendingPermission {
             // Show claude activity when processing or waiting for permission
-            activityCoordinator.showActivity(type: .claude)
-            isVisible = true
-            hideVisibilityTask?.cancel()
-        } else if hasWaitingForInput {
+            self.activityCoordinator.showActivity(type: .claude)
+            self.isVisible = true
+            self.hideVisibilityTask?.cancel()
+        } else if self.hasWaitingForInput {
             // Keep visible for waiting-for-input but hide the processing spinner
-            activityCoordinator.hideActivity()
-            isVisible = true
-            hideVisibilityTask?.cancel()
+            self.activityCoordinator.hideActivity()
+            self.isVisible = true
+            self.hideVisibilityTask?.cancel()
         } else {
             // Hide activity when done
-            activityCoordinator.hideActivity()
+            self.activityCoordinator.hideActivity()
 
             // Delay hiding the notch until animation completes
             // Don't hide on non-notched devices - users need a visible target
-            if viewModel.status == .closed && viewModel.hasPhysicalNotch {
-                hideVisibilityTask?.cancel()
-                hideVisibilityTask = Task {
+            if self.viewModel.status == .closed && self.viewModel.hasPhysicalNotch {
+                self.hideVisibilityTask?.cancel()
+                self.hideVisibilityTask = Task {
                     try? await Task.sleep(for: .seconds(0.5))
                     guard !Task.isCancelled else { return }
-                    if !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && viewModel.status == .closed {
-                        isVisible = false
+                    if !self.isAnyProcessing && !self.hasPendingPermission && !self.hasWaitingForInput && self.viewModel.status == .closed {
+                        self.isVisible = false
                     }
                 }
             }
@@ -426,22 +426,23 @@ struct NotchView: View {
         switch newStatus {
         case .opened,
              .popping:
-            isVisible = true
-            hideVisibilityTask?.cancel()
+            self.isVisible = true
+            self.hideVisibilityTask?.cancel()
             // Clear waiting-for-input timestamps only when manually opened (user acknowledged)
-            if viewModel.openReason == .click || viewModel.openReason == .hover {
-                waitingForInputTimestamps.removeAll()
+            if self.viewModel.openReason == .click || self.viewModel.openReason == .hover {
+                self.waitingForInputTimestamps.removeAll()
             }
         case .closed:
             // Don't hide on non-notched devices - users need a visible target
-            guard viewModel.hasPhysicalNotch else { return }
-            hideVisibilityTask?.cancel()
-            hideVisibilityTask = Task {
+            guard self.viewModel.hasPhysicalNotch else { return }
+            self.hideVisibilityTask?.cancel()
+            self.hideVisibilityTask = Task {
                 try? await Task.sleep(for: .seconds(0.35))
                 guard !Task.isCancelled else { return }
-                if viewModel.status == .closed && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !activityCoordinator
+                if self.viewModel.status == .closed && !self.isAnyProcessing && !self.hasPendingPermission && !self.hasWaitingForInput && !self
+                    .activityCoordinator
                     .expandingActivity.show {
-                    isVisible = false
+                    self.isVisible = false
                 }
             }
         }
@@ -449,22 +450,22 @@ struct NotchView: View {
 
     private func handlePendingSessionsChange(_ sessions: [SessionState]) {
         let currentIDs = Set(sessions.map(\.stableID))
-        let newPendingIDs = currentIDs.subtracting(previousPendingIDs)
+        let newPendingIDs = currentIDs.subtracting(self.previousPendingIDs)
 
         if !newPendingIDs.isEmpty &&
-            viewModel.status == .closed &&
+            self.viewModel.status == .closed &&
             !TerminalVisibilityDetector.isTerminalVisibleOnCurrentSpace() {
-            viewModel.notchOpen(reason: .notification)
+            self.viewModel.notchOpen(reason: .notification)
         }
 
-        previousPendingIDs = currentIDs
+        self.previousPendingIDs = currentIDs
     }
 
     private func handleWaitingForInputChange(_ instances: [SessionState]) {
         // Get sessions that are now waiting for input
         let waitingForInputSessions = instances.filter { $0.phase == .waitingForInput }
         let currentIDs = Set(waitingForInputSessions.map(\.stableID))
-        let newWaitingIDs = currentIDs.subtracting(previousWaitingForInputIDs)
+        let newWaitingIDs = currentIDs.subtracting(self.previousWaitingForInputIDs)
 
         // Track timestamps for newly waiting sessions
         let now = Date()
@@ -475,7 +476,7 @@ struct NotchView: View {
         // Clean up timestamps for sessions no longer waiting
         let staleIDs = Set(waitingForInputTimestamps.keys).subtracting(currentIDs)
         for staleID in staleIDs {
-            waitingForInputTimestamps.removeValue(forKey: staleID)
+            self.waitingForInputTimestamps.removeValue(forKey: staleID)
         }
 
         // Bounce the notch when a session newly enters waitingForInput state
@@ -494,7 +495,7 @@ struct NotchView: View {
 
             // Skip all alerts if only context resumes remain
             guard !newlyWaitingSessions.isEmpty else {
-                previousWaitingForInputIDs = currentIDs
+                self.previousWaitingForInputIDs = currentIDs
                 return
             }
 
@@ -512,26 +513,26 @@ struct NotchView: View {
             }
 
             // Trigger bounce animation to get user's attention
-            bounceTask?.cancel()
-            isBouncing = true
-            bounceTask = Task {
+            self.bounceTask?.cancel()
+            self.isBouncing = true
+            self.bounceTask = Task {
                 // Bounce back after a short delay
                 try? await Task.sleep(for: .seconds(0.15))
                 guard !Task.isCancelled else { return }
-                isBouncing = false
+                self.isBouncing = false
             }
 
             // Schedule hiding the checkmark after 30 seconds
-            checkmarkHideTask?.cancel()
-            checkmarkHideTask = Task {
+            self.checkmarkHideTask?.cancel()
+            self.checkmarkHideTask = Task {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled else { return }
                 // Trigger a UI update to re-evaluate hasWaitingForInput
-                handleProcessingChange()
+                self.handleProcessingChange()
             }
         }
 
-        previousWaitingForInputIDs = currentIDs
+        self.previousWaitingForInputIDs = currentIDs
     }
 
     /// Determine if notification sound should play for the given sessions
