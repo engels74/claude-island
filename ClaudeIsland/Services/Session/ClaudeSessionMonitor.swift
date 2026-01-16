@@ -3,17 +3,21 @@
 //  ClaudeIsland
 //
 //  MainActor wrapper around SessionStore for UI binding.
-//  Publishes SessionState arrays for SwiftUI observation.
+//  Uses @Observable for efficient property-level change tracking (macOS 14+).
 //
 
 import AppKit
 import Combine
 import Foundation
+import Observation
 
 // MARK: - ClaudeSessionMonitor
 
+/// Session monitor using modern @Observable macro for efficient SwiftUI updates.
+/// Subscribes to SessionStore's Combine publisher to receive session state changes.
+@Observable
 @MainActor
-class ClaudeSessionMonitor: ObservableObject {
+final class ClaudeSessionMonitor {
     // MARK: Lifecycle
 
     init() {
@@ -29,8 +33,8 @@ class ClaudeSessionMonitor: ObservableObject {
 
     // MARK: Internal
 
-    @Published var instances: [SessionState] = []
-    @Published var pendingInstances: [SessionState] = []
+    var instances: [SessionState] = []
+    var pendingInstances: [SessionState] = []
 
     // MARK: - Monitoring Lifecycle
 
@@ -137,7 +141,8 @@ class ClaudeSessionMonitor: ObservableObject {
 
     // MARK: Private
 
-    private var cancellables = Set<AnyCancellable>()
+    /// Combine subscriptions - ignored by Observation since these don't affect UI state
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     // MARK: - State Update
 
@@ -151,11 +156,9 @@ class ClaudeSessionMonitor: ObservableObject {
 
 extension ClaudeSessionMonitor: JSONLInterruptWatcherDelegate {
     nonisolated func didDetectInterrupt(sessionID: String) {
-        Task {
-            await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
-        }
-
+        // Combined task for interrupt handling - both actions should complete together
         Task { @MainActor in
+            await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
             InterruptWatcherManager.shared.stopWatching(sessionID: sessionID)
         }
     }

@@ -62,6 +62,10 @@ actor ConversationParser {
         let clearDetected: Bool
     }
 
+    /// Maximum file size (10 MB) before switching to incremental parsing
+    /// Files larger than this will use streaming to avoid memory pressure
+    static let maxFullLoadFileSize = 10_000_000
+
     static let shared = ConversationParser()
 
     /// Logger for conversation parser (nonisolated static for cross-context access)
@@ -70,9 +74,10 @@ actor ConversationParser {
     /// Parse a JSONL file to extract conversation info
     /// Uses caching based on file modification time
     ///
-    /// Note: This method loads the entire file into memory. For incremental updates during
-    /// active sessions, use `parseIncremental` instead which uses FileHandle for streaming.
-    /// Full file loading is acceptable here because:
+    /// Note: This method loads the entire file into memory for files under 10 MB.
+    /// For larger files or incremental updates during active sessions, use `parseIncremental`
+    /// instead which uses FileHandle for streaming.
+    /// Full file loading is acceptable for smaller files because:
     /// 1. This is called infrequently (only when cache is stale)
     /// 2. The algorithm requires both forward and backward iteration
     /// 3. For very long conversations, the summary is typically updated, invalidating old data
@@ -97,6 +102,15 @@ actor ConversationParser {
 
         if let cached = cache[sessionFile], cached.modificationDate == modDate {
             return cached.info
+        }
+
+        // Check file size to avoid memory pressure for very large conversation files
+        if let fileSize = attrs[.size] as? Int, fileSize > Self.maxFullLoadFileSize {
+            Self.logger.info("File size \(fileSize) exceeds max (\(Self.maxFullLoadFileSize)), using tail-based parsing")
+            // For large files, read only the last portion to get recent info
+            let info = parseLargeFile(path: sessionFile)
+            cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
+            return info
         }
 
         guard let data = fileManager.contents(atPath: sessionFile),
@@ -264,6 +278,60 @@ actor ConversationParser {
     private static func sessionFilePath(sessionID: String, cwd: String) -> String {
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
         return NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
+    }
+
+    /// Parse a large file by reading only the last portion
+    /// Used when file exceeds maxFullLoadFileSize to avoid memory pressure
+    private func parseLargeFile(path: String) -> ConversationInfo {
+        guard let fileHandle = FileHandle(forReadingAtPath: path) else {
+            return ConversationInfo(
+                summary: nil,
+                lastMessage: nil,
+                lastMessageRole: nil,
+                lastToolName: nil,
+                firstUserMessage: nil,
+                lastUserMessageDate: nil
+            )
+        }
+        defer { try? fileHandle.close() }
+
+        do {
+            let fileSize = try fileHandle.seekToEnd()
+            // Read the last 2 MB to find recent messages and summary
+            let readSize: UInt64 = min(2_000_000, fileSize)
+            let startOffset = fileSize - readSize
+
+            try fileHandle.seek(toOffset: startOffset)
+            guard let data = try fileHandle.readToEnd(),
+                  let content = String(data: data, encoding: .utf8)
+            else {
+                return ConversationInfo(
+                    summary: nil,
+                    lastMessage: nil,
+                    lastMessageRole: nil,
+                    lastToolName: nil,
+                    firstUserMessage: nil,
+                    lastUserMessageDate: nil
+                )
+            }
+
+            // Skip partial first line if we didn't start at beginning
+            var trimmedContent = content
+            if startOffset > 0, let firstNewline = content.firstIndex(of: "\n") {
+                trimmedContent = String(content[content.index(after: firstNewline)...])
+            }
+
+            return parseContent(trimmedContent)
+        } catch {
+            return ConversationInfo(
+                summary: nil,
+                lastMessage: nil,
+                lastMessageRole: nil,
+                lastToolName: nil,
+                firstUserMessage: nil,
+                lastUserMessageDate: nil
+            )
+        }
     }
 
     /// Parse JSONL content

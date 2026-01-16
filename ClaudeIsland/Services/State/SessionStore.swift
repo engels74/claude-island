@@ -811,7 +811,10 @@ actor SessionStore {
         // Schedule new debounced sync
         pendingSyncs[sessionID] = Task { [weak self, syncDebounceNs] in
             try? await Task.sleep(nanoseconds: syncDebounceNs)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let self else { return }
+
+            // Revalidate session still exists after sleep (actor reentrancy protection)
+            guard sessions[sessionID] != nil else { return }
 
             // Parse incrementally - only get NEW messages since last call
             let result = await ConversationParser.shared.parseIncremental(
@@ -819,13 +822,21 @@ actor SessionStore {
                 cwd: cwd
             )
 
+            // Recheck cancellation after await
+            guard !Task.isCancelled else { return }
+
             if result.clearDetected {
-                await self?.process(.clearDetected(sessionID: sessionID))
+                await process(.clearDetected(sessionID: sessionID))
+                // Recheck cancellation after clear processing
+                guard !Task.isCancelled else { return }
             }
 
             guard !result.newMessages.isEmpty || result.clearDetected else {
                 return
             }
+
+            // Revalidate session still exists before processing file update
+            guard sessions[sessionID] != nil else { return }
 
             let payload = FileUpdatePayload(
                 sessionID: sessionID,
@@ -837,7 +848,7 @@ actor SessionStore {
                 structuredResults: result.structuredResults
             )
 
-            await self?.process(.fileUpdated(payload))
+            await process(.fileUpdated(payload))
         }
     }
 

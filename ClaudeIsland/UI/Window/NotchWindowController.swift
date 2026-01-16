@@ -86,7 +86,9 @@ class NotchWindowController: NSWindowController {
         notchWindow.ignoresMouseEvents = true
 
         // Perform boot animation after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        self.bootAnimationTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            guard !Task.isCancelled else { return }
             self?.viewModel.performBootAnimation()
         }
     }
@@ -104,4 +106,5 @@ class NotchWindowController: NSWindowController {
 
     private let screen: NSScreen
     private var cancellables = Set<AnyCancellable>()
+    private var bootAnimationTask: Task<Void, Never>?
 }

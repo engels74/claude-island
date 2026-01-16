@@ -102,9 +102,11 @@ struct NotchView: View {
 
     // MARK: Private
 
-    @StateObject private var sessionMonitor = ClaudeSessionMonitor()
+    /// Session monitor is @Observable, so we use @State for ownership
+    @State private var sessionMonitor = ClaudeSessionMonitor()
     /// Singleton is @Observable, so SwiftUI automatically tracks property access
     private var activityCoordinator = NotchActivityCoordinator.shared
+    /// UpdateManager inherits from NSObject for Sparkle integration - intentional exception to @Observable pattern
     @ObservedObject private var updateManager = UpdateManager.shared
     @State private var previousPendingIDs: Set<String> = []
     @State private var previousWaitingForInputIDs: Set<String> = []
@@ -112,6 +114,9 @@ struct NotchView: View {
     @State private var isVisible = false
     @State private var isHovering = false
     @State private var isBouncing = false
+    @State private var hideVisibilityTask: Task<Void, Never>?
+    @State private var bounceTask: Task<Void, Never>?
+    @State private var checkmarkHideTask: Task<Void, Never>?
 
     @Namespace private var activityNamespace
 
@@ -383,10 +388,12 @@ struct NotchView: View {
             // Show claude activity when processing or waiting for permission
             activityCoordinator.showActivity(type: .claude)
             isVisible = true
+            hideVisibilityTask?.cancel()
         } else if hasWaitingForInput {
             // Keep visible for waiting-for-input but hide the processing spinner
             activityCoordinator.hideActivity()
             isVisible = true
+            hideVisibilityTask?.cancel()
         } else {
             // Hide activity when done
             activityCoordinator.hideActivity()
@@ -394,7 +401,10 @@ struct NotchView: View {
             // Delay hiding the notch until animation completes
             // Don't hide on non-notched devices - users need a visible target
             if viewModel.status == .closed && viewModel.hasPhysicalNotch {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                hideVisibilityTask?.cancel()
+                hideVisibilityTask = Task {
+                    try? await Task.sleep(for: .seconds(0.5))
+                    guard !Task.isCancelled else { return }
                     if !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && viewModel.status == .closed {
                         isVisible = false
                     }
@@ -408,6 +418,7 @@ struct NotchView: View {
         case .opened,
              .popping:
             isVisible = true
+            hideVisibilityTask?.cancel()
             // Clear waiting-for-input timestamps only when manually opened (user acknowledged)
             if viewModel.openReason == .click || viewModel.openReason == .hover {
                 waitingForInputTimestamps.removeAll()
@@ -415,7 +426,10 @@ struct NotchView: View {
         case .closed:
             // Don't hide on non-notched devices - users need a visible target
             guard viewModel.hasPhysicalNotch else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            hideVisibilityTask?.cancel()
+            hideVisibilityTask = Task {
+                try? await Task.sleep(for: .seconds(0.35))
+                guard !Task.isCancelled else { return }
                 if viewModel.status == .closed && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !activityCoordinator
                     .expandingActivity.show {
                     isVisible = false
@@ -474,16 +488,20 @@ struct NotchView: View {
             }
 
             // Trigger bounce animation to get user's attention
-            DispatchQueue.main.async {
-                isBouncing = true
+            bounceTask?.cancel()
+            isBouncing = true
+            bounceTask = Task {
                 // Bounce back after a short delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    isBouncing = false
-                }
+                try? await Task.sleep(for: .seconds(0.15))
+                guard !Task.isCancelled else { return }
+                isBouncing = false
             }
 
             // Schedule hiding the checkmark after 30 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [self] in
+            checkmarkHideTask?.cancel()
+            checkmarkHideTask = Task {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { return }
                 // Trigger a UI update to re-evaluate hasWaitingForInput
                 handleProcessingChange()
             }

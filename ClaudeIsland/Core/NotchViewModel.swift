@@ -184,8 +184,10 @@ final class NotchViewModel {
     /// Perform boot animation: expand briefly then collapse
     func performBootAnimation() {
         notchOpen(reason: .boot)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self, openReason == .boot else { return }
+        bootAnimationTask?.cancel()
+        bootAnimationTask = Task {
+            try? await Task.sleep(for: .seconds(1.0))
+            guard !Task.isCancelled, openReason == .boot else { return }
             notchClose()
         }
     }
@@ -197,9 +199,13 @@ final class NotchViewModel {
     private let screenSelector = ScreenSelector.shared
     private let soundSelector = SoundSelector.shared
 
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     private let events = EventMonitors.shared
-    private var hoverTimer: DispatchWorkItem?
+
+    /// Task for hover delay before opening notch
+    @ObservationIgnored private var hoverTask: Task<Void, Never>?
+    /// Task for boot animation auto-close
+    @ObservationIgnored private var bootAnimationTask: Task<Void, Never>?
 
     /// The chat session we're viewing (persists across close/open)
     private var currentChatSession: SessionState?
@@ -268,18 +274,17 @@ final class NotchViewModel {
 
         isHovering = newHovering
 
-        // Cancel any pending hover timer
-        hoverTimer?.cancel()
-        hoverTimer = nil
+        // Cancel any pending hover task
+        hoverTask?.cancel()
+        hoverTask = nil
 
         // Start hover timer to auto-expand after 1 second
         if isHovering && (status == .closed || status == .popping) {
-            let workItem = DispatchWorkItem { [weak self] in
-                guard let self, isHovering else { return }
+            hoverTask = Task {
+                try? await Task.sleep(for: .seconds(1.0))
+                guard !Task.isCancelled, isHovering else { return }
                 notchOpen(reason: .hover)
             }
-            hoverTimer = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
         }
     }
 
@@ -309,7 +314,10 @@ final class NotchViewModel {
     /// Re-posts a mouse click at the given screen location so it reaches windows behind us
     private func repostClickAt(_ location: CGPoint) {
         // Small delay to let the window's ignoresMouseEvents update
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.05))
+            guard !Task.isCancelled else { return }
+
             // Convert to CGEvent coordinate system (screen coordinates with Y from top-left)
             guard let screen = NSScreen.main else { return }
             let screenHeight = screen.frame.height

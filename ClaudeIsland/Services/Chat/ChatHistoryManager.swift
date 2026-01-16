@@ -5,11 +5,15 @@
 
 import Combine
 import Foundation
+import Observation
 
 // MARK: - ChatHistoryManager
 
+/// Manager for chat history using modern @Observable macro for efficient SwiftUI updates.
+/// Subscribes to SessionStore's Combine publisher to receive session state changes.
+@Observable
 @MainActor
-class ChatHistoryManager: ObservableObject {
+final class ChatHistoryManager {
     // MARK: Lifecycle
 
     private init() {
@@ -25,8 +29,8 @@ class ChatHistoryManager: ObservableObject {
 
     static let shared = ChatHistoryManager()
 
-    @Published private(set) var histories: [String: [ChatHistoryItem]] = [:]
-    @Published private(set) var agentDescriptions: [String: [String: String]] = [:]
+    private(set) var histories: [String: [ChatHistoryItem]] = [:]
+    private(set) var agentDescriptions: [String: [String: String]] = [:]
 
     // MARK: - Public API
 
@@ -76,8 +80,10 @@ class ChatHistoryManager: ObservableObject {
 
     // MARK: Private
 
-    private var loadedSessions: Set<String> = []
-    private var cancellables = Set<AnyCancellable>()
+    /// Tracks which sessions have been loaded - ignored by Observation since it's internal state
+    @ObservationIgnored private var loadedSessions: Set<String> = []
+    /// Combine subscriptions - ignored by Observation since these don't affect UI state
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     // MARK: - State Updates
 

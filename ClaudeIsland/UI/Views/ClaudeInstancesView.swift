@@ -5,7 +5,6 @@
 //  Minimal instances list matching Dynamic Island aesthetic
 //
 
-import Combine
 import SwiftUI
 
 // MARK: - ClaudeInstancesView
@@ -13,7 +12,8 @@ import SwiftUI
 struct ClaudeInstancesView: View {
     // MARK: Internal
 
-    @ObservedObject var sessionMonitor: ClaudeSessionMonitor
+    /// Session monitor is @Observable, so SwiftUI automatically tracks property access
+    var sessionMonitor: ClaudeSessionMonitor
 
     /// View model is @Observable, so SwiftUI automatically tracks property access
     var viewModel: NotchViewModel
