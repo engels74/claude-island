@@ -12,12 +12,12 @@ struct ProcessingSpinner: View {
     // MARK: Internal
 
     var body: some View {
-        Text(symbols[phase % symbols.count])
+        Text(self.symbols[self.phase % self.symbols.count])
             .font(.system(size: 12, weight: .bold))
-            .foregroundColor(color)
+            .foregroundColor(self.color)
             .frame(width: 12, alignment: .center)
-            .onReceive(timer) { _ in
-                phase = (phase + 1) % symbols.count
+            .onReceive(self.timer) { _ in
+                self.phase = (self.phase + 1) % self.symbols.count
             }
     }
 

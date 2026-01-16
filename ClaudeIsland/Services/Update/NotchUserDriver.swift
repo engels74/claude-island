@@ -58,98 +58,98 @@ class UpdateManager: NSObject, ObservableObject {
     // MARK: - Public API
 
     func checkForUpdates() {
-        state = .checking
+        self.state = .checking
         if let updater = AppDelegate.shared?.updater {
             updater.checkForUpdates()
         } else {
-            state = .error(message: "Updater not initialized")
+            self.state = .error(message: "Updater not initialized")
         }
     }
 
     func downloadAndInstall() {
-        installHandler?(.install)
+        self.installHandler?(.install)
     }
 
     func installAndRelaunch() {
-        installHandler?(.install)
+        self.installHandler?(.install)
     }
 
     func skipUpdate() {
-        installHandler?(.skip)
-        state = .idle
+        self.installHandler?(.skip)
+        self.state = .idle
     }
 
     func dismissUpdate() {
-        installHandler?(.dismiss)
-        state = .idle
+        self.installHandler?(.dismiss)
+        self.state = .idle
     }
 
     func cancelDownload() {
-        cancellationHandler?()
-        state = .idle
+        self.cancellationHandler?()
+        self.state = .idle
     }
 
     // MARK: - Internal state updates (called by NotchUserDriver)
 
     func updateFound(version: String, releaseNotes: String?, installHandler: @escaping (SPUUserUpdateChoice) -> Void) {
-        currentVersion = version
+        self.currentVersion = version
         self.installHandler = installHandler
-        state = .found(version: version, releaseNotes: releaseNotes)
+        self.state = .found(version: version, releaseNotes: releaseNotes)
         // Only show the dot if user hasn't seen it this session
-        if !hasSeenUpdateThisSession {
-            hasUnseenUpdate = true
+        if !self.hasSeenUpdateThisSession {
+            self.hasUnseenUpdate = true
         }
     }
 
     func markUpdateSeen() {
-        hasUnseenUpdate = false
-        hasSeenUpdateThisSession = true
+        self.hasUnseenUpdate = false
+        self.hasSeenUpdateThisSession = true
     }
 
     func downloadStarted(cancellation: @escaping () -> Void) {
-        cancellationHandler = cancellation
-        downloadedBytes = 0
-        expectedBytes = 0
-        state = .downloading(progress: 0)
+        self.cancellationHandler = cancellation
+        self.downloadedBytes = 0
+        self.expectedBytes = 0
+        self.state = .downloading(progress: 0)
     }
 
     func downloadExpectedLength(_ length: UInt64) {
-        expectedBytes = Int64(length)
+        self.expectedBytes = Int64(length)
     }
 
     func downloadReceivedData(_ length: UInt64) {
-        downloadedBytes += Int64(length)
-        let progress = expectedBytes > 0 ? Double(downloadedBytes) / Double(expectedBytes) : 0
-        state = .downloading(progress: min(progress, 1.0))
+        self.downloadedBytes += Int64(length)
+        let progress = self.expectedBytes > 0 ? Double(self.downloadedBytes) / Double(self.expectedBytes) : 0
+        self.state = .downloading(progress: min(progress, 1.0))
     }
 
     func extractionStarted() {
-        state = .extracting(progress: 0)
+        self.state = .extracting(progress: 0)
     }
 
     func extractionProgress(_ progress: Double) {
-        state = .extracting(progress: progress)
+        self.state = .extracting(progress: progress)
     }
 
     func readyToInstall(installHandler: @escaping (SPUUserUpdateChoice) -> Void) {
         self.installHandler = installHandler
-        state = .readyToInstall(version: currentVersion)
+        self.state = .readyToInstall(version: self.currentVersion)
     }
 
     func installing() {
-        state = .installing
+        self.state = .installing
     }
 
     func installed(relaunched: Bool) {
-        state = .idle
+        self.state = .idle
     }
 
     func noUpdateFound() {
-        state = .upToDate
+        self.state = .upToDate
         // Cancel any previous reset task
-        upToDateResetTask?.cancel()
+        self.upToDateResetTask?.cancel()
         // Reset to idle after a few seconds
-        upToDateResetTask = Task {
+        self.upToDateResetTask = Task {
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             if case .upToDate = self.state {
@@ -159,19 +159,19 @@ class UpdateManager: NSObject, ObservableObject {
     }
 
     func updateError(_ message: String) {
-        state = .error(message: message)
+        self.state = .error(message: message)
     }
 
     func dismiss() {
         // Don't dismiss if we're showing "up to date" - let it display
-        if case .upToDate = state {
+        if case .upToDate = self.state {
             return
         }
-        upToDateResetTask?.cancel()
-        upToDateResetTask = nil
-        state = .idle
-        installHandler = nil
-        cancellationHandler = nil
+        self.upToDateResetTask?.cancel()
+        self.upToDateResetTask = nil
+        self.state = .idle
+        self.installHandler = nil
+        self.cancellationHandler = nil
     }
 
     // MARK: Private
@@ -305,7 +305,7 @@ class NotchUserDriver: NSObject, SPUUserDriver {
 
     func showResumableUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void) {
         // Resumable update - treat same as regular update found
-        showUpdateFound(with: appcastItem, state: state, reply: reply)
+        self.showUpdateFound(with: appcastItem, state: state, reply: reply)
     }
 
     func showInformationalUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void) {

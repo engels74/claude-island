@@ -31,7 +31,7 @@ enum ToolEventProcessor {
 
         let toolExists = session.chatItems.contains { $0.id == toolUseID }
         if !toolExists {
-            let input = extractToolInput(from: event.toolInput)
+            let input = self.extractToolInput(from: event.toolInput)
             let placeholderItem = ChatHistoryItem(
                 id: toolUseID,
                 type: .toolCall(ToolCallItem(
@@ -57,7 +57,7 @@ enum ToolEventProcessor {
         guard let toolUseID = event.toolUseID else { return }
 
         session.toolTracker.completeTool(id: toolUseID, success: true)
-        updateToolStatus(in: &session, toolID: toolUseID, status: .success)
+        self.updateToolStatus(in: &session, toolID: toolUseID, status: .success)
     }
 
     // MARK: - Subagent Tracking
@@ -74,7 +74,7 @@ enum ToolEventProcessor {
             logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
         } else if let toolName = event.tool, session.subagentState.hasActiveSubagent {
             logger.debug("Adding subagent tool \(toolName, privacy: .public) to active Task")
-            let input = extractToolInput(from: event.toolInput)
+            let input = self.extractToolInput(from: event.toolInput)
             let subagentTool = SubagentToolCall(
                 id: toolUseID,
                 name: toolName,
@@ -96,7 +96,7 @@ enum ToolEventProcessor {
         if event.tool == "Task" {
             if let taskContext = session.subagentState.activeTasks[toolUseID] {
                 logger.debug("Task completing with \(taskContext.subagentTools.count) subagent tools")
-                attachSubagentToolsToTask(
+                self.attachSubagentToolsToTask(
                     session: &session,
                     taskToolID: toolUseID,
                     subagentTools: taskContext.subagentTools
@@ -119,7 +119,7 @@ enum ToolEventProcessor {
                     tools[index].status = .interrupted
                 }
             }
-            attachSubagentToolsToTask(
+            self.attachSubagentToolsToTask(
                 session: &session,
                 taskToolID: taskID,
                 subagentTools: tools

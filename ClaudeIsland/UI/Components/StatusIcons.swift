@@ -24,7 +24,7 @@ struct WaitingForInputIcon: View {
 
     var body: some View {
         Canvas { context, _ in
-            let scale = size / 30.0
+            let scale = self.size / 30.0
             let dotSize = 4 * scale
 
             // Grid positions that are "on" (full opacity)
@@ -57,7 +57,7 @@ struct WaitingForInputIcon: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(rect), with: .color(color))
+                context.fill(Path(rect), with: .color(self.color))
             }
 
             // Draw faded dots
@@ -68,10 +68,10 @@ struct WaitingForInputIcon: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(rect), with: .color(color.opacity(0.4)))
+                context.fill(Path(rect), with: .color(self.color.opacity(0.4)))
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: self.size, height: self.size)
     }
 }
 
@@ -92,7 +92,7 @@ struct WaitingForApprovalIcon: View {
 
     var body: some View {
         Canvas { context, _ in
-            let scale = size / 30.0
+            let scale = self.size / 30.0
             let dotSize = 4 * scale
 
             // Grid positions that are "on" - forms a hand/approval shape
@@ -114,10 +114,10 @@ struct WaitingForApprovalIcon: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(rect), with: .color(color))
+                context.fill(Path(rect), with: .color(self.color))
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: self.size, height: self.size)
     }
 }
 
@@ -138,7 +138,7 @@ struct RunningIcon: View {
 
     var body: some View {
         Canvas { context, _ in
-            let scale = size / 30.0
+            let scale = self.size / 30.0
             let dotSize = 4 * scale
 
             // Hourglass shape
@@ -168,7 +168,7 @@ struct RunningIcon: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(rect), with: .color(color))
+                context.fill(Path(rect), with: .color(self.color))
             }
 
             // Draw faded dots
@@ -179,17 +179,17 @@ struct RunningIcon: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(rect), with: .color(color.opacity(0.4)))
+                context.fill(Path(rect), with: .color(self.color.opacity(0.4)))
             }
         }
-        .frame(width: size, height: size)
-        .rotationEffect(.degrees(rotation))
+        .frame(width: self.size, height: self.size)
+        .rotationEffect(.degrees(self.rotation))
         .onAppear {
             withAnimation(
                 .linear(duration: 2.0)
                     .repeatForever(autoreverses: false)
             ) {
-                rotation = 360
+                self.rotation = 360
             }
         }
     }
@@ -216,7 +216,7 @@ struct IdleIcon: View {
 
     var body: some View {
         Canvas { context, _ in
-            let scale = size / 30.0
+            let scale = self.size / 30.0
             let dotSize = 4 * scale
 
             // Simple horizontal line
@@ -231,10 +231,10 @@ struct IdleIcon: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(rect), with: .color(color))
+                context.fill(Path(rect), with: .color(self.color))
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: self.size, height: self.size)
     }
 }
 
@@ -254,17 +254,17 @@ struct StatusIcon: View {
     let size: CGFloat
 
     var body: some View {
-        switch phase {
+        switch self.phase {
         case .waitingForInput:
-            WaitingForInputIcon(size: size)
+            WaitingForInputIcon(size: self.size)
         case .waitingForApproval:
-            WaitingForApprovalIcon(size: size)
+            WaitingForApprovalIcon(size: self.size)
         case .processing,
              .compacting:
-            RunningIcon(size: size)
+            RunningIcon(size: self.size)
         case .idle,
              .ended:
-            IdleIcon(size: size)
+            IdleIcon(size: self.size)
         }
     }
 }

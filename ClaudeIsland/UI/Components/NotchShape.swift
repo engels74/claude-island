@@ -25,24 +25,24 @@ struct NotchShape: Shape {
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get {
-            .init(topCornerRadius, bottomCornerRadius)
+            .init(self.topCornerRadius, self.bottomCornerRadius)
         }
         set {
-            topCornerRadius = newValue.first
-            bottomCornerRadius = newValue.second
+            self.topCornerRadius = newValue.first
+            self.bottomCornerRadius = newValue.second
         }
     }
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        addTopLeftCorner(to: &path, rect: rect)
-        addLeftEdge(to: &path, rect: rect)
-        addBottomLeftCorner(to: &path, rect: rect)
-        addBottomEdge(to: &path, rect: rect)
-        addBottomRightCorner(to: &path, rect: rect)
-        addRightEdge(to: &path, rect: rect)
-        addTopRightCorner(to: &path, rect: rect)
+        self.addTopLeftCorner(to: &path, rect: rect)
+        self.addLeftEdge(to: &path, rect: rect)
+        self.addBottomLeftCorner(to: &path, rect: rect)
+        self.addBottomEdge(to: &path, rect: rect)
+        self.addBottomRightCorner(to: &path, rect: rect)
+        self.addRightEdge(to: &path, rect: rect)
+        self.addTopRightCorner(to: &path, rect: rect)
         path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
         return path
     }
@@ -51,41 +51,41 @@ struct NotchShape: Shape {
 
     private func addTopLeftCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY + topCornerRadius),
-            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY)
+            to: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.minY + self.topCornerRadius),
+            control: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.minY)
         )
     }
 
     private func addLeftEdge(to path: inout Path, rect: CGRect) {
-        path.addLine(to: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY - bottomCornerRadius))
+        path.addLine(to: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.maxY - self.bottomCornerRadius))
     }
 
     private func addBottomLeftCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + topCornerRadius + bottomCornerRadius, y: rect.maxY),
-            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY)
+            to: CGPoint(x: rect.minX + self.topCornerRadius + self.bottomCornerRadius, y: rect.maxY),
+            control: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.maxY)
         )
     }
 
     private func addBottomEdge(to path: inout Path, rect: CGRect) {
-        path.addLine(to: CGPoint(x: rect.maxX - topCornerRadius - bottomCornerRadius, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - self.topCornerRadius - self.bottomCornerRadius, y: rect.maxY))
     }
 
     private func addBottomRightCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY - bottomCornerRadius),
-            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY)
+            to: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.maxY - self.bottomCornerRadius),
+            control: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.maxY)
         )
     }
 
     private func addRightEdge(to path: inout Path, rect: CGRect) {
-        path.addLine(to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY + topCornerRadius))
+        path.addLine(to: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.minY + self.topCornerRadius))
     }
 
     private func addTopRightCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
             to: CGPoint(x: rect.maxX, y: rect.minY),
-            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY)
+            control: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.minY)
         )
     }
 }

@@ -54,23 +54,23 @@ actor WindowFinder {
 
         let paths = ["/opt/homebrew/bin/yabai", "/usr/local/bin/yabai"]
         if let foundPath = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
-            yabaiPath = foundPath
-            isAvailableCache = true
+            self.yabaiPath = foundPath
+            self.isAvailableCache = true
             return true
         }
-        isAvailableCache = false
+        self.isAvailableCache = false
         return false
     }
 
     /// Get the yabai path if available
     func getYabaiPath() -> String? {
-        _ = isYabaiAvailable()
-        return yabaiPath
+        _ = self.isYabaiAvailable()
+        return self.yabaiPath
     }
 
     /// Get all windows from yabai
     func getAllWindows() async -> [YabaiWindow] {
-        guard isYabaiAvailable(), let path = yabaiPath else { return [] }
+        guard self.isYabaiAvailable(), let path = yabaiPath else { return [] }
 
         do {
             let output = try await ProcessExecutor.shared.run(path, arguments: ["-m", "query", "--windows"])

@@ -35,7 +35,7 @@ struct NotchMenuView: View {
                 icon: "chevron.left",
                 label: "Back"
             ) {
-                viewModel.toggleMenu()
+                self.viewModel.toggleMenu()
             }
 
             Divider()
@@ -43,8 +43,8 @@ struct NotchMenuView: View {
                 .padding(.vertical, 4)
 
             // Appearance settings
-            ScreenPickerRow(screenSelector: screenSelector)
-            SoundPickerRow(soundSelector: soundSelector)
+            ScreenPickerRow(screenSelector: self.screenSelector)
+            SoundPickerRow(soundSelector: self.soundSelector)
 
             Divider()
                 .background(Color.white.opacity(0.08))
@@ -54,15 +54,15 @@ struct NotchMenuView: View {
             MenuToggleRow(
                 icon: "power",
                 label: "Launch at Login",
-                isOn: launchAtLogin
+                isOn: self.launchAtLogin
             ) {
                 do {
-                    if launchAtLogin {
+                    if self.launchAtLogin {
                         try SMAppService.mainApp.unregister()
-                        launchAtLogin = false
+                        self.launchAtLogin = false
                     } else {
                         try SMAppService.mainApp.register()
-                        launchAtLogin = true
+                        self.launchAtLogin = true
                     }
                 } catch {
                     logger.error("Failed to toggle launch at login: \(error.localizedDescription)")
@@ -72,14 +72,14 @@ struct NotchMenuView: View {
             MenuToggleRow(
                 icon: "arrow.triangle.2.circlepath",
                 label: "Hooks",
-                isOn: hooksInstalled
+                isOn: self.hooksInstalled
             ) {
-                if hooksInstalled {
+                if self.hooksInstalled {
                     HookInstaller.uninstall()
-                    hooksInstalled = false
+                    self.hooksInstalled = false
                 } else {
                     HookInstaller.installIfNeeded()
-                    hooksInstalled = true
+                    self.hooksInstalled = true
                 }
             }
 
@@ -90,7 +90,7 @@ struct NotchMenuView: View {
                 .padding(.vertical, 4)
 
             // About
-            UpdateRow(updateManager: updateManager)
+            UpdateRow(updateManager: self.updateManager)
 
             MenuRow(
                 icon: "star",
@@ -117,11 +117,11 @@ struct NotchMenuView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
-            refreshStates()
+            self.refreshStates()
         }
-        .onChange(of: viewModel.contentType) { _, newValue in
+        .onChange(of: self.viewModel.contentType) { _, newValue in
             if newValue == .menu {
-                refreshStates()
+                self.refreshStates()
             }
         }
     }
@@ -138,9 +138,9 @@ struct NotchMenuView: View {
     private var soundSelector = SoundSelector.shared
 
     private func refreshStates() {
-        hooksInstalled = HookInstaller.isInstalled()
-        launchAtLogin = SMAppService.mainApp.status == .enabled
-        screenSelector.refreshScreens()
+        self.hooksInstalled = HookInstaller.isInstalled()
+        self.launchAtLogin = SMAppService.mainApp.status == .enabled
+        self.screenSelector.refreshScreens()
     }
 }
 
@@ -154,47 +154,47 @@ struct UpdateRow: View {
 
     var body: some View {
         Button {
-            handleTap()
+            self.handleTap()
         } label: {
             HStack(spacing: 10) {
                 // Icon
                 ZStack {
-                    if case .installing = updateManager.state {
+                    if case .installing = self.updateManager.state {
                         Image(systemName: "gear")
                             .font(.system(size: 12))
                             .foregroundColor(TerminalColors.blue)
-                            .rotationEffect(.degrees(isSpinning ? 360 : 0))
-                            .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSpinning)
-                            .onAppear { isSpinning = true }
+                            .rotationEffect(.degrees(self.isSpinning ? 360 : 0))
+                            .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: self.isSpinning)
+                            .onAppear { self.isSpinning = true }
                     } else {
-                        Image(systemName: icon)
+                        Image(systemName: self.icon)
                             .font(.system(size: 12))
-                            .foregroundColor(iconColor)
+                            .foregroundColor(self.iconColor)
                     }
                 }
                 .frame(width: 16)
 
                 // Label
-                Text(label)
+                Text(self.label)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(labelColor)
+                    .foregroundColor(self.labelColor)
 
                 Spacer()
 
                 // Right side: progress or status
-                rightContent
+                self.rightContent
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered && isInteractive ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered && self.isInteractive ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)
-        .disabled(!isInteractive)
-        .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.2), value: updateManager.state)
+        .disabled(!self.isInteractive)
+        .onHover { self.isHovered = $0 }
+        .animation(.easeInOut(duration: 0.2), value: self.updateManager.state)
     }
 
     // MARK: Private
@@ -209,7 +209,7 @@ struct UpdateRow: View {
     }
 
     private var icon: String {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle:
             "arrow.down.circle"
         case .checking:
@@ -232,9 +232,9 @@ struct UpdateRow: View {
     }
 
     private var iconColor: Color {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle:
-            .white.opacity(isHovered ? 1.0 : 0.7)
+            .white.opacity(self.isHovered ? 1.0 : 0.7)
         case .checking:
             .white.opacity(0.7)
         case .upToDate:
@@ -254,7 +254,7 @@ struct UpdateRow: View {
     }
 
     private var label: String {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle:
             "Check for Updates"
         case .checking:
@@ -277,10 +277,10 @@ struct UpdateRow: View {
     }
 
     private var labelColor: Color {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle,
              .upToDate:
-            .white.opacity(isHovered ? 1.0 : 0.7)
+            .white.opacity(self.isHovered ? 1.0 : 0.7)
         case .checking,
              .downloading,
              .extracting,
@@ -295,7 +295,7 @@ struct UpdateRow: View {
     }
 
     private var isInteractive: Bool {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle,
              .upToDate,
              .found,
@@ -313,9 +313,9 @@ struct UpdateRow: View {
     // MARK: - Right Content
 
     @ViewBuilder private var rightContent: some View {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle:
-            Text(appVersion)
+            Text(self.appVersion)
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.4))
 
@@ -385,15 +385,15 @@ struct UpdateRow: View {
     }
 
     private func handleTap() {
-        switch updateManager.state {
+        switch self.updateManager.state {
         case .idle,
              .upToDate,
              .error:
-            updateManager.checkForUpdates()
+            self.updateManager.checkForUpdates()
         case .found:
-            updateManager.downloadAndInstall()
+            self.updateManager.downloadAndInstall()
         case .readyToInstall:
-            updateManager.installAndRelaunch()
+            self.updateManager.installAndRelaunch()
         default:
             break
         }
@@ -411,16 +411,16 @@ struct AccessibilityRow: View {
         HStack(spacing: 10) {
             Image(systemName: "hand.raised")
                 .font(.system(size: 12))
-                .foregroundColor(textColor)
+                .foregroundColor(self.textColor)
                 .frame(width: 16)
 
             Text("Accessibility")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(textColor)
+                .foregroundColor(self.textColor)
 
             Spacer()
 
-            if isEnabled {
+            if self.isEnabled {
                 Circle()
                     .fill(TerminalColors.green)
                     .frame(width: 6, height: 6)
@@ -429,7 +429,7 @@ struct AccessibilityRow: View {
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.4))
             } else {
-                Button(action: openAccessibilitySettings) {
+                Button(action: self.openAccessibilitySettings) {
                     Text("Enable")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.black)
@@ -447,11 +447,11 @@ struct AccessibilityRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+                .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
         )
-        .onHover { isHovered = $0 }
+        .onHover { self.isHovered = $0 }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshTrigger.toggle()
+            self.refreshTrigger.toggle()
         }
     }
 
@@ -462,12 +462,12 @@ struct AccessibilityRow: View {
 
     private var currentlyEnabled: Bool {
         // Re-check on each render when refreshTrigger changes
-        _ = refreshTrigger
-        return isEnabled
+        _ = self.refreshTrigger
+        return self.isEnabled
     }
 
     private var textColor: Color {
-        .white.opacity(isHovered ? 1.0 : 0.7)
+        .white.opacity(self.isHovered ? 1.0 : 0.7)
     }
 
     private func openAccessibilitySettings() {
@@ -488,16 +488,16 @@ struct MenuRow: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: self.action) {
             HStack(spacing: 10) {
-                Image(systemName: icon)
+                Image(systemName: self.icon)
                     .font(.system(size: 12))
-                    .foregroundColor(textColor)
+                    .foregroundColor(self.textColor)
                     .frame(width: 16)
 
-                Text(label)
+                Text(self.label)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(textColor)
+                    .foregroundColor(self.textColor)
 
                 Spacer()
             }
@@ -505,11 +505,11 @@ struct MenuRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { self.isHovered = $0 }
     }
 
     // MARK: Private
@@ -517,10 +517,10 @@ struct MenuRow: View {
     @State private var isHovered = false
 
     private var textColor: Color {
-        if isDestructive {
+        if self.isDestructive {
             return Color(red: 1.0, green: 0.4, blue: 0.4)
         }
-        return .white.opacity(isHovered ? 1.0 : 0.7)
+        return .white.opacity(self.isHovered ? 1.0 : 0.7)
     }
 }
 
@@ -535,24 +535,24 @@ struct MenuToggleRow: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: self.action) {
             HStack(spacing: 10) {
-                Image(systemName: icon)
+                Image(systemName: self.icon)
                     .font(.system(size: 12))
-                    .foregroundColor(textColor)
+                    .foregroundColor(self.textColor)
                     .frame(width: 16)
 
-                Text(label)
+                Text(self.label)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(textColor)
+                    .foregroundColor(self.textColor)
 
                 Spacer()
 
                 Circle()
-                    .fill(isOn ? TerminalColors.green : Color.white.opacity(0.3))
+                    .fill(self.isOn ? TerminalColors.green : Color.white.opacity(0.3))
                     .frame(width: 6, height: 6)
 
-                Text(isOn ? "On" : "Off")
+                Text(self.isOn ? "On" : "Off")
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.4))
             }
@@ -560,11 +560,11 @@ struct MenuToggleRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { self.isHovered = $0 }
     }
 
     // MARK: Private
@@ -572,6 +572,6 @@ struct MenuToggleRow: View {
     @State private var isHovered = false
 
     private var textColor: Color {
-        .white.opacity(isHovered ? 1.0 : 0.7)
+        .white.opacity(self.isHovered ? 1.0 : 0.7)
     }
 }

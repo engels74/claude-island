@@ -29,10 +29,10 @@ final class SoundSelector {
 
     /// Extra height needed when picker is expanded (capped for scrolling)
     var expandedPickerHeight: CGFloat {
-        guard isPickerExpanded else { return 0 }
+        guard self.isPickerExpanded else { return 0 }
         let totalOptions = NotificationSound.allCases.count
         let visibleOptions = min(totalOptions, maxVisibleOptions)
-        return CGFloat(visibleOptions) * rowHeight + 8 // +8 for padding
+        return CGFloat(visibleOptions) * self.rowHeight + 8 // +8 for padding
     }
 
     // MARK: Private

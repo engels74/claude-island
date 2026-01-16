@@ -19,7 +19,7 @@ struct ItemCreationContext {
     var toolTracker: ToolTracker
 
     mutating func markToolSeen(_ id: String) -> Bool {
-        toolTracker.markSeen(id)
+        self.toolTracker.markSeen(id)
     }
 }
 
@@ -38,7 +38,7 @@ enum ChatItemFactory {
     ) -> ChatHistoryItem? {
         switch block {
         case let .text(text):
-            createTextItem(
+            self.createTextItem(
                 text: text,
                 message: message,
                 blockIndex: blockIndex,
@@ -46,10 +46,10 @@ enum ChatItemFactory {
             )
 
         case let .toolUse(tool):
-            createToolUseItem(tool: tool, message: message, context: &context)
+            self.createToolUseItem(tool: tool, message: message, context: &context)
 
         case let .thinking(text):
-            createThinkingItem(
+            self.createThinkingItem(
                 text: text,
                 message: message,
                 blockIndex: blockIndex,
@@ -57,7 +57,7 @@ enum ChatItemFactory {
             )
 
         case .interrupted:
-            createInterruptedItem(
+            self.createInterruptedItem(
                 message: message,
                 blockIndex: blockIndex,
                 existingIDs: context.existingIDs

@@ -107,13 +107,13 @@ struct SessionState: Equatable, Identifiable, Sendable {
 
     // MARK: - Identifiable
 
-    var id: String { sessionID }
+    var id: String { self.sessionID }
 
     // MARK: - Derived Properties
 
     /// Whether this session needs user attention
     var needsAttention: Bool {
-        phase.needsAttention
+        self.phase.needsAttention
     }
 
     /// The active permission context, if any
@@ -129,69 +129,69 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Stable identity for SwiftUI (combines PID and sessionID for animation stability)
     var stableID: String {
         if let pid {
-            return "\(pid)-\(sessionID)"
+            return "\(pid)-\(self.sessionID)"
         }
-        return sessionID
+        return self.sessionID
     }
 
     /// Display title: summary > first user message > project name
     var displayTitle: String {
-        conversationInfo.summary ?? conversationInfo.firstUserMessage ?? projectName
+        self.conversationInfo.summary ?? self.conversationInfo.firstUserMessage ?? self.projectName
     }
 
     /// Best hint for matching window title
     var windowHint: String {
-        conversationInfo.summary ?? projectName
+        self.conversationInfo.summary ?? self.projectName
     }
 
     /// Pending tool name if waiting for approval
     var pendingToolName: String? {
-        activePermission?.toolName
+        self.activePermission?.toolName
     }
 
     /// Pending tool use ID
     var pendingToolID: String? {
-        activePermission?.toolUseID
+        self.activePermission?.toolUseID
     }
 
     /// Formatted pending tool input for display
     var pendingToolInput: String? {
-        activePermission?.formattedInput
+        self.activePermission?.formattedInput
     }
 
     /// Last message content
     var lastMessage: String? {
-        conversationInfo.lastMessage
+        self.conversationInfo.lastMessage
     }
 
     /// Last message role
     var lastMessageRole: String? {
-        conversationInfo.lastMessageRole
+        self.conversationInfo.lastMessageRole
     }
 
     /// Last tool name
     var lastToolName: String? {
-        conversationInfo.lastToolName
+        self.conversationInfo.lastToolName
     }
 
     /// Summary
     var summary: String? {
-        conversationInfo.summary
+        self.conversationInfo.summary
     }
 
     /// First user message
     var firstUserMessage: String? {
-        conversationInfo.firstUserMessage
+        self.conversationInfo.firstUserMessage
     }
 
     /// Last user message date
     var lastUserMessageDate: Date? {
-        conversationInfo.lastUserMessageDate
+        self.conversationInfo.lastUserMessageDate
     }
 
     /// Whether the session can be interacted with
     var canInteract: Bool {
-        phase.needsAttention
+        self.phase.needsAttention
     }
 }
 
@@ -229,18 +229,18 @@ struct ToolTracker: Equatable, Sendable {
 
     /// Mark a tool ID as seen, returns true if it was new
     mutating func markSeen(_ id: String) -> Bool {
-        seenIDs.insert(id).inserted
+        self.seenIDs.insert(id).inserted
     }
 
     /// Check if a tool ID has been seen
     func hasSeen(_ id: String) -> Bool {
-        seenIDs.contains(id)
+        self.seenIDs.contains(id)
     }
 
     /// Start tracking a tool
     mutating func startTool(id: String, name: String) {
-        guard markSeen(id) else { return }
-        inProgress[id] = ToolInProgress(
+        guard self.markSeen(id) else { return }
+        self.inProgress[id] = ToolInProgress(
             id: id,
             name: name,
             startTime: Date(),
@@ -250,7 +250,7 @@ struct ToolTracker: Equatable, Sendable {
 
     /// Complete a tool
     mutating func completeTool(id: String, success: Bool) {
-        inProgress.removeValue(forKey: id)
+        self.inProgress.removeValue(forKey: id)
     }
 }
 
@@ -299,12 +299,12 @@ struct SubagentState: Equatable, Sendable {
 
     /// Whether there's an active subagent
     var hasActiveSubagent: Bool {
-        !activeTasks.isEmpty
+        !self.activeTasks.isEmpty
     }
 
     /// Start tracking a Task tool
     mutating func startTask(taskToolID: String, description: String? = nil) {
-        activeTasks[taskToolID] = TaskContext(
+        self.activeTasks[taskToolID] = TaskContext(
             taskToolID: taskToolID,
             startTime: Date(),
             agentID: nil,
@@ -315,25 +315,25 @@ struct SubagentState: Equatable, Sendable {
 
     /// Stop tracking a Task tool
     mutating func stopTask(taskToolID: String) {
-        activeTasks.removeValue(forKey: taskToolID)
+        self.activeTasks.removeValue(forKey: taskToolID)
     }
 
     /// Set the agentID for a Task (called when agent file is discovered)
     mutating func setAgentID(_ agentID: String, for taskToolID: String) {
-        activeTasks[taskToolID]?.agentID = agentID
+        self.activeTasks[taskToolID]?.agentID = agentID
         if let description = activeTasks[taskToolID]?.description {
-            agentDescriptions[agentID] = description
+            self.agentDescriptions[agentID] = description
         }
     }
 
     /// Add a subagent tool to a specific Task by ID
     mutating func addSubagentToolToTask(_ tool: SubagentToolCall, taskID: String) {
-        activeTasks[taskID]?.subagentTools.append(tool)
+        self.activeTasks[taskID]?.subagentTools.append(tool)
     }
 
     /// Set all subagent tools for a specific Task (used when updating from agent file)
     mutating func setSubagentTools(_ tools: [SubagentToolCall], for taskID: String) {
-        activeTasks[taskID]?.subagentTools = tools
+        self.activeTasks[taskID]?.subagentTools = tools
     }
 
     /// Add a subagent tool to the most recent active Task
@@ -344,14 +344,14 @@ struct SubagentState: Equatable, Sendable {
         })
         else { return }
 
-        activeTasks[mostRecentTaskID]?.subagentTools.append(tool)
+        self.activeTasks[mostRecentTaskID]?.subagentTools.append(tool)
     }
 
     /// Update the status of a subagent tool across all active Tasks
     mutating func updateSubagentToolStatus(toolID: String, status: ToolStatus) {
-        for taskID in activeTasks.keys {
+        for taskID in self.activeTasks.keys {
             if let index = activeTasks[taskID]?.subagentTools.firstIndex(where: { $0.id == toolID }) {
-                activeTasks[taskID]?.subagentTools[index].status = status
+                self.activeTasks[taskID]?.subagentTools[index].status = status
                 return
             }
         }

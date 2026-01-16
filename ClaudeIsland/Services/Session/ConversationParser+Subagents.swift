@@ -40,8 +40,8 @@ extension ConversationParser {
             return []
         }
 
-        let completedToolIDs = parseCompletedToolIDs(from: content)
-        return parseToolUseBlocks(from: content, completedToolIDs: completedToolIDs)
+        let completedToolIDs = self.parseCompletedToolIDs(from: content)
+        return self.parseToolUseBlocks(from: content, completedToolIDs: completedToolIDs)
     }
 
     // MARK: Private Helpers
@@ -113,7 +113,7 @@ extension ConversationParser {
 
         seenToolIDs.insert(toolID)
 
-        let input = parseToolInput(block["input"] as? [String: Any])
+        let input = self.parseToolInput(block["input"] as? [String: Any])
         let isCompleted = completedToolIDs.contains(toolID)
         let timestamp = json["timestamp"] as? String
 

@@ -33,7 +33,7 @@ enum MCPToolFormatter {
             return alias
         }
 
-        guard isMCPTool(toolID) else { return toolID }
+        guard self.isMCPTool(toolID) else { return toolID }
 
         // Remove "mcp__" prefix and split by "__"
         let withoutPrefix = String(toolID.dropFirst(5)) // Drop "mcp__"
@@ -41,14 +41,14 @@ enum MCPToolFormatter {
 
         guard parts.count >= 1 else { return toolID }
 
-        let serverName = toTitleCase(String(parts[0]))
+        let serverName = self.toTitleCase(String(parts[0]))
 
         if parts.count >= 2 {
             // The second part starts with "_" which we need to drop
             let toolNameRaw = String(parts[1]).hasPrefix("_")
                 ? String(String(parts[1]).dropFirst())
                 : String(parts[1])
-            let toolName = toTitleCase(toolNameRaw)
+            let toolName = self.toTitleCase(toolNameRaw)
             return "\(serverName) - \(toolName)"
         }
 

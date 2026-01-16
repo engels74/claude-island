@@ -108,8 +108,8 @@ actor ConversationParser {
         if let fileSize = attrs[.size] as? Int, fileSize > Self.maxFullLoadFileSize {
             Self.logger.info("File size \(fileSize) exceeds max (\(Self.maxFullLoadFileSize)), using tail-based parsing")
             // For large files, read only the last portion to get recent info
-            let info = parseLargeFile(path: sessionFile)
-            cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
+            let info = self.parseLargeFile(path: sessionFile)
+            self.cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
             return info
         }
 
@@ -126,8 +126,8 @@ actor ConversationParser {
             )
         }
 
-        let info = parseContent(content)
-        cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
+        let info = self.parseContent(content)
+        self.cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
 
         return info
     }
@@ -142,9 +142,9 @@ actor ConversationParser {
             return []
         }
 
-        var state = incrementalState[sessionID] ?? IncrementalParseState()
-        _ = parseNewLines(filePath: sessionFile, state: &state)
-        incrementalState[sessionID] = state
+        var state = self.incrementalState[sessionID] ?? IncrementalParseState()
+        _ = self.parseNewLines(filePath: sessionFile, state: &state)
+        self.incrementalState[sessionID] = state
 
         return state.messages
     }
@@ -164,13 +164,13 @@ actor ConversationParser {
             )
         }
 
-        var state = incrementalState[sessionID] ?? IncrementalParseState()
-        let newMessages = parseNewLines(filePath: sessionFile, state: &state)
+        var state = self.incrementalState[sessionID] ?? IncrementalParseState()
+        let newMessages = self.parseNewLines(filePath: sessionFile, state: &state)
         let clearDetected = state.clearPending
         if clearDetected {
             state.clearPending = false
         }
-        incrementalState[sessionID] = state
+        self.incrementalState[sessionID] = state
 
         return IncrementalParseResult(
             newMessages: newMessages,
@@ -184,22 +184,22 @@ actor ConversationParser {
 
     /// Get set of completed tool IDs for a session
     func completedToolIDs(for sessionID: String) -> Set<String> {
-        incrementalState[sessionID]?.completedToolIDs ?? []
+        self.incrementalState[sessionID]?.completedToolIDs ?? []
     }
 
     /// Get tool results for a session
     func toolResults(for sessionID: String) -> [String: ToolResult] {
-        incrementalState[sessionID]?.toolResults ?? [:]
+        self.incrementalState[sessionID]?.toolResults ?? [:]
     }
 
     /// Get structured tool results for a session
     func structuredResults(for sessionID: String) -> [String: ToolResultData] {
-        incrementalState[sessionID]?.structuredResults ?? [:]
+        self.incrementalState[sessionID]?.structuredResults ?? [:]
     }
 
     /// Reset incremental state for a session (call when reloading)
     func resetState(for sessionID: String) {
-        incrementalState.removeValue(forKey: sessionID)
+        self.incrementalState.removeValue(forKey: sessionID)
     }
 
     /// Check if a /clear command was detected during the last parse
@@ -209,7 +209,7 @@ actor ConversationParser {
             return false
         }
         state.clearPending = false
-        incrementalState[sessionID] = state
+        self.incrementalState[sessionID] = state
         return true
     }
 
@@ -321,7 +321,7 @@ actor ConversationParser {
                 trimmedContent = String(content[content.index(after: firstNewline)...])
             }
 
-            return parseContent(trimmedContent)
+            return self.parseContent(trimmedContent)
         } catch {
             return ConversationInfo(
                 summary: nil,

@@ -64,8 +64,8 @@ final class NotchViewModel {
             windowHeight: windowHeight
         )
         self.hasPhysicalNotch = hasPhysicalNotch
-        setupEventHandlers()
-        observeSelectors()
+        self.setupEventHandlers()
+        self.observeSelectors()
     }
 
     // MARK: Internal
@@ -88,41 +88,41 @@ final class NotchViewModel {
 
     var status: NotchStatus = .closed {
         didSet {
-            statusSubject.send(status)
+            self.statusSubject.send(self.status)
         }
     }
 
     /// Combine publisher for status changes (for use in non-SwiftUI contexts like window controllers)
     var statusPublisher: AnyPublisher<NotchStatus, Never> {
-        statusSubject.eraseToAnyPublisher()
+        self.statusSubject.eraseToAnyPublisher()
     }
 
-    var deviceNotchRect: CGRect { geometry.deviceNotchRect }
-    var screenRect: CGRect { geometry.screenRect }
-    var windowHeight: CGFloat { geometry.windowHeight }
+    var deviceNotchRect: CGRect { self.geometry.deviceNotchRect }
+    var screenRect: CGRect { self.geometry.screenRect }
+    var windowHeight: CGFloat { self.geometry.windowHeight }
 
     /// Dynamic opened size based on content type
     /// Note: References selectorUpdateToken to ensure views re-compute when pickers expand/collapse
     var openedSize: CGSize {
         // Touch token to establish observation dependency
-        _ = selectorUpdateToken
+        _ = self.selectorUpdateToken
 
-        switch contentType {
+        switch self.contentType {
         case .chat:
             // Large size for chat view
             return CGSize(
-                width: min(screenRect.width * 0.5, 600),
+                width: min(self.screenRect.width * 0.5, 600),
                 height: 580
             )
         case .menu:
             // Compact size for settings menu
             return CGSize(
-                width: min(screenRect.width * 0.4, 480),
-                height: 500 + screenSelector.expandedPickerHeight + soundSelector.expandedPickerHeight
+                width: min(self.screenRect.width * 0.4, 480),
+                height: 500 + self.screenSelector.expandedPickerHeight + self.soundSelector.expandedPickerHeight
             )
         case .instances:
             return CGSize(
-                width: min(screenRect.width * 0.4, 480),
+                width: min(self.screenRect.width * 0.4, 480),
                 height: 320
             )
         }
@@ -135,12 +135,12 @@ final class NotchViewModel {
     }
 
     func notchOpen(reason: NotchOpenReason = .unknown) {
-        openReason = reason
-        status = .opened
+        self.openReason = reason
+        self.status = .opened
 
         // Don't restore chat on notification - show instances list instead
         if reason == .notification {
-            currentChatSession = nil
+            self.currentChatSession = nil
             return
         }
 
@@ -150,31 +150,31 @@ final class NotchViewModel {
             if case let .chat(current) = contentType, current.sessionID == chatSession.sessionID {
                 return
             }
-            contentType = .chat(chatSession)
+            self.contentType = .chat(chatSession)
         }
     }
 
     func notchClose() {
         // Save chat session before closing if in chat mode
         if case let .chat(session) = contentType {
-            currentChatSession = session
+            self.currentChatSession = session
         }
-        status = .closed
-        contentType = .instances
+        self.status = .closed
+        self.contentType = .instances
     }
 
     func notchPop() {
-        guard status == .closed else { return }
-        status = .popping
+        guard self.status == .closed else { return }
+        self.status = .popping
     }
 
     func notchUnpop() {
-        guard status == .popping else { return }
-        status = .closed
+        guard self.status == .popping else { return }
+        self.status = .closed
     }
 
     func toggleMenu() {
-        contentType = contentType == .menu ? .instances : .menu
+        self.contentType = self.contentType == .menu ? .instances : .menu
     }
 
     func showChat(for session: SessionState) {
@@ -182,23 +182,23 @@ final class NotchViewModel {
         if case let .chat(current) = contentType, current.sessionID == session.sessionID {
             return
         }
-        contentType = .chat(session)
+        self.contentType = .chat(session)
     }
 
     /// Go back to instances list and clear saved chat state
     func exitChat() {
-        currentChatSession = nil
-        contentType = .instances
+        self.currentChatSession = nil
+        self.contentType = .instances
     }
 
     /// Perform boot animation: expand briefly then collapse
     func performBootAnimation() {
-        notchOpen(reason: .boot)
-        bootAnimationTask?.cancel()
-        bootAnimationTask = Task {
+        self.notchOpen(reason: .boot)
+        self.bootAnimationTask?.cancel()
+        self.bootAnimationTask = Task {
             try? await Task.sleep(for: .seconds(1.0))
-            guard !Task.isCancelled, openReason == .boot else { return }
-            notchClose()
+            guard !Task.isCancelled, self.openReason == .boot else { return }
+            self.notchClose()
         }
     }
 
@@ -229,26 +229,26 @@ final class NotchViewModel {
 
     /// Whether we're in chat mode (sticky behavior)
     private var isInChatMode: Bool {
-        if case .chat = contentType { return true }
+        if case .chat = self.contentType { return true }
         return false
     }
 
     private func observeSelectors() {
         // Use withObservationTracking to observe @Observable properties across objects
-        startSelectorObservation()
+        self.startSelectorObservation()
     }
 
     private func startSelectorObservation() {
-        guard !isObservingSelectors else { return }
-        isObservingSelectors = true
-        observeSelectorChanges()
+        guard !self.isObservingSelectors else { return }
+        self.isObservingSelectors = true
+        self.observeSelectorChanges()
     }
 
     private func observeSelectorChanges() {
         withObservationTracking {
             // Access the properties we want to observe
-            _ = screenSelector.isPickerExpanded
-            _ = soundSelector.isPickerExpanded
+            _ = self.screenSelector.isPickerExpanded
+            _ = self.soundSelector.isPickerExpanded
         } onChange: { [weak self] in
             // Dispatch to main actor since onChange may be called from any context
             Task { @MainActor [weak self] in
@@ -262,42 +262,42 @@ final class NotchViewModel {
     // MARK: - Event Handling
 
     private func setupEventHandlers() {
-        events.mouseLocation
+        self.events.mouseLocation
             .throttle(for: .milliseconds(50), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] location in
                 self?.handleMouseMove(location)
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
 
-        events.mouseDown
+        self.events.mouseDown
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.handleMouseDown()
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
     }
 
     private func handleMouseMove(_ location: CGPoint) {
-        let inNotch = geometry.isPointInNotch(location)
-        let inOpened = status == .opened && geometry.isPointInOpenedPanel(location, size: openedSize)
+        let inNotch = self.geometry.isPointInNotch(location)
+        let inOpened = self.status == .opened && self.geometry.isPointInOpenedPanel(location, size: self.openedSize)
 
         let newHovering = inNotch || inOpened
 
         // Only update if changed to prevent unnecessary re-renders
-        guard newHovering != isHovering else { return }
+        guard newHovering != self.isHovering else { return }
 
-        isHovering = newHovering
+        self.isHovering = newHovering
 
         // Cancel any pending hover task
-        hoverTask?.cancel()
-        hoverTask = nil
+        self.hoverTask?.cancel()
+        self.hoverTask = nil
 
         // Start hover timer to auto-expand after 1 second
-        if isHovering && (status == .closed || status == .popping) {
-            hoverTask = Task {
+        if self.isHovering && (self.status == .closed || self.status == .popping) {
+            self.hoverTask = Task {
                 try? await Task.sleep(for: .seconds(1.0))
-                guard !Task.isCancelled, isHovering else { return }
-                notchOpen(reason: .hover)
+                guard !Task.isCancelled, self.isHovering else { return }
+                self.notchOpen(reason: .hover)
             }
         }
     }
@@ -305,22 +305,22 @@ final class NotchViewModel {
     private func handleMouseDown() {
         let location = NSEvent.mouseLocation
 
-        switch status {
+        switch self.status {
         case .opened:
-            if geometry.isPointOutsidePanel(location, size: openedSize) {
-                notchClose()
+            if self.geometry.isPointOutsidePanel(location, size: self.openedSize) {
+                self.notchClose()
                 // Re-post the click so it reaches the window/app behind us
-                repostClickAt(location)
-            } else if geometry.notchScreenRect.contains(location) {
+                self.repostClickAt(location)
+            } else if self.geometry.notchScreenRect.contains(location) {
                 // Clicking notch while opened - only close if NOT in chat mode
-                if !isInChatMode {
-                    notchClose()
+                if !self.isInChatMode {
+                    self.notchClose()
                 }
             }
         case .closed,
              .popping:
-            if geometry.isPointInNotch(location) {
-                notchOpen(reason: .click)
+            if self.geometry.isPointInNotch(location) {
+                self.notchOpen(reason: .click)
             }
         }
     }
@@ -328,9 +328,9 @@ final class NotchViewModel {
     /// Re-posts a mouse click at the given screen location so it reaches windows behind us
     private func repostClickAt(_ location: CGPoint) {
         // Cancel any pending repost task
-        repostClickTask?.cancel()
+        self.repostClickTask?.cancel()
         // Small delay to let the window's ignoresMouseEvents update
-        repostClickTask = Task {
+        self.repostClickTask = Task {
             try? await Task.sleep(for: .seconds(0.05))
             guard !Task.isCancelled else { return }
 

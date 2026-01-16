@@ -29,12 +29,12 @@ final class EventMonitor: @unchecked Sendable {
     @MainActor
     func start() {
         // Global monitor for events outside our app
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+        self.globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: self.mask) { [weak self] event in
             self?.handler(event)
         }
 
         // Local monitor for events inside our app
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+        self.localMonitor = NSEvent.addLocalMonitorForEvents(matching: self.mask) { [weak self] event in
             self?.handler(event)
             return event
         }
@@ -43,7 +43,7 @@ final class EventMonitor: @unchecked Sendable {
     /// Stop monitoring events. Must be called on the main thread.
     @MainActor
     func stop() {
-        stopInternal()
+        self.stopInternal()
     }
 
     // MARK: Private
@@ -62,11 +62,11 @@ final class EventMonitor: @unchecked Sendable {
     private func stopInternal() {
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)
-            globalMonitor = nil
+            self.globalMonitor = nil
         }
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
-            localMonitor = nil
+            self.localMonitor = nil
         }
     }
 }

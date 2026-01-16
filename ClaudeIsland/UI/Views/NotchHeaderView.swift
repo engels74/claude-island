@@ -27,20 +27,20 @@ struct ClaudeCrabIcon: View {
 
     var body: some View {
         Canvas { context, canvasSize in
-            let scale = size / 52.0 // Original viewBox height is 52
+            let scale = self.size / 52.0 // Original viewBox height is 52
             let xOffset = (canvasSize.width - 66 * scale) / 2
 
             // Left antenna
             let leftAntenna = Path { path in
                 path.addRect(CGRect(x: 0, y: 13, width: 6, height: 13))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(leftAntenna, with: .color(color))
+            context.fill(leftAntenna, with: .color(self.color))
 
             // Right antenna
             let rightAntenna = Path { path in
                 path.addRect(CGRect(x: 60, y: 13, width: 6, height: 13))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(rightAntenna, with: .color(color))
+            context.fill(rightAntenna, with: .color(self.color))
 
             // Animated legs - alternating up/down pattern for walking effect
             // Legs stay attached to body (y=39), only height changes
@@ -55,7 +55,7 @@ struct ClaudeCrabIcon: View {
                 [0, 0, 0, 0], // Phase 3: neutral
             ]
 
-            let currentHeightOffsets = animateLegs ? legHeightOffsets[legPhase % 4] : [CGFloat](repeating: 0, count: 4)
+            let currentHeightOffsets = self.animateLegs ? legHeightOffsets[self.legPhase % 4] : [CGFloat](repeating: 0, count: 4)
 
             for (index, xPos) in baseLegPositions.enumerated() {
                 let heightOffset = currentHeightOffsets[index]
@@ -63,14 +63,14 @@ struct ClaudeCrabIcon: View {
                 let leg = Path { path in
                     path.addRect(CGRect(x: xPos, y: 39, width: 6, height: legHeight))
                 }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-                context.fill(leg, with: .color(color))
+                context.fill(leg, with: .color(self.color))
             }
 
             // Main body
             let body = Path { path in
                 path.addRect(CGRect(x: 6, y: 0, width: 54, height: 39))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(body, with: .color(color))
+            context.fill(body, with: .color(self.color))
 
             // Left eye
             let leftEye = Path { path in
@@ -84,10 +84,10 @@ struct ClaudeCrabIcon: View {
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
             context.fill(rightEye, with: .color(.black))
         }
-        .frame(width: size * (66.0 / 52.0), height: size)
-        .onReceive(legTimer) { _ in
-            if animateLegs {
-                legPhase = (legPhase + 1) % 4
+        .frame(width: self.size * (66.0 / 52.0), height: self.size)
+        .onReceive(self.legTimer) { _ in
+            if self.animateLegs {
+                self.legPhase = (self.legPhase + 1) % 4
             }
         }
     }
@@ -118,20 +118,20 @@ struct PermissionIndicatorIcon: View {
 
     var body: some View {
         Canvas { context, _ in
-            let scale = size / 30.0
+            let scale = self.size / 30.0
             let pixelSize: CGFloat = 4 * scale
 
-            for (x, y) in pixels {
+            for (x, y) in self.pixels {
                 let rect = CGRect(
                     x: x * scale - pixelSize / 2,
                     y: y * scale - pixelSize / 2,
                     width: pixelSize,
                     height: pixelSize
                 )
-                context.fill(Path(rect), with: .color(color))
+                context.fill(Path(rect), with: .color(self.color))
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: self.size, height: self.size)
     }
 
     // MARK: Private
@@ -164,20 +164,20 @@ struct ReadyForInputIndicatorIcon: View {
 
     var body: some View {
         Canvas { context, _ in
-            let scale = size / 30.0
+            let scale = self.size / 30.0
             let pixelSize: CGFloat = 4 * scale
 
-            for (x, y) in pixels {
+            for (x, y) in self.pixels {
                 let rect = CGRect(
                     x: x * scale - pixelSize / 2,
                     y: y * scale - pixelSize / 2,
                     width: pixelSize,
                     height: pixelSize
                 )
-                context.fill(Path(rect), with: .color(color))
+                context.fill(Path(rect), with: .color(self.color))
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: self.size, height: self.size)
     }
 
     // MARK: Private

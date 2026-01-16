@@ -17,7 +17,7 @@ class PassThroughHostingView<Content: View>: NSHostingView<Content> {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         // Only accept hits within the panel rect
-        guard hitTestRect().contains(point) else {
+        guard self.hitTestRect().contains(point) else {
             return nil // Pass through to windows behind
         }
         return super.hitTest(point)
@@ -47,7 +47,7 @@ class NotchViewController: NSViewController {
         // Calculate the hit-test rect based on panel state
         hosting.hitTestRect = { [weak self] () -> CGRect in
             guard let self else { return .zero }
-            let vm = viewModel
+            let vm = self.viewModel
             let geometry = vm.geometry
 
             // Window coordinates: origin at bottom-left, Y increases upward
@@ -82,7 +82,7 @@ class NotchViewController: NSViewController {
             }
         }
 
-        hostingView = hosting
+        self.hostingView = hosting
         view = hosting
     }
 
