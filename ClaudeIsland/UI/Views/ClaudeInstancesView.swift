@@ -5,6 +5,7 @@
 //  Minimal instances list matching Dynamic Island aesthetic
 //
 
+import Combine
 import SwiftUI
 
 // MARK: - ClaudeInstancesView

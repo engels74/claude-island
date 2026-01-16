@@ -5,6 +5,7 @@
 //  Redesigned chat interface with clean visual hierarchy
 //
 
+import Combine
 import SwiftUI
 
 // swiftlint:disable file_length

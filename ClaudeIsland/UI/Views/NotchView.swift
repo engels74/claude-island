@@ -19,6 +19,12 @@ private let cornerRadiusInsets = (
 
 // swiftlint:disable:next type_body_length
 struct NotchView: View {
+    // MARK: Lifecycle
+
+    init(viewModel: NotchViewModel) {
+        self.viewModel = viewModel
+    }
+
     // MARK: Internal
 
     /// View model is @Observable, so SwiftUI automatically tracks property access
@@ -104,8 +110,6 @@ struct NotchView: View {
 
     /// Session monitor is @Observable, so we use @State for ownership
     @State private var sessionMonitor = ClaudeSessionMonitor()
-    /// Singleton is @Observable, so SwiftUI automatically tracks property access
-    private var activityCoordinator = NotchActivityCoordinator.shared
     /// UpdateManager inherits from NSObject for Sparkle integration - intentional exception to @Observable pattern
     @ObservedObject private var updateManager = UpdateManager.shared
     @State private var previousPendingIDs: Set<String> = []
@@ -117,8 +121,10 @@ struct NotchView: View {
     @State private var hideVisibilityTask: Task<Void, Never>?
     @State private var bounceTask: Task<Void, Never>?
     @State private var checkmarkHideTask: Task<Void, Never>?
-
     @Namespace private var activityNamespace
+
+    /// Singleton is @Observable, so SwiftUI automatically tracks property access
+    private var activityCoordinator = NotchActivityCoordinator.shared
 
     // Animation springs
     private let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)

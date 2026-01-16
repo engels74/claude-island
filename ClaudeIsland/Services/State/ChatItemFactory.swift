@@ -86,7 +86,7 @@ enum ChatItemFactory {
     }
 
     private static func createToolUseItem(
-        tool: ToolUse,
+        tool: ToolUseBlock,
         message: ChatMessage,
         context: inout ItemCreationContext
     ) -> ChatHistoryItem? {
