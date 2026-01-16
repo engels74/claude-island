@@ -11,17 +11,6 @@ import Foundation
 
 /// Information about a process in the tree
 struct ProcessInfo: Sendable {
-    // MARK: Lifecycle
-
-    nonisolated init(pid: Int, ppid: Int, command: String, tty: String?) {
-        self.pid = pid
-        self.ppid = ppid
-        self.command = command
-        self.tty = tty
-    }
-
-    // MARK: Internal
-
     let pid: Int
     let ppid: Int
     let command: String
@@ -38,7 +27,7 @@ struct ProcessTreeBuilder: Sendable {
 
     // MARK: Internal
 
-    nonisolated static let shared = ProcessTreeBuilder()
+    nonisolated static let shared = Self()
 
     /// Build a process tree mapping PID -> ProcessInfo
     nonisolated func buildTree() -> [Int: ProcessInfo] {

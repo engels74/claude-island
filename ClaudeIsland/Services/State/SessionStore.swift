@@ -11,8 +11,9 @@ import Foundation
 import Mixpanel
 import os.log
 
-/// Central state manager for all Claude sessions
-/// Uses Swift actor for thread-safe state mutations
+// Central state manager for all Claude sessions
+// Uses Swift actor for thread-safe state mutations
+// swiftlint:disable:next type_body_length
 actor SessionStore {
     // MARK: Lifecycle
 
@@ -66,14 +67,14 @@ actor SessionStore {
         case let .loadHistory(sessionID, cwd):
             await loadHistoryFromFile(sessionID: sessionID, cwd: cwd)
 
-        case let .historyLoaded(sessionID, messages, completedTools, toolResults, structuredResults, conversationInfo):
+        case let .historyLoaded(payload):
             await processHistoryLoaded(
-                sessionID: sessionID,
-                messages: messages,
-                completedTools: completedTools,
-                toolResults: toolResults,
-                structuredResults: structuredResults,
-                conversationInfo: conversationInfo
+                sessionID: payload.sessionID,
+                messages: payload.messages,
+                completedTools: payload.completedTools,
+                toolResults: payload.toolResults,
+                structuredResults: payload.structuredResults,
+                conversationInfo: payload.conversationInfo
             )
 
         case let .toolCompleted(sessionID, toolUseID, result):
@@ -565,89 +566,12 @@ actor SessionStore {
             Self.logger.debug("Clear reconciliation: kept \(session.chatItems.count) of \(previousCount) items")
         }
 
-        if payload.isIncremental {
-            let existingIDs = Set(session.chatItems.map(\.id))
+        processMessages(
+            from: payload,
+            into: &session
+        )
 
-            for message in payload.messages {
-                for (blockIndex, block) in message.content.enumerated() {
-                    if case let .toolUse(tool) = block {
-                        if let idx = session.chatItems.firstIndex(where: { $0.id == tool.id }) {
-                            if case let .toolCall(existingTool) = session.chatItems[idx].type {
-                                session.chatItems[idx] = ChatHistoryItem(
-                                    id: tool.id,
-                                    type: .toolCall(ToolCallItem(
-                                        name: tool.name,
-                                        input: tool.input,
-                                        status: existingTool.status,
-                                        result: existingTool.result,
-                                        structuredResult: existingTool.structuredResult,
-                                        subagentTools: existingTool.subagentTools
-                                    )),
-                                    timestamp: message.timestamp
-                                )
-                            }
-                            continue
-                        }
-                    }
-
-                    let item = createChatItem(
-                        from: block,
-                        message: message,
-                        blockIndex: blockIndex,
-                        existingIDs: existingIDs,
-                        completedTools: payload.completedToolIDs,
-                        toolResults: payload.toolResults,
-                        structuredResults: payload.structuredResults,
-                        toolTracker: &session.toolTracker
-                    )
-
-                    if let item {
-                        session.chatItems.append(item)
-                    }
-                }
-            }
-        } else {
-            let existingIDs = Set(session.chatItems.map(\.id))
-
-            for message in payload.messages {
-                for (blockIndex, block) in message.content.enumerated() {
-                    if case let .toolUse(tool) = block {
-                        if let idx = session.chatItems.firstIndex(where: { $0.id == tool.id }) {
-                            if case let .toolCall(existingTool) = session.chatItems[idx].type {
-                                session.chatItems[idx] = ChatHistoryItem(
-                                    id: tool.id,
-                                    type: .toolCall(ToolCallItem(
-                                        name: tool.name,
-                                        input: tool.input,
-                                        status: existingTool.status,
-                                        result: existingTool.result,
-                                        structuredResult: existingTool.structuredResult,
-                                        subagentTools: existingTool.subagentTools
-                                    )),
-                                    timestamp: message.timestamp
-                                )
-                            }
-                            continue
-                        }
-                    }
-
-                    let item = createChatItem(
-                        from: block,
-                        message: message,
-                        blockIndex: blockIndex,
-                        existingIDs: existingIDs,
-                        completedTools: payload.completedToolIDs,
-                        toolResults: payload.toolResults,
-                        structuredResults: payload.structuredResults,
-                        toolTracker: &session.toolTracker
-                    )
-
-                    if let item {
-                        session.chatItems.append(item)
-                    }
-                }
-            }
-
+        if !payload.isIncremental {
             session.chatItems.sort { $0.timestamp < $1.timestamp }
         }
 
@@ -668,6 +592,53 @@ actor SessionStore {
             toolResults: payload.toolResults,
             structuredResults: payload.structuredResults
         )
+    }
+
+    /// Process messages from payload into session chat items
+    private func processMessages(
+        from payload: FileUpdatePayload,
+        into session: inout SessionState
+    ) {
+        let existingIDs = Set(session.chatItems.map(\.id))
+
+        for message in payload.messages {
+            for (blockIndex, block) in message.content.enumerated() {
+                if case let .toolUse(tool) = block {
+                    if let idx = session.chatItems.firstIndex(where: { $0.id == tool.id }) {
+                        if case let .toolCall(existingTool) = session.chatItems[idx].type {
+                            session.chatItems[idx] = ChatHistoryItem(
+                                id: tool.id,
+                                type: .toolCall(ToolCallItem(
+                                    name: tool.name,
+                                    input: tool.input,
+                                    status: existingTool.status,
+                                    result: existingTool.result,
+                                    structuredResult: existingTool.structuredResult,
+                                    subagentTools: existingTool.subagentTools
+                                )),
+                                timestamp: message.timestamp
+                            )
+                        }
+                        continue
+                    }
+                }
+
+                let item = ChatItemFactory.createItem(
+                    from: block,
+                    message: message,
+                    blockIndex: blockIndex,
+                    existingIDs: existingIDs,
+                    completedTools: payload.completedToolIDs,
+                    toolResults: payload.toolResults,
+                    structuredResults: payload.structuredResults,
+                    toolTracker: &session.toolTracker
+                )
+
+                if let item {
+                    session.chatItems.append(item)
+                }
+            }
+        }
     }
 
     /// Populate subagent tools for Task tools using their agent JSONL files
@@ -745,71 +716,6 @@ actor SessionStore {
 
             // Process the completion event (this will update state and phase consistently)
             await process(.toolCompleted(sessionID: sessionID, toolUseID: item.id, result: result))
-        }
-    }
-
-    /// Create chat item (checks existingIDs to avoid duplicates)
-    private func createChatItem(
-        from block: MessageBlock,
-        message: ChatMessage,
-        blockIndex: Int,
-        existingIDs: Set<String>,
-        completedTools: Set<String>,
-        toolResults: [String: ConversationParser.ToolResult],
-        structuredResults: [String: ToolResultData],
-        toolTracker: inout ToolTracker
-    ) -> ChatHistoryItem? {
-        switch block {
-        case let .text(text):
-            let itemID = "\(message.id)-text-\(blockIndex)"
-            guard !existingIDs.contains(itemID) else { return nil }
-
-            if message.role == .user {
-                return ChatHistoryItem(id: itemID, type: .user(text), timestamp: message.timestamp)
-            } else {
-                return ChatHistoryItem(id: itemID, type: .assistant(text), timestamp: message.timestamp)
-            }
-
-        case let .toolUse(tool):
-            guard toolTracker.markSeen(tool.id) else { return nil }
-
-            let isCompleted = completedTools.contains(tool.id)
-            let status: ToolStatus = isCompleted ? .success : .running
-
-            // Extract result text for completed tools
-            var resultText: String? = nil
-            if isCompleted, let parserResult = toolResults[tool.id] {
-                if let stdout = parserResult.stdout, !stdout.isEmpty {
-                    resultText = stdout
-                } else if let stderr = parserResult.stderr, !stderr.isEmpty {
-                    resultText = stderr
-                } else if let content = parserResult.content, !content.isEmpty {
-                    resultText = content
-                }
-            }
-
-            return ChatHistoryItem(
-                id: tool.id,
-                type: .toolCall(ToolCallItem(
-                    name: tool.name,
-                    input: tool.input,
-                    status: status,
-                    result: resultText,
-                    structuredResult: structuredResults[tool.id],
-                    subagentTools: []
-                )),
-                timestamp: message.timestamp
-            )
-
-        case let .thinking(text):
-            let itemID = "\(message.id)-thinking-\(blockIndex)"
-            guard !existingIDs.contains(itemID) else { return nil }
-            return ChatHistoryItem(id: itemID, type: .thinking(text), timestamp: message.timestamp)
-
-        case .interrupted:
-            let itemID = "\(message.id)-interrupted-\(blockIndex)"
-            guard !existingIDs.contains(itemID) else { return nil }
-            return ChatHistoryItem(id: itemID, type: .interrupted, timestamp: message.timestamp)
         }
     }
 
@@ -904,14 +810,14 @@ actor SessionStore {
         )
 
         // Process loaded history
-        await process(.historyLoaded(
+        await process(.historyLoaded(HistoryLoadedPayload(
             sessionID: sessionID,
             messages: messages,
             completedTools: completedTools,
             toolResults: toolResults,
             structuredResults: structuredResults,
             conversationInfo: conversationInfo
-        ))
+        )))
     }
 
     private func processHistoryLoaded(
@@ -932,7 +838,7 @@ actor SessionStore {
 
         for message in messages {
             for (blockIndex, block) in message.content.enumerated() {
-                let item = createChatItem(
+                let item = ChatItemFactory.createItem(
                     from: block,
                     message: message,
                     blockIndex: blockIndex,

@@ -419,9 +419,8 @@ struct ChatView: View {
     /// Bar for interactive tools like AskUserQuestion that need terminal input
     private var interactivePromptBar: some View {
         ChatInteractivePromptBar(
-            isInTmux: session.isInTmux,
-            onGoToTerminal: { focusTerminal() }
-        )
+            isInTmux: session.isInTmux
+        ) { focusTerminal() }
     }
 
     // MARK: - Approval Bar

@@ -20,7 +20,7 @@ enum NotchActivityType: Equatable {
 
 /// An activity that expands the notch to the sides
 struct ExpandingActivity: Equatable {
-    static let empty = ExpandingActivity()
+    static let empty = Self()
 
     var show = false
     var type: NotchActivityType = .none

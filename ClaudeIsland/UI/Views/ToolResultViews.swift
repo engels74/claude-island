@@ -15,38 +15,38 @@ struct ToolResultContent: View {
     var body: some View {
         if let structured = tool.structuredResult {
             switch structured {
-            case let .read(r):
-                ReadResultContent(result: r)
-            case let .edit(r):
-                EditResultContent(result: r, toolInput: tool.input)
-            case let .write(r):
-                WriteResultContent(result: r)
-            case let .bash(r):
-                BashResultContent(result: r)
-            case let .grep(r):
-                GrepResultContent(result: r)
-            case let .glob(r):
-                GlobResultContent(result: r)
-            case let .todoWrite(r):
-                TodoWriteResultContent(result: r)
-            case let .task(r):
-                TaskResultContent(result: r)
-            case let .webFetch(r):
-                WebFetchResultContent(result: r)
-            case let .webSearch(r):
-                WebSearchResultContent(result: r)
-            case let .askUserQuestion(r):
-                AskUserQuestionResultContent(result: r)
-            case let .bashOutput(r):
-                BashOutputResultContent(result: r)
-            case let .killShell(r):
-                KillShellResultContent(result: r)
-            case let .exitPlanMode(r):
-                ExitPlanModeResultContent(result: r)
-            case let .mcp(r):
-                MCPResultContent(result: r)
-            case let .generic(r):
-                GenericResultContent(result: r)
+            case let .read(result):
+                ReadResultContent(result: result)
+            case let .edit(result):
+                EditResultContent(result: result, toolInput: tool.input)
+            case let .write(result):
+                WriteResultContent(result: result)
+            case let .bash(result):
+                BashResultContent(result: result)
+            case let .grep(result):
+                GrepResultContent(result: result)
+            case let .glob(result):
+                GlobResultContent(result: result)
+            case let .todoWrite(result):
+                TodoWriteResultContent(result: result)
+            case let .task(result):
+                TaskResultContent(result: result)
+            case let .webFetch(result):
+                WebFetchResultContent(result: result)
+            case let .webSearch(result):
+                WebSearchResultContent(result: result)
+            case let .askUserQuestion(result):
+                AskUserQuestionResultContent(result: result)
+            case let .bashOutput(result):
+                BashOutputResultContent(result: result)
+            case let .killShell(result):
+                KillShellResultContent(result: result)
+            case let .exitPlanMode(result):
+                ExitPlanModeResultContent(result: result)
+            case let .mcp(result):
+                MCPResultContent(result: result)
+            case let .generic(result):
+                GenericResultContent(result: result)
             }
         } else if tool.name == "Edit" {
             // Special fallback for Edit - show diff from input params
@@ -1093,35 +1093,36 @@ struct SimpleDiffView: View {
     }
 
     /// Compute Longest Common Subsequence of two string arrays
-    private func computeLCS(_ a: [String], _ b: [String]) -> [String] {
-        let m = a.count
-        let n = b.count
+    private func computeLCS(_ oldLines: [String], _ newLines: [String]) -> [String] {
+        let rowCount = oldLines.count
+        let colCount = newLines.count
 
         // DP table
-        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        var dp = Array(repeating: Array(repeating: 0, count: colCount + 1), count: rowCount + 1)
 
-        for i in 1 ... m {
-            for j in 1 ... n {
-                if a[i - 1] == b[j - 1] {
-                    dp[i][j] = dp[i - 1][j - 1] + 1
+        for idx in 1 ... rowCount {
+            for jdx in 1 ... colCount {
+                if oldLines[idx - 1] == newLines[jdx - 1] {
+                    dp[idx][jdx] = dp[idx - 1][jdx - 1] + 1
                 } else {
-                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                    dp[idx][jdx] = max(dp[idx - 1][jdx], dp[idx][jdx - 1])
                 }
             }
         }
 
         // Backtrack to find LCS
         var lcs: [String] = []
-        var i = m, j = n
-        while i > 0 && j > 0 {
-            if a[i - 1] == b[j - 1] {
-                lcs.append(a[i - 1])
-                i -= 1
-                j -= 1
-            } else if dp[i - 1][j] > dp[i][j - 1] {
-                i -= 1
+        var row = rowCount
+        var col = colCount
+        while row > 0 && col > 0 {
+            if oldLines[row - 1] == newLines[col - 1] {
+                lcs.append(oldLines[row - 1])
+                row -= 1
+                col -= 1
+            } else if dp[row - 1][col] > dp[row][col - 1] {
+                row -= 1
             } else {
-                j -= 1
+                col -= 1
             }
         }
 
@@ -1134,10 +1135,10 @@ struct SimpleDiffView: View {
 /// Helper for selective corner rounding (macOS compatible)
 struct RoundedCorner: Shape {
     struct RectCorner: OptionSet {
-        static let topLeft = RectCorner(rawValue: 1 << 0)
-        static let topRight = RectCorner(rawValue: 1 << 1)
-        static let bottomLeft = RectCorner(rawValue: 1 << 2)
-        static let bottomRight = RectCorner(rawValue: 1 << 3)
+        static let topLeft = Self(rawValue: 1 << 0)
+        static let topRight = Self(rawValue: 1 << 1)
+        static let bottomLeft = Self(rawValue: 1 << 2)
+        static let bottomRight = Self(rawValue: 1 << 3)
         static let allCorners: RectCorner = [.topLeft, .topRight, .bottomLeft, .bottomRight]
 
         let rawValue: Int

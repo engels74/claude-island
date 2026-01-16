@@ -115,10 +115,8 @@ enum ToolEventProcessor {
         for (taskID, taskContext) in session.subagentState.activeTasks {
             var tools = taskContext.subagentTools
             if markAsInterrupted {
-                for i in 0 ..< tools.count {
-                    if tools[i].status == .running {
-                        tools[i].status = .interrupted
-                    }
+                for index in 0 ..< tools.count where tools[index].status == .running {
+                    tools[index].status = .interrupted
                 }
             }
             attachSubagentToolsToTask(

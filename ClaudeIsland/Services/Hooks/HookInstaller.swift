@@ -156,8 +156,8 @@ enum HookInstaller {
             if var existingEvent = hooks[event] as? [[String: Any]] {
                 let hasOurHook = existingEvent.contains { entry in
                     if let entryHooks = entry["hooks"] as? [[String: Any]] {
-                        return entryHooks.contains { h in
-                            let cmd = h["command"] as? String ?? ""
+                        return entryHooks.contains { hookEntry in
+                            let cmd = hookEntry["command"] as? String ?? ""
                             return cmd.contains("claude-island-state.py")
                         }
                     }

@@ -53,12 +53,10 @@ actor WindowFinder {
         if let cached = isAvailableCache { return cached }
 
         let paths = ["/opt/homebrew/bin/yabai", "/usr/local/bin/yabai"]
-        for path in paths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                yabaiPath = path
-                isAvailableCache = true
-                return true
-            }
+        if let foundPath = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
+            yabaiPath = foundPath
+            isAvailableCache = true
+            return true
         }
         isAvailableCache = false
         return false
@@ -89,7 +87,7 @@ actor WindowFinder {
 
     /// Get the current space number
     nonisolated func getCurrentSpace(windows: [YabaiWindow]) -> Int? {
-        windows.first(where: { $0.hasFocus })?.space
+        windows.first { $0.hasFocus }?.space
     }
 
     /// Find windows for a terminal PID

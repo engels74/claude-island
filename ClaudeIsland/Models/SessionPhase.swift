@@ -116,7 +116,7 @@ enum SessionPhase: Sendable {
     // MARK: - State Machine Transitions
 
     /// Check if a transition to the target phase is valid
-    nonisolated func canTransition(to next: SessionPhase) -> Bool {
+    nonisolated func canTransition(to next: Self) -> Bool {
         switch (self, next) {
         // Terminal state - no transitions out
         case (.ended, _):
@@ -170,7 +170,7 @@ enum SessionPhase: Sendable {
     }
 
     /// Attempt to transition to a new phase, returns the new phase if valid
-    nonisolated func transition(to next: SessionPhase) -> SessionPhase? {
+    nonisolated func transition(to next: Self) -> Self? {
         canTransition(to: next) ? next : nil
     }
 }

@@ -115,7 +115,7 @@ struct ChatHistoryItem: Identifiable, Equatable, Sendable {
     let type: ChatHistoryItemType
     let timestamp: Date
 
-    static func == (lhs: ChatHistoryItem, rhs: ChatHistoryItem) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id && lhs.type == rhs.type
     }
 }
@@ -182,7 +182,7 @@ struct ToolCallItem: Equatable, Sendable {
     }
 
     /// Custom Equatable implementation to handle structuredResult
-    static func == (lhs: ToolCallItem, rhs: ToolCallItem) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.name == rhs.name &&
             lhs.input == rhs.input &&
             lhs.status == rhs.status &&

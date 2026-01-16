@@ -161,10 +161,8 @@ class JSONLInterruptWatcher {
         }
 
         if line.contains("\"tool_result\"") && line.contains("\"is_error\":true") {
-            for pattern in Self.interruptContentPatterns {
-                if line.contains(pattern) {
-                    return true
-                }
+            if Self.interruptContentPatterns.contains(where: { line.contains($0) }) {
+                return true
             }
         }
 
