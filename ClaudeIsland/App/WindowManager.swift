@@ -32,33 +32,42 @@ final class WindowManager {
             return nil
         }
 
-        // Skip recreation if screen frame hasn't meaningfully changed
+        // Skip recreation if screen hasn't meaningfully changed (same frame AND same display)
+        let screenDisplayID = self.displayID(of: screen)
         if let existingController = windowController,
            let existingFrame = currentScreenFrame,
-           existingFrame == screen.frame {
+           existingFrame == screen.frame,
+           currentDisplayID == screenDisplayID {
             logger.debug("Screen unchanged, skipping window recreation")
             return existingController
         }
 
         // Only animate on initial app launch, not on screen changes
-        let shouldAnimate = isInitialLaunch
-        isInitialLaunch = false
+        let shouldAnimate = self.isInitialLaunch
+        self.isInitialLaunch = false
 
         if let existingController = windowController {
             existingController.window?.orderOut(nil)
             existingController.window?.close()
-            windowController = nil
+            self.windowController = nil
         }
 
-        currentScreenFrame = screen.frame
-        windowController = NotchWindowController(screen: screen, animateOnLaunch: shouldAnimate)
-        windowController?.showWindow(nil)
+        self.currentScreenFrame = screen.frame
+        self.currentDisplayID = screenDisplayID
+        self.windowController = NotchWindowController(screen: screen, animateOnLaunch: shouldAnimate)
+        self.windowController?.showWindow(nil)
 
-        return windowController
+        return self.windowController
     }
 
     // MARK: Private
 
     private var isInitialLaunch = true
     private var currentScreenFrame: NSRect?
+    private var currentDisplayID: CGDirectDisplayID?
+
+    /// Extract the display ID from an NSScreen
+    private func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
 }
