@@ -8,6 +8,21 @@
 
 import Foundation
 
+// MARK: - ItemCreationContext
+
+/// Context for creating chat items, grouping related parameters
+struct ItemCreationContext {
+    let existingIDs: Set<String>
+    let completedTools: Set<String>
+    let toolResults: [String: ConversationParser.ToolResult]
+    let structuredResults: [String: ToolResultData]
+    var toolTracker: ToolTracker
+
+    mutating func markToolSeen(_ id: String) -> Bool {
+        toolTracker.markSeen(id)
+    }
+}
+
 // MARK: - ChatItemFactory
 
 enum ChatItemFactory {
@@ -19,11 +34,7 @@ enum ChatItemFactory {
         from block: MessageBlock,
         message: ChatMessage,
         blockIndex: Int,
-        existingIDs: Set<String>,
-        completedTools: Set<String>,
-        toolResults: [String: ConversationParser.ToolResult],
-        structuredResults: [String: ToolResultData],
-        toolTracker: inout ToolTracker
+        context: inout ItemCreationContext
     ) -> ChatHistoryItem? {
         switch block {
         case let .text(text):
@@ -31,32 +42,25 @@ enum ChatItemFactory {
                 text: text,
                 message: message,
                 blockIndex: blockIndex,
-                existingIDs: existingIDs
+                existingIDs: context.existingIDs
             )
 
         case let .toolUse(tool):
-            createToolUseItem(
-                tool: tool,
-                message: message,
-                completedTools: completedTools,
-                toolResults: toolResults,
-                structuredResults: structuredResults,
-                toolTracker: &toolTracker
-            )
+            createToolUseItem(tool: tool, message: message, context: &context)
 
         case let .thinking(text):
             createThinkingItem(
                 text: text,
                 message: message,
                 blockIndex: blockIndex,
-                existingIDs: existingIDs
+                existingIDs: context.existingIDs
             )
 
         case .interrupted:
             createInterruptedItem(
                 message: message,
                 blockIndex: blockIndex,
-                existingIDs: existingIDs
+                existingIDs: context.existingIDs
             )
         }
     }
@@ -84,19 +88,16 @@ enum ChatItemFactory {
     private static func createToolUseItem(
         tool: ToolUse,
         message: ChatMessage,
-        completedTools: Set<String>,
-        toolResults: [String: ConversationParser.ToolResult],
-        structuredResults: [String: ToolResultData],
-        toolTracker: inout ToolTracker
+        context: inout ItemCreationContext
     ) -> ChatHistoryItem? {
-        guard toolTracker.markSeen(tool.id) else { return nil }
+        guard context.markToolSeen(tool.id) else { return nil }
 
-        let isCompleted = completedTools.contains(tool.id)
+        let isCompleted = context.completedTools.contains(tool.id)
         let status: ToolStatus = isCompleted ? .success : .running
 
         // Extract result text for completed tools
         var resultText: String?
-        if isCompleted, let parserResult = toolResults[tool.id] {
+        if isCompleted, let parserResult = context.toolResults[tool.id] {
             if let stdout = parserResult.stdout, !stdout.isEmpty {
                 resultText = stdout
             } else if let stderr = parserResult.stderr, !stderr.isEmpty {
@@ -113,7 +114,7 @@ enum ChatItemFactory {
                 input: tool.input,
                 status: status,
                 result: resultText,
-                structuredResult: structuredResults[tool.id],
+                structuredResult: context.structuredResults[tool.id],
                 subagentTools: []
             )),
             timestamp: message.timestamp

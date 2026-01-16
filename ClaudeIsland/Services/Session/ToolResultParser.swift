@@ -13,8 +13,6 @@ import Foundation
 enum ToolResultParser {
     // MARK: Internal
 
-    // MARK: - Main Parser
-
     /// Parse tool result JSON into structured ToolResultData
     static func parseStructuredResult(
         toolName: String,
@@ -22,54 +20,51 @@ enum ToolResultParser {
         isError: Bool
     ) -> ToolResultData {
         if toolName.hasPrefix("mcp__") {
-            let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
-            let serverName = !parts.isEmpty ? String(parts[0]) : "unknown"
-            let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
-            return .mcp(MCPResult(
-                serverName: serverName,
-                toolName: mcpToolName,
-                rawResult: toolUseResult
-            ))
+            return parseMCPResult(toolName: toolName, data: toolUseResult)
         }
 
-        switch toolName {
-        case "Read":
-            return parseReadResult(toolUseResult)
-        case "Edit":
-            return parseEditResult(toolUseResult)
-        case "Write":
-            return parseWriteResult(toolUseResult)
-        case "Bash":
-            return parseBashResult(toolUseResult)
-        case "Grep":
-            return parseGrepResult(toolUseResult)
-        case "Glob":
-            return parseGlobResult(toolUseResult)
-        case "TodoWrite":
-            return parseTodoWriteResult(toolUseResult)
-        case "Task":
-            return parseTaskResult(toolUseResult)
-        case "WebFetch":
-            return parseWebFetchResult(toolUseResult)
-        case "WebSearch":
-            return parseWebSearchResult(toolUseResult)
-        case "AskUserQuestion":
-            return parseAskUserQuestionResult(toolUseResult)
-        case "BashOutput":
-            return parseBashOutputResult(toolUseResult)
-        case "KillShell":
-            return parseKillShellResult(toolUseResult)
-        case "ExitPlanMode":
-            return parseExitPlanModeResult(toolUseResult)
-        default:
-            let content = toolUseResult["content"] as? String ??
-                toolUseResult["stdout"] as? String ??
-                toolUseResult["result"] as? String
-            return .generic(GenericResult(rawContent: content, rawData: toolUseResult))
+        if let parser = toolParsers[toolName] {
+            return parser(toolUseResult)
         }
+
+        return parseGenericResult(toolUseResult)
     }
 
     // MARK: Private
+
+    // MARK: - Main Parser
+
+    /// Tool name to parser function mapping
+    private static let toolParsers: [String: ([String: Any]) -> ToolResultData] = [
+        "Read": parseReadResult,
+        "Edit": parseEditResult,
+        "Write": parseWriteResult,
+        "Bash": parseBashResult,
+        "Grep": parseGrepResult,
+        "Glob": parseGlobResult,
+        "TodoWrite": parseTodoWriteResult,
+        "Task": parseTaskResult,
+        "WebFetch": parseWebFetchResult,
+        "WebSearch": parseWebSearchResult,
+        "AskUserQuestion": parseAskUserQuestionResult,
+        "BashOutput": parseBashOutputResult,
+        "KillShell": parseKillShellResult,
+        "ExitPlanMode": parseExitPlanModeResult,
+    ]
+
+    private static func parseMCPResult(toolName: String, data: [String: Any]) -> ToolResultData {
+        let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
+        let serverName = !parts.isEmpty ? String(parts[0]) : "unknown"
+        let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
+        return .mcp(MCPResult(serverName: serverName, toolName: mcpToolName, rawResult: data))
+    }
+
+    private static func parseGenericResult(_ data: [String: Any]) -> ToolResultData {
+        let content = data["content"] as? String ??
+            data["stdout"] as? String ??
+            data["result"] as? String
+        return .generic(GenericResult(rawContent: content, rawData: data))
+    }
 
     // MARK: - Individual Tool Result Parsers
 

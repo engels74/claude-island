@@ -28,6 +28,11 @@ actor SessionStore {
     /// Logger for session store (nonisolated static for cross-context access)
     nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "Session")
 
+    // MARK: - State
+
+    /// All sessions keyed by sessionID (internal for extension access)
+    var sessions: [String: SessionState] = [:]
+
     /// Public publisher for UI subscription
     nonisolated var sessionsPublisher: AnyPublisher<[SessionState], Never> {
         sessionsSubject.eraseToAnyPublisher()
@@ -36,7 +41,7 @@ actor SessionStore {
     // MARK: - Event Processing
 
     /// Process any session event - the ONLY way to mutate state
-    func process(_ event: SessionEvent) async {
+    func process(_ event: SessionEvent) async { // swiftlint:disable:this cyclomatic_complexity
         Self.logger.debug("Processing: \(String(describing: event), privacy: .public)")
 
         switch event {
@@ -68,14 +73,7 @@ actor SessionStore {
             await loadHistoryFromFile(sessionID: sessionID, cwd: cwd)
 
         case let .historyLoaded(payload):
-            await processHistoryLoaded(
-                sessionID: payload.sessionID,
-                messages: payload.messages,
-                completedTools: payload.completedTools,
-                toolResults: payload.toolResults,
-                structuredResults: payload.structuredResults,
-                conversationInfo: payload.conversationInfo
-            )
+            await processHistoryLoaded(payload)
 
         case let .toolCompleted(sessionID, toolUseID, result):
             await processToolCompleted(sessionID: sessionID, toolUseID: toolUseID, result: result)
@@ -83,16 +81,16 @@ actor SessionStore {
         // MARK: - Subagent Events
 
         case let .subagentStarted(sessionID, taskToolID):
-            processSubagentStarted(sessionID: sessionID, taskToolID: taskToolID)
+            handleSubagentStarted(sessionID: sessionID, taskToolID: taskToolID)
 
         case let .subagentToolExecuted(sessionID, tool):
-            processSubagentToolExecuted(sessionID: sessionID, tool: tool)
+            handleSubagentToolExecuted(sessionID: sessionID, tool: tool)
 
         case let .subagentToolCompleted(sessionID, toolID, status):
-            processSubagentToolCompleted(sessionID: sessionID, toolID: toolID, status: status)
+            handleSubagentToolCompleted(sessionID: sessionID, toolID: toolID, status: status)
 
         case let .subagentStopped(sessionID, taskToolID):
-            processSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
+            handleSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
 
         case .agentFileUpdated:
             // No longer used - subagent tools are populated from JSONL completion
@@ -124,11 +122,6 @@ actor SessionStore {
     }
 
     // MARK: Private
-
-    // MARK: - State
-
-    /// All sessions keyed by sessionID
-    private var sessions: [String: SessionState] = [:]
 
     /// Pending file syncs (debounced)
     private var pendingSyncs: [String: Task<Void, Never>] = [:]
@@ -186,7 +179,7 @@ actor SessionStore {
         }
 
         processToolTracking(event: event, session: &session)
-        processSubagentTracking(event: event, session: &session)
+        trackSubagent(event: event, session: &session)
 
         if event.event == "Stop" {
             session.subagentState = SubagentState()
@@ -280,61 +273,6 @@ actor SessionStore {
         default:
             break
         }
-    }
-
-    private func processSubagentTracking(event: HookEvent, session: inout SessionState) {
-        switch event.event {
-        case "PreToolUse":
-            if event.tool == "Task", let toolUseID = event.toolUseID {
-                let description = event.toolInput?["description"]?.value as? String
-                session.subagentState.startTask(taskToolID: toolUseID, description: description)
-                Self.logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
-            }
-
-        case "PostToolUse":
-            if event.tool == "Task" {
-                Self.logger.debug("PostToolUse for Task received (subagent still running)")
-            }
-
-        case "SubagentStop":
-            // SubagentStop fires when a subagent completes - stop tracking
-            // Subagent tools are populated from agent file in processFileUpdated
-            Self.logger.debug("SubagentStop received")
-
-        default:
-            break
-        }
-    }
-
-    // MARK: - Subagent Event Handlers
-
-    /// Handle subagent started event
-    private func processSubagentStarted(sessionID: String, taskToolID: String) {
-        guard var session = sessions[sessionID] else { return }
-        session.subagentState.startTask(taskToolID: taskToolID)
-        sessions[sessionID] = session
-    }
-
-    /// Handle subagent tool executed event
-    private func processSubagentToolExecuted(sessionID: String, tool: SubagentToolCall) {
-        guard var session = sessions[sessionID] else { return }
-        session.subagentState.addSubagentTool(tool)
-        sessions[sessionID] = session
-    }
-
-    /// Handle subagent tool completed event
-    private func processSubagentToolCompleted(sessionID: String, toolID: String, status: ToolStatus) {
-        guard var session = sessions[sessionID] else { return }
-        session.subagentState.updateSubagentToolStatus(toolID: toolID, status: status)
-        sessions[sessionID] = session
-    }
-
-    /// Handle subagent stopped event
-    private func processSubagentStopped(sessionID: String, taskToolID: String) {
-        guard var session = sessions[sessionID] else { return }
-        session.subagentState.stopTask(taskToolID: taskToolID)
-        sessions[sessionID] = session
-        // Subagent tools will be populated from agent file in processFileUpdated
     }
 
     /// Parse ISO8601 timestamp string
@@ -599,7 +537,13 @@ actor SessionStore {
         from payload: FileUpdatePayload,
         into session: inout SessionState
     ) {
-        let existingIDs = Set(session.chatItems.map(\.id))
+        var context = ItemCreationContext(
+            existingIDs: Set(session.chatItems.map(\.id)),
+            completedTools: payload.completedToolIDs,
+            toolResults: payload.toolResults,
+            structuredResults: payload.structuredResults,
+            toolTracker: session.toolTracker
+        )
 
         for message in payload.messages {
             for (blockIndex, block) in message.content.enumerated() {
@@ -623,22 +567,18 @@ actor SessionStore {
                     }
                 }
 
-                let item = ChatItemFactory.createItem(
+                if let item = ChatItemFactory.createItem(
                     from: block,
                     message: message,
                     blockIndex: blockIndex,
-                    existingIDs: existingIDs,
-                    completedTools: payload.completedToolIDs,
-                    toolResults: payload.toolResults,
-                    structuredResults: payload.structuredResults,
-                    toolTracker: &session.toolTracker
-                )
-
-                if let item {
+                    context: &context
+                ) {
                     session.chatItems.append(item)
                 }
             }
         }
+
+        session.toolTracker = context.toolTracker
     }
 
     /// Populate subagent tools for Task tools using their agent JSONL files
@@ -820,45 +760,40 @@ actor SessionStore {
         )))
     }
 
-    private func processHistoryLoaded(
-        sessionID: String,
-        messages: [ChatMessage],
-        completedTools: Set<String>,
-        toolResults: [String: ConversationParser.ToolResult],
-        structuredResults: [String: ToolResultData],
-        conversationInfo: ConversationInfo
-    ) async {
-        guard var session = sessions[sessionID] else { return }
+    private func processHistoryLoaded(_ payload: HistoryLoadedPayload) async {
+        guard var session = sessions[payload.sessionID] else { return }
 
         // Update conversationInfo (summary, lastMessage, etc.)
-        session.conversationInfo = conversationInfo
+        session.conversationInfo = payload.conversationInfo
 
         // Convert messages to chat items
-        let existingIDs = Set(session.chatItems.map(\.id))
+        var context = ItemCreationContext(
+            existingIDs: Set(session.chatItems.map(\.id)),
+            completedTools: payload.completedTools,
+            toolResults: payload.toolResults,
+            structuredResults: payload.structuredResults,
+            toolTracker: session.toolTracker
+        )
 
-        for message in messages {
+        for message in payload.messages {
             for (blockIndex, block) in message.content.enumerated() {
-                let item = ChatItemFactory.createItem(
+                if let item = ChatItemFactory.createItem(
                     from: block,
                     message: message,
                     blockIndex: blockIndex,
-                    existingIDs: existingIDs,
-                    completedTools: completedTools,
-                    toolResults: toolResults,
-                    structuredResults: structuredResults,
-                    toolTracker: &session.toolTracker
-                )
-
-                if let item {
+                    context: &context
+                ) {
                     session.chatItems.append(item)
                 }
             }
         }
 
+        session.toolTracker = context.toolTracker
+
         // Sort by timestamp
         session.chatItems.sort { $0.timestamp < $1.timestamp }
 
-        sessions[sessionID] = session
+        sessions[payload.sessionID] = session
     }
 
     // MARK: - File Sync Scheduling

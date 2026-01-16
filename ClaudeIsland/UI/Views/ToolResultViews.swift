@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // MARK: - ToolResultContent
 
 struct ToolResultContent: View {

@@ -22,7 +22,7 @@ struct ConversationInfo: Equatable {
 
 // MARK: - ConversationParser
 
-// swiftlint:disable:next type_body_length
+// swiftlint:disable type_body_length function_body_length cyclomatic_complexity
 actor ConversationParser {
     // MARK: Internal
 
@@ -192,90 +192,6 @@ actor ConversationParser {
         return true
     }
 
-    // MARK: - Subagent Tools Parsing
-
-    /// Parse subagent tools from an agent JSONL file
-    func parseSubagentTools(agentID: String, cwd: String) -> [SubagentToolInfo] {
-        guard !agentID.isEmpty else { return [] }
-
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let agentFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/agent-" + agentID + ".jsonl"
-
-        guard FileManager.default.fileExists(atPath: agentFile),
-              let content = try? String(contentsOfFile: agentFile, encoding: .utf8)
-        else {
-            return []
-        }
-
-        var tools: [SubagentToolInfo] = []
-        var seenToolIDs: Set<String> = []
-        var completedToolIDs: Set<String> = []
-
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
-            if line.contains("\"tool_result\""),
-               let lineData = line.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-               let messageDict = json["message"] as? [String: Any],
-               let contentArray = messageDict["content"] as? [[String: Any]] {
-                for block in contentArray {
-                    if block["type"] as? String == "tool_result",
-                       let toolUseID = block["tool_use_id"] as? String {
-                        completedToolIDs.insert(toolUseID)
-                    }
-                }
-            }
-        }
-
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
-            guard line.contains("\"tool_use\""),
-                  let lineData = line.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let messageDict = json["message"] as? [String: Any],
-                  let contentArray = messageDict["content"] as? [[String: Any]]
-            else {
-                continue
-            }
-
-            for block in contentArray {
-                guard block["type"] as? String == "tool_use",
-                      let toolID = block["id"] as? String,
-                      let toolName = block["name"] as? String,
-                      !seenToolIDs.contains(toolID)
-                else {
-                    continue
-                }
-
-                seenToolIDs.insert(toolID)
-
-                var input: [String: String] = [:]
-                if let inputDict = block["input"] as? [String: Any] {
-                    for (key, value) in inputDict {
-                        if let strValue = value as? String {
-                            input[key] = strValue
-                        } else if let intValue = value as? Int {
-                            input[key] = String(intValue)
-                        } else if let boolValue = value as? Bool {
-                            input[key] = boolValue ? "true" : "false"
-                        }
-                    }
-                }
-
-                let isCompleted = completedToolIDs.contains(toolID)
-                let timestamp = json["timestamp"] as? String
-
-                tools.append(SubagentToolInfo(
-                    id: toolID,
-                    name: toolName,
-                    input: input,
-                    isCompleted: isCompleted,
-                    timestamp: timestamp
-                ))
-            }
-        }
-
-        return tools
-    }
-
     // MARK: Private
 
     private struct CachedInfo {
@@ -296,6 +212,19 @@ actor ConversationParser {
         var clearPending = false // True if a /clear was just detected
     }
 
+    /// Tool input key mapping for display formatting
+    private static let toolInputKeys: [String: String] = [
+        "Read": "file_path",
+        "Write": "file_path",
+        "Edit": "file_path",
+        "Bash": "command",
+        "Grep": "pattern",
+        "Glob": "pattern",
+        "Task": "description",
+        "WebFetch": "url",
+        "WebSearch": "query",
+    ]
+
     /// Cache of parsed conversation info, keyed by session file path
     private var cache: [String: CachedInfo] = [:]
 
@@ -305,45 +234,12 @@ actor ConversationParser {
     private static func formatToolInput(_ input: [String: Any]?, toolName: String) -> String {
         guard let input else { return "" }
 
-        switch toolName {
-        case "Read",
-             "Write",
-             "Edit":
-            if let filePath = input["file_path"] as? String {
-                return (filePath as NSString).lastPathComponent
-            }
-        case "Bash":
-            if let command = input["command"] as? String {
-                return command
-            }
-        case "Grep":
-            if let pattern = input["pattern"] as? String {
-                return pattern
-            }
-        case "Glob":
-            if let pattern = input["pattern"] as? String {
-                return pattern
-            }
-        case "Task":
-            if let description = input["description"] as? String {
-                return description
-            }
-        case "WebFetch":
-            if let url = input["url"] as? String {
-                return url
-            }
-        case "WebSearch":
-            if let query = input["query"] as? String {
-                return query
-            }
-        default:
-            for (_, value) in input {
-                if let str = value as? String, !str.isEmpty {
-                    return str
-                }
-            }
+        if let key = toolInputKeys[toolName], let value = input[key] as? String {
+            return ["Read", "Write", "Edit"].contains(toolName) ?
+                (value as NSString).lastPathComponent : value
         }
-        return ""
+
+        return input.values.compactMap { $0 as? String }.first { !$0.isEmpty } ?? ""
     }
 
     /// Truncate message for display
@@ -693,99 +589,4 @@ actor ConversationParser {
     }
 }
 
-// MARK: - SubagentToolInfo
-
-/// Info about a subagent tool call parsed from JSONL
-struct SubagentToolInfo: Sendable {
-    let id: String
-    let name: String
-    let input: [String: String]
-    let isCompleted: Bool
-    let timestamp: String?
-}
-
-// MARK: - Static Subagent Tools Parsing
-
-extension ConversationParser {
-    /// Parse subagent tools from an agent JSONL file (static, synchronous version)
-    nonisolated static func parseSubagentToolsSync(agentID: String, cwd: String) -> [SubagentToolInfo] {
-        guard !agentID.isEmpty else { return [] }
-
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let agentFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/agent-" + agentID + ".jsonl"
-
-        guard FileManager.default.fileExists(atPath: agentFile),
-              let content = try? String(contentsOfFile: agentFile, encoding: .utf8)
-        else {
-            return []
-        }
-
-        var tools: [SubagentToolInfo] = []
-        var seenToolIDs: Set<String> = []
-        var completedToolIDs: Set<String> = []
-
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
-            if line.contains("\"tool_result\""),
-               let lineData = line.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-               let messageDict = json["message"] as? [String: Any],
-               let contentArray = messageDict["content"] as? [[String: Any]] {
-                for block in contentArray {
-                    if block["type"] as? String == "tool_result",
-                       let toolUseID = block["tool_use_id"] as? String {
-                        completedToolIDs.insert(toolUseID)
-                    }
-                }
-            }
-        }
-
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
-            guard line.contains("\"tool_use\""),
-                  let lineData = line.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let messageDict = json["message"] as? [String: Any],
-                  let contentArray = messageDict["content"] as? [[String: Any]]
-            else {
-                continue
-            }
-
-            for block in contentArray {
-                guard block["type"] as? String == "tool_use",
-                      let toolID = block["id"] as? String,
-                      let toolName = block["name"] as? String,
-                      !seenToolIDs.contains(toolID)
-                else {
-                    continue
-                }
-
-                seenToolIDs.insert(toolID)
-
-                var input: [String: String] = [:]
-                if let inputDict = block["input"] as? [String: Any] {
-                    for (key, value) in inputDict {
-                        if let strValue = value as? String {
-                            input[key] = strValue
-                        } else if let intValue = value as? Int {
-                            input[key] = String(intValue)
-                        } else if let boolValue = value as? Bool {
-                            input[key] = boolValue ? "true" : "false"
-                        }
-                    }
-                }
-
-                let isCompleted = completedToolIDs.contains(toolID)
-                let timestamp = json["timestamp"] as? String
-
-                tools.append(SubagentToolInfo(
-                    id: toolID,
-                    name: toolName,
-                    input: input,
-                    isCompleted: isCompleted,
-                    timestamp: timestamp
-                ))
-            }
-        }
-
-        return tools
-    }
-}
+// swiftlint:enable type_body_length function_body_length cyclomatic_complexity

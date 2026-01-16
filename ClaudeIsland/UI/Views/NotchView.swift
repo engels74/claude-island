@@ -17,6 +17,7 @@ private let cornerRadiusInsets = (
 
 // MARK: - NotchView
 
+// swiftlint:disable:next type_body_length
 struct NotchView: View {
     // MARK: Internal
 
