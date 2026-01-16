@@ -10,7 +10,7 @@ import Foundation
 import os.log
 
 /// Logger for tool events
-private let logger = Logger(subsystem: "com.claudeisland", category: "ToolEvents")
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ToolEvents")
 
 // MARK: - ToolEventProcessor
 

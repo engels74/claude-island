@@ -11,7 +11,7 @@ import Foundation
 import os.log
 
 /// Logger for hook socket server
-private let logger = Logger(subsystem: "com.claudeisland", category: "Hooks")
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Hooks")
 
 // MARK: - SocketReconnectionManager
 

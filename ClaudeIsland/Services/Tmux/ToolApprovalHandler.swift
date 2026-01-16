@@ -19,7 +19,7 @@ actor ToolApprovalHandler {
     static let shared = ToolApprovalHandler()
 
     /// Logger for tool approval (nonisolated static for cross-context access)
-    nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "Approval")
+    nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Approval")
 
     /// Approve a tool once (sends '1' + Enter)
     func approveOnce(target: TmuxTarget) async -> Bool {
