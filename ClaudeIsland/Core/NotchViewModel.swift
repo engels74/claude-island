@@ -206,6 +206,8 @@ final class NotchViewModel {
     @ObservationIgnored private var hoverTask: Task<Void, Never>?
     /// Task for boot animation auto-close
     @ObservationIgnored private var bootAnimationTask: Task<Void, Never>?
+    /// Task for reposting mouse clicks to windows behind us
+    @ObservationIgnored private var repostClickTask: Task<Void, Never>?
 
     /// The chat session we're viewing (persists across close/open)
     private var currentChatSession: SessionState?
@@ -313,8 +315,10 @@ final class NotchViewModel {
 
     /// Re-posts a mouse click at the given screen location so it reaches windows behind us
     private func repostClickAt(_ location: CGPoint) {
+        // Cancel any pending repost task
+        repostClickTask?.cancel()
         // Small delay to let the window's ignoresMouseEvents update
-        Task {
+        repostClickTask = Task {
             try? await Task.sleep(for: .seconds(0.05))
             guard !Task.isCancelled else { return }
 

@@ -146,9 +146,12 @@ class UpdateManager: NSObject, ObservableObject {
 
     func noUpdateFound() {
         state = .upToDate
+        // Cancel any previous reset task
+        upToDateResetTask?.cancel()
         // Reset to idle after a few seconds
-        Task {
+        upToDateResetTask = Task {
             try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
             if case .upToDate = self.state {
                 self.state = .idle
             }
@@ -164,6 +167,8 @@ class UpdateManager: NSObject, ObservableObject {
         if case .upToDate = state {
             return
         }
+        upToDateResetTask?.cancel()
+        upToDateResetTask = nil
         state = .idle
         installHandler = nil
         cancellationHandler = nil
@@ -180,6 +185,9 @@ class UpdateManager: NSObject, ObservableObject {
     // Callbacks from Sparkle
     private var installHandler: ((SPUUserUpdateChoice) -> Void)?
     private var cancellationHandler: (() -> Void)?
+
+    /// Task for delayed state reset after "up to date" message
+    private var upToDateResetTask: Task<Void, Never>?
 }
 
 // MARK: - NotchUserDriver

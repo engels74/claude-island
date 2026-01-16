@@ -86,64 +86,75 @@ actor ProcessExecutor: ProcessExecuting {
     }
 
     /// Run a command asynchronously and return a full Result with exit code and stderr
+    ///
+    /// Note: Blocking operations (waitUntilExit, readDataToEndOfFile) are dispatched to a background
+    /// queue to avoid blocking the cooperative thread pool.
     func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError> {
         await withCheckedContinuation { continuation in
-            let process = Process()
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
+            // Dispatch blocking work to background queue to avoid exhausting cooperative thread pool
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
 
-            process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = arguments
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
+                process.executableURL = URL(fileURLWithPath: executable)
+                process.arguments = arguments
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
 
-            do {
-                try process.run()
-                process.waitUntilExit()
+                do {
+                    try process.run()
+                    process.waitUntilExit()
 
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
 
-                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                let stderr = String(data: stderrData, encoding: .utf8)
+                    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrData, encoding: .utf8)
 
-                let result = ProcessResult(
-                    output: stdout,
-                    exitCode: process.terminationStatus,
-                    stderr: stderr
-                )
-
-                if process.terminationStatus == 0 {
-                    continuation.resume(returning: .success(result))
-                } else {
-                    Self.logger
-                        .warning(
-                            "Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(process.terminationStatus)"
-                        )
-                    continuation.resume(returning: .failure(.executionFailed(
-                        command: executable,
+                    let result = ProcessResult(
+                        output: stdout,
                         exitCode: process.terminationStatus,
                         stderr: stderr
-                    )))
-                }
-            } catch let error as NSError {
-                if error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
-                    Self.logger.error("Command not found: \(executable, privacy: .public)")
-                    continuation.resume(returning: .failure(.commandNotFound(executable)))
-                } else {
+                    )
+
+                    if process.terminationStatus == 0 {
+                        continuation.resume(returning: .success(result))
+                    } else {
+                        Self.logger
+                            .warning(
+                                "Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(process.terminationStatus)"
+                            )
+                        continuation.resume(returning: .failure(.executionFailed(
+                            command: executable,
+                            exitCode: process.terminationStatus,
+                            stderr: stderr
+                        )))
+                    }
+                } catch let error as NSError {
+                    if error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
+                        Self.logger.error("Command not found: \(executable, privacy: .public)")
+                        continuation.resume(returning: .failure(.commandNotFound(executable)))
+                    } else {
+                        Self.logger
+                            .error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
+                        continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
+                    }
+                } catch {
                     Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
                     continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
                 }
-            } catch {
-                Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-                continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
             }
         }
     }
 
     /// Run a command synchronously (for use in nonisolated contexts)
     /// Returns Result instead of optional for better error handling
+    ///
+    /// - Important: This method performs blocking I/O and must not be called from the main thread.
+    ///   Use `run()` or `runWithResult()` async methods instead for main thread contexts.
     nonisolated func runSync(_ executable: String, arguments: [String]) -> Result<String, ProcessExecutorError> {
+        precondition(!Thread.isMainThread, "runSync must not be called on main thread - use async run() instead")
         let process = Process()
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
