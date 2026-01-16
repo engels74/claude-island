@@ -17,7 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updater = SPUUpdater(
             hostBundle: Bundle.main,
             applicationBundle: Bundle.main,
-            userDriver: userDriver,
+            userDriver: self.userDriver,
             delegate: nil
         )
         super.init()
@@ -37,19 +37,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let updater: SPUUpdater
 
     var windowController: NotchWindowController? {
-        windowManager?.windowController
+        self.windowManager?.windowController
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if !ensureSingleInstance() {
+        if !self.ensureSingleInstance() {
             NSApplication.shared.terminate(nil)
             return
         }
 
         Mixpanel.initialize(token: "49814c1436104ed108f3fc4735228496")
 
-        let distinctID = getOrCreateDistinctID()
-        Mixpanel.mainInstance().identify(distinctID: distinctID)
+        let distinctID = self.getOrCreateDistinctID()
+        // swiftformat:disable:next acronyms
+        Mixpanel.mainInstance().identify(distinctId: distinctID)
 
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
@@ -61,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "macos_version": osVersion,
         ])
 
-        fetchAndRegisterClaudeVersion()
+        self.fetchAndRegisterClaudeVersion()
 
         Mixpanel.mainInstance().people.set(properties: [
             "app_version": version,
@@ -75,10 +76,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HookInstaller.installIfNeeded()
         NSApplication.shared.setActivationPolicy(.accessory)
 
-        windowManager = WindowManager()
-        _ = windowManager?.setupNotchWindow()
+        self.windowManager = WindowManager()
+        _ = self.windowManager?.setupNotchWindow()
 
-        screenObserver = ScreenObserver { [weak self] in
+        self.screenObserver = ScreenObserver { [weak self] in
             self?.handleScreenChange()
         }
 
@@ -86,7 +87,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             updater.checkForUpdates()
         }
 
-        updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+        self.updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             guard let updater = self?.updater, updater.canCheckForUpdates else { return }
             updater.checkForUpdates()
         }
@@ -100,8 +101,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         InterruptWatcherManager.shared.stopAll()
 
         Mixpanel.mainInstance().flush()
-        updateCheckTimer?.invalidate()
-        screenObserver = nil
+        self.updateCheckTimer?.invalidate()
+        self.screenObserver = nil
     }
 
     // MARK: Private
@@ -113,7 +114,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let userDriver: NotchUserDriver
 
     private func handleScreenChange() {
-        _ = windowManager?.setupNotchWindow()
+        _ = self.windowManager?.setupNotchWindow()
     }
 
     private func getOrCreateDistinctID() -> String {

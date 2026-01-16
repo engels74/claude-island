@@ -50,14 +50,14 @@ class AgentFileWatcher {
 
     /// Start watching the agent file
     func start() {
-        queue.async { [weak self] in
+        self.queue.async { [weak self] in
             self?.startWatching()
         }
     }
 
     /// Stop watching
     func stop() {
-        queue.async { [weak self] in
+        self.queue.async { [weak self] in
             self?.stopInternal()
         }
     }
@@ -78,21 +78,21 @@ class AgentFileWatcher {
     private var seenToolIDs: Set<String> = []
 
     private func startWatching() {
-        stopInternal()
+        self.stopInternal()
 
-        guard FileManager.default.fileExists(atPath: filePath),
-              let handle = FileHandle(forReadingAtPath: filePath)
+        guard FileManager.default.fileExists(atPath: self.filePath),
+              let handle = FileHandle(forReadingAtPath: self.filePath)
         else {
-            logger.warning("Failed to open agent file: \(filePath, privacy: .public)")
+            logger.warning("Failed to open agent file: \(self.filePath, privacy: .public)")
             return
         }
 
-        fileHandle = handle
-        lastOffset = 0
-        parseTools()
+        self.fileHandle = handle
+        self.lastOffset = 0
+        self.parseTools()
 
         do {
-            lastOffset = try handle.seekToEnd()
+            self.lastOffset = try handle.seekToEnd()
         } catch {
             logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
             return
@@ -102,7 +102,7 @@ class AgentFileWatcher {
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
-            queue: queue
+            queue: self.queue
         )
 
         newSource.setEventHandler { [weak self] in
@@ -114,26 +114,29 @@ class AgentFileWatcher {
             self?.fileHandle = nil
         }
 
-        source = newSource
+        self.source = newSource
         newSource.resume()
 
-        logger.debug("Started watching agent file: \(agentID.prefix(8), privacy: .public) for task: \(taskToolID.prefix(12), privacy: .public)")
+        logger
+            .debug(
+                "Started watching agent file: \(self.agentID.prefix(8), privacy: .public) for task: \(self.taskToolID.prefix(12), privacy: .public)"
+            )
     }
 
     private func parseTools() {
-        let tools = ConversationParser.parseSubagentToolsSync(agentID: agentID, cwd: cwd)
+        let tools = ConversationParser.parseSubagentToolsSync(agentID: self.agentID, cwd: self.cwd)
 
-        let newTools = tools.filter { !seenToolIDs.contains($0.id) }
-        guard !newTools.isEmpty || tools.count != seenToolIDs.count else { return }
+        let newTools = tools.filter { !self.seenToolIDs.contains($0.id) }
+        guard !newTools.isEmpty || tools.count != self.seenToolIDs.count else { return }
 
-        seenToolIDs = Set(tools.map(\.id))
-        logger.debug("Agent \(agentID.prefix(8), privacy: .public) has \(tools.count) tools")
+        self.seenToolIDs = Set(tools.map(\.id))
+        logger.debug("Agent \(self.agentID.prefix(8), privacy: .public) has \(tools.count) tools")
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            delegate?.didUpdateAgentTools(
-                sessionID: sessionID,
-                taskToolID: taskToolID,
+            self.delegate?.didUpdateAgentTools(
+                sessionID: self.sessionID,
+                taskToolID: self.taskToolID,
                 tools: tools
             )
         }
@@ -141,9 +144,9 @@ class AgentFileWatcher {
 
     private func stopInternal() {
         guard let existingSource = source else { return }
-        logger.debug("Stopped watching agent file: \(agentID.prefix(8), privacy: .public)")
+        logger.debug("Stopped watching agent file: \(self.agentID.prefix(8), privacy: .public)")
         existingSource.cancel()
-        source = nil
+        self.source = nil
     }
 }
 
@@ -164,7 +167,7 @@ class AgentFileWatcherManager {
 
     func startWatching(sessionID: String, taskToolID: String, agentID: String, cwd: String) {
         let key = "\(sessionID)-\(taskToolID)"
-        guard watchers[key] == nil else { return }
+        guard self.watchers[key] == nil else { return }
 
         let watcher = AgentFileWatcher(
             sessionID: sessionID,
@@ -172,9 +175,9 @@ class AgentFileWatcherManager {
             agentID: agentID,
             cwd: cwd
         )
-        watcher.delegate = delegate
+        watcher.delegate = self.delegate
         watcher.start()
-        watchers[key] = watcher
+        self.watchers[key] = watcher
 
         logger.info("Started agent watcher for task \(taskToolID.prefix(12), privacy: .public)")
     }
@@ -182,31 +185,31 @@ class AgentFileWatcherManager {
     /// Stop watching a specific Task's agent file
     func stopWatching(sessionID: String, taskToolID: String) {
         let key = "\(sessionID)-\(taskToolID)"
-        watchers[key]?.stop()
-        watchers.removeValue(forKey: key)
+        self.watchers[key]?.stop()
+        self.watchers.removeValue(forKey: key)
     }
 
     /// Stop all watchers for a session
     func stopWatchingSession(sessionID: String) {
-        let keysToRemove = watchers.keys.filter { $0.hasPrefix(sessionID) }
+        let keysToRemove = self.watchers.keys.filter { $0.hasPrefix(sessionID) }
         for key in keysToRemove {
-            watchers[key]?.stop()
-            watchers.removeValue(forKey: key)
+            self.watchers[key]?.stop()
+            self.watchers.removeValue(forKey: key)
         }
     }
 
     /// Stop all watchers
     func stopAll() {
-        for (_, watcher) in watchers {
+        for (_, watcher) in self.watchers {
             watcher.stop()
         }
-        watchers.removeAll()
+        self.watchers.removeAll()
     }
 
     /// Check if we're watching a Task's agent file
     func isWatching(sessionID: String, taskToolID: String) -> Bool {
         let key = "\(sessionID)-\(taskToolID)"
-        return watchers[key] != nil
+        return self.watchers[key] != nil
     }
 
     // MARK: Private

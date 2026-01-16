@@ -45,7 +45,7 @@
 
 # Redundant
 --redundanttype inferred
---self init-only
+--self insert
 
 # Other
 --commas always

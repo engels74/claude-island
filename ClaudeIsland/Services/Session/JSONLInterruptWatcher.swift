@@ -30,7 +30,7 @@ class JSONLInterruptWatcher {
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
         self.directoryPath = NSHomeDirectory() + "/.claude/projects/" + projectDir
-        self.filePath = directoryPath + "/" + sessionID + ".jsonl"
+        self.filePath = self.directoryPath + "/" + sessionID + ".jsonl"
     }
 
     deinit {
@@ -49,14 +49,14 @@ class JSONLInterruptWatcher {
 
     /// Start watching the JSONL file for interrupts
     func start() {
-        queue.async { [weak self] in
+        self.queue.async { [weak self] in
             self?.startWatching()
         }
     }
 
     /// Stop watching
     func stop() {
-        queue.async { [weak self] in
+        self.queue.async { [weak self] in
             self?.stopInternal()
         }
     }
@@ -83,27 +83,27 @@ class JSONLInterruptWatcher {
     private let queue = DispatchQueue(label: "com.claudeisland.interruptwatcher", qos: .userInteractive)
 
     private func startWatching() {
-        stopInternal()
+        self.stopInternal()
 
         // Try to watch the file directly
-        if FileManager.default.fileExists(atPath: filePath) {
-            startFileWatcher()
+        if FileManager.default.fileExists(atPath: self.filePath) {
+            self.startFileWatcher()
         } else {
             // File doesn't exist yet - watch the parent directory
-            startDirectoryWatcher()
+            self.startDirectoryWatcher()
         }
     }
 
     private func startFileWatcher() {
         guard let handle = FileHandle(forReadingAtPath: filePath) else {
-            logger.warning("Failed to open file: \(filePath, privacy: .public)")
+            logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
             return
         }
 
-        fileHandle = handle
+        self.fileHandle = handle
 
         do {
-            lastOffset = try handle.seekToEnd()
+            self.lastOffset = try handle.seekToEnd()
         } catch {
             logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
             return
@@ -113,7 +113,7 @@ class JSONLInterruptWatcher {
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
-            queue: queue
+            queue: self.queue
         )
 
         newSource.setEventHandler { [weak self] in
@@ -125,31 +125,31 @@ class JSONLInterruptWatcher {
             self?.fileHandle = nil
         }
 
-        source = newSource
+        self.source = newSource
         newSource.resume()
 
-        logger.debug("Started watching file: \(sessionID.prefix(8), privacy: .public)...")
+        logger.debug("Started watching file: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
     private func startDirectoryWatcher() {
         // Ensure the directory exists
-        guard FileManager.default.fileExists(atPath: directoryPath) else {
-            logger.warning("Directory doesn't exist: \(directoryPath, privacy: .public)")
+        guard FileManager.default.fileExists(atPath: self.directoryPath) else {
+            logger.warning("Directory doesn't exist: \(self.directoryPath, privacy: .public)")
             return
         }
 
-        guard let handle = FileHandle(forReadingAtPath: directoryPath) else {
-            logger.warning("Failed to open directory for watching: \(directoryPath, privacy: .public)")
+        guard let handle = FileHandle(forReadingAtPath: self.directoryPath) else {
+            logger.warning("Failed to open directory for watching: \(self.directoryPath, privacy: .public)")
             return
         }
 
-        directoryHandle = handle
+        self.directoryHandle = handle
         let fd = handle.fileDescriptor
 
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write],
-            queue: queue
+            queue: self.queue
         )
 
         newSource.setEventHandler { [weak self] in
@@ -161,28 +161,28 @@ class JSONLInterruptWatcher {
             self?.directoryHandle = nil
         }
 
-        directorySource = newSource
+        self.directorySource = newSource
         newSource.resume()
 
-        logger.debug("Started watching directory for file appearance: \(sessionID.prefix(8), privacy: .public)...")
+        logger.debug("Started watching directory for file appearance: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
     private func checkForFileAppearance() {
         // Check if the file now exists
-        guard FileManager.default.fileExists(atPath: filePath) else {
+        guard FileManager.default.fileExists(atPath: self.filePath) else {
             return
         }
 
-        logger.debug("File appeared, switching to file watcher: \(sessionID.prefix(8), privacy: .public)")
+        logger.debug("File appeared, switching to file watcher: \(self.sessionID.prefix(8), privacy: .public)")
 
         // Stop directory watcher
         if let existingDirSource = directorySource {
             existingDirSource.cancel()
-            directorySource = nil
+            self.directorySource = nil
         }
 
         // Start file watcher
-        startFileWatcher()
+        self.startFileWatcher()
     }
 
     private func checkForInterrupt() {
@@ -195,10 +195,10 @@ class JSONLInterruptWatcher {
             return
         }
 
-        guard currentSize > lastOffset else { return }
+        guard currentSize > self.lastOffset else { return }
 
         do {
-            try handle.seek(toOffset: lastOffset)
+            try handle.seek(toOffset: self.lastOffset)
         } catch {
             return
         }
@@ -209,7 +209,7 @@ class JSONLInterruptWatcher {
             return
         }
 
-        lastOffset = currentSize
+        self.lastOffset = currentSize
 
         let lines = newContent.components(separatedBy: "\n")
         for line in lines where !line.isEmpty {
@@ -249,15 +249,15 @@ class JSONLInterruptWatcher {
         // Stop file watcher
         if let existingSource = source {
             existingSource.cancel()
-            source = nil
+            self.source = nil
         }
         // Stop directory watcher
         if let existingDirSource = directorySource {
             existingDirSource.cancel()
-            directorySource = nil
+            self.directorySource = nil
         }
         // fileHandle and directoryHandle closed by cancel handlers
-        logger.debug("Stopped watching: \(sessionID.prefix(8), privacy: .public)...")
+        logger.debug("Stopped watching: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 }
 
@@ -277,31 +277,31 @@ class InterruptWatcherManager {
     weak var delegate: JSONLInterruptWatcherDelegate?
 
     func startWatching(sessionID: String, cwd: String) {
-        guard watchers[sessionID] == nil else { return }
+        guard self.watchers[sessionID] == nil else { return }
 
         let watcher = JSONLInterruptWatcher(sessionID: sessionID, cwd: cwd)
-        watcher.delegate = delegate
+        watcher.delegate = self.delegate
         watcher.start()
-        watchers[sessionID] = watcher
+        self.watchers[sessionID] = watcher
     }
 
     /// Stop watching a specific session
     func stopWatching(sessionID: String) {
-        watchers[sessionID]?.stop()
-        watchers.removeValue(forKey: sessionID)
+        self.watchers[sessionID]?.stop()
+        self.watchers.removeValue(forKey: sessionID)
     }
 
     /// Stop all watchers
     func stopAll() {
-        for (_, watcher) in watchers {
+        for (_, watcher) in self.watchers {
             watcher.stop()
         }
-        watchers.removeAll()
+        self.watchers.removeAll()
     }
 
     /// Check if we're watching a session
     func isWatching(sessionID: String) -> Bool {
-        watchers[sessionID] != nil
+        self.watchers[sessionID] != nil
     }
 
     // MARK: Private

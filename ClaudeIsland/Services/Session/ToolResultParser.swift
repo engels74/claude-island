@@ -13,44 +13,36 @@ import Foundation
 enum ToolResultParser {
     // MARK: Internal
 
-    /// Parse tool result JSON into structured ToolResultData
+    // Parse tool result JSON into structured ToolResultData
+    // Uses switch-based dispatch to avoid function reference isolation issues
+    // swiftlint:disable:next cyclomatic_complexity
     static func parseStructuredResult(
         toolName: String,
         toolUseResult: [String: Any],
         isError: Bool
     ) -> ToolResultData {
-        if toolName.hasPrefix("mcp__") {
-            return parseMCPResult(toolName: toolName, data: toolUseResult)
+        switch toolName {
+        case let name where name.hasPrefix("mcp__"):
+            self.parseMCPResult(toolName: name, data: toolUseResult)
+        case "Read": self.parseReadResult(toolUseResult)
+        case "Edit": self.parseEditResult(toolUseResult)
+        case "Write": self.parseWriteResult(toolUseResult)
+        case "Bash": self.parseBashResult(toolUseResult)
+        case "Grep": self.parseGrepResult(toolUseResult)
+        case "Glob": self.parseGlobResult(toolUseResult)
+        case "TodoWrite": self.parseTodoWriteResult(toolUseResult)
+        case "Task": self.parseTaskResult(toolUseResult)
+        case "WebFetch": self.parseWebFetchResult(toolUseResult)
+        case "WebSearch": self.parseWebSearchResult(toolUseResult)
+        case "AskUserQuestion": self.parseAskUserQuestionResult(toolUseResult)
+        case "BashOutput": self.parseBashOutputResult(toolUseResult)
+        case "KillShell": self.parseKillShellResult(toolUseResult)
+        case "ExitPlanMode": self.parseExitPlanModeResult(toolUseResult)
+        default: self.parseGenericResult(toolUseResult)
         }
-
-        if let parser = toolParsers[toolName] {
-            return parser(toolUseResult)
-        }
-
-        return parseGenericResult(toolUseResult)
     }
 
     // MARK: Private
-
-    // MARK: - Main Parser
-
-    /// Tool name to parser function mapping
-    private static let toolParsers: [String: ([String: Any]) -> ToolResultData] = [
-        "Read": parseReadResult,
-        "Edit": parseEditResult,
-        "Write": parseWriteResult,
-        "Bash": parseBashResult,
-        "Grep": parseGrepResult,
-        "Glob": parseGlobResult,
-        "TodoWrite": parseTodoWriteResult,
-        "Task": parseTaskResult,
-        "WebFetch": parseWebFetchResult,
-        "WebSearch": parseWebSearchResult,
-        "AskUserQuestion": parseAskUserQuestionResult,
-        "BashOutput": parseBashOutputResult,
-        "KillShell": parseKillShellResult,
-        "ExitPlanMode": parseExitPlanModeResult,
-    ]
 
     private static func parseMCPResult(toolName: String, data: [String: Any]) -> ToolResultData {
         let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
