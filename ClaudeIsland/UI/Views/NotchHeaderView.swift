@@ -96,8 +96,8 @@ struct ClaudeCrabIcon: View {
 
     @State private var legPhase = 0
 
-    /// Timer for leg animation
-    private let legTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    /// Timer for leg animation - @State ensures persistence across view updates
+    @State private var legTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 }
 
 // MARK: - PermissionIndicatorIcon

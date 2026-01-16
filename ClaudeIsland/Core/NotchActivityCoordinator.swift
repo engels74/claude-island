@@ -5,7 +5,7 @@
 //  Coordinates live activities and expanding views for the notch
 //
 
-import Combine
+import Observation
 import SwiftUI
 
 // MARK: - NotchActivityType
@@ -30,8 +30,10 @@ struct ExpandingActivity: Equatable {
 // MARK: - NotchActivityCoordinator
 
 /// Coordinates notch activities and state
+/// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
+@Observable
 @MainActor
-class NotchActivityCoordinator: ObservableObject {
+final class NotchActivityCoordinator {
     // MARK: Lifecycle
 
     private init() {}
@@ -43,10 +45,10 @@ class NotchActivityCoordinator: ObservableObject {
     /// Duration before auto-hiding the activity
     var activityDuration: TimeInterval = 0 // 0 = manual control (won't auto-hide)
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
     /// Current expanding activity (expands notch to sides)
-    @Published var expandingActivity: ExpandingActivity = .empty {
+    var expandingActivity: ExpandingActivity = .empty {
         didSet {
             if expandingActivity.show {
                 scheduleActivityHide()

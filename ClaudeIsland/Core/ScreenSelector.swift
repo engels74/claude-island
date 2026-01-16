@@ -6,8 +6,8 @@
 //
 
 import AppKit
-import Combine
 import Foundation
+import Observation
 
 // MARK: - ScreenSelectionMode
 
@@ -54,8 +54,11 @@ struct ScreenIdentifier: Codable, Equatable, Hashable {
 
 // MARK: - ScreenSelector
 
+/// Manages screen selection state and persistence
+/// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
+@Observable
 @MainActor
-class ScreenSelector: ObservableObject {
+final class ScreenSelector {
     // MARK: Lifecycle
 
     private init() {
@@ -67,12 +70,12 @@ class ScreenSelector: ObservableObject {
 
     static let shared = ScreenSelector()
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
-    @Published private(set) var availableScreens: [NSScreen] = []
-    @Published private(set) var selectedScreen: NSScreen?
-    @Published var selectionMode: ScreenSelectionMode = .automatic
-    @Published var isPickerExpanded = false
+    private(set) var availableScreens: [NSScreen] = []
+    private(set) var selectedScreen: NSScreen?
+    var selectionMode: ScreenSelectionMode = .automatic
+    var isPickerExpanded = false
 
     /// Extra height needed when picker is expanded
     var expandedPickerHeight: CGFloat {

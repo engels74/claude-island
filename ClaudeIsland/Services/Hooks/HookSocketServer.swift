@@ -5,12 +5,41 @@
 //  Unix domain socket server for real-time hook events
 //  Supports request/response for permission decisions
 //
+// swiftlint:disable file_length
 
 import Foundation
 import os.log
 
 /// Logger for hook socket server
 private let logger = Logger(subsystem: "com.claudeisland", category: "Hooks")
+
+// MARK: - SocketReconnectionManager
+
+/// Manages exponential backoff retry logic for socket server creation
+private actor SocketReconnectionManager {
+    private var attempt = 0
+    private let maxAttempts = 5
+    private let baseDelay: Double = 0.5
+    private let maxDelay: Double = 10.0
+
+    /// Calculate the next delay with exponential backoff and jitter
+    /// Returns nil if max attempts exceeded
+    func nextDelay() -> Double? {
+        guard attempt < maxAttempts else { return nil }
+        attempt += 1
+        let exponential = min(baseDelay * pow(2.0, Double(attempt - 1)), maxDelay)
+        let jitter = Double.random(in: 0 ... 0.3) * exponential
+        return exponential + jitter
+    }
+
+    /// Reset the retry counter (call on successful connection)
+    func reset() {
+        attempt = 0
+    }
+
+    /// Get current attempt count for logging
+    var currentAttempt: Int { attempt }
+}
 
 // MARK: - HookEvent
 
@@ -68,7 +97,7 @@ struct HookEvent: Codable, Sendable {
     let notificationType: String?
     let message: String?
 
-    var sessionPhase: SessionPhase {
+    nonisolated var sessionPhase: SessionPhase {
         if event == "PreCompact" {
             return .compacting
         }
@@ -150,10 +179,19 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
 
     /// Stop the socket server
     func stop() {
-        acceptSource?.cancel()
-        acceptSource = nil
+        // Mark as stopped to prevent pending retries from restarting
+        queue.sync {
+            isStopped = true
+        }
+
+        // Cancel accept source if active
+        if let source = acceptSource {
+            source.cancel()
+            acceptSource = nil
+        }
         unlink(Self.socketPath)
 
+        // Clean up pending permissions
         permissionsLock.lock()
         for (_, pending) in pendingPermissions {
             close(pending.clientSocket)
@@ -223,10 +261,22 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
     private var eventHandler: HookEventHandler?
     private var permissionFailureHandler: PermissionFailureHandler?
     private let queue = DispatchQueue(label: "com.claudeisland.socket", qos: .userInitiated)
+    private let reconnectionManager = SocketReconnectionManager()
+
+    /// Explicit stopped state to prevent retries after stop() is called
+    private var isStopped = false
 
     /// Pending permission requests indexed by toolUseID
     private var pendingPermissions: [String: PendingPermission] = [:]
     private let permissionsLock = NSLock()
+
+    /// Permissions that have already been responded to (prevents race condition duplicates)
+    /// Uses a bounded set that auto-cleans old entries
+    private var respondedPermissions: Set<String> = []
+    private let maxRespondedPermissions = 100
+
+    /// Timeout for pending permission sockets (5 minutes)
+    private let permissionTimeoutSeconds: TimeInterval = 300
 
     /// Cache tool_use_id from PreToolUse to correlate with PermissionRequest
     /// Key: "sessionId:toolName:serializedInput" -> Queue of tool_use_ids (FIFO)
@@ -237,14 +287,29 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
     private func startServer(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler?) {
         guard serverSocket < 0 else { return }
 
+        // Reset stopped state when explicitly starting
+        isStopped = false
+
         eventHandler = onEvent
         permissionFailureHandler = onPermissionFailure
 
+        attemptServerStart()
+    }
+
+    private func attemptServerStart() {
+        // Check if stopped to prevent restarts after stop() was called
+        guard !isStopped else {
+            logger.debug("Server start aborted - server has been stopped")
+            return
+        }
+
+        // Clean up stale socket file before attempting
         unlink(Self.socketPath)
 
         serverSocket = socket(AF_UNIX, SOCK_STREAM, 0)
         guard serverSocket >= 0 else {
             logger.error("Failed to create socket: \(errno)")
+            scheduleRetry()
             return
         }
 
@@ -271,6 +336,7 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
             logger.error("Failed to bind socket: \(errno)")
             close(serverSocket)
             serverSocket = -1
+            scheduleRetry()
             return
         }
 
@@ -280,9 +346,14 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
             logger.error("Failed to listen: \(errno)")
             close(serverSocket)
             serverSocket = -1
+            scheduleRetry()
             return
         }
 
+        // Success - reset retry counter
+        Task {
+            await reconnectionManager.reset()
+        }
         logger.info("Listening on \(Self.socketPath, privacy: .public)")
 
         acceptSource = DispatchSource.makeReadSource(fileDescriptor: serverSocket, queue: queue)
@@ -298,12 +369,56 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
         acceptSource?.resume()
     }
 
+    private func scheduleRetry() {
+        // Check if stopped before scheduling retry
+        guard !isStopped else {
+            logger.debug("Retry aborted - server has been stopped")
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+
+            // Check again after Task starts in case stop() was called
+            let stopped = await MainActor.run { self.queue.sync { self.isStopped } }
+            guard !stopped else {
+                logger.debug("Retry cancelled - server has been stopped")
+                return
+            }
+
+            guard let delay = await reconnectionManager.nextDelay() else {
+                let attempts = await reconnectionManager.currentAttempt
+                logger.error("Socket server failed after \(attempts) attempts - giving up")
+                return
+            }
+
+            let attempt = await reconnectionManager.currentAttempt
+            logger.warning("Socket server failed, retrying in \(String(format: "%.1f", delay))s (attempt \(attempt))")
+
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+            // Final check after sleep before actually restarting
+            let stoppedAfterSleep = self.queue.sync { self.isStopped }
+            guard !stoppedAfterSleep else {
+                logger.debug("Retry cancelled after sleep - server has been stopped")
+                return
+            }
+
+            queue.async { [weak self] in
+                self?.attemptServerStart()
+            }
+        }
+    }
+
     private func cleanupSpecificPermission(toolUseID: String) {
         permissionsLock.lock()
         guard let pending = pendingPermissions.removeValue(forKey: toolUseID) else {
             permissionsLock.unlock()
             return
         }
+
+        // Mark as responded (tool completed via terminal approval)
+        markPermissionResponded(toolUseID: toolUseID)
         permissionsLock.unlock()
 
         logger
@@ -311,6 +426,20 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
                 "Tool completed externally, closing socket for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)"
             )
         close(pending.clientSocket)
+    }
+
+    /// Mark a permission as responded to prevent duplicate responses
+    /// Must be called while holding permissionsLock
+    private func markPermissionResponded(toolUseID: String) {
+        respondedPermissions.insert(toolUseID)
+
+        // Bound the set size to prevent unbounded growth
+        if respondedPermissions.count > maxRespondedPermissions {
+            // Remove oldest entries (arbitrary since Set is unordered, but keeps size bounded)
+            while respondedPermissions.count > maxRespondedPermissions / 2 {
+                _ = respondedPermissions.removeFirst()
+            }
+        }
     }
 
     private func cleanupPendingPermissions(sessionID: String) {
@@ -522,15 +651,66 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
         permissionsLock.lock()
         pendingPermissions[toolUseID] = pending
         permissionsLock.unlock()
+
+        // Schedule timeout cleanup to prevent FD leak if Claude dies
+        schedulePermissionTimeout(toolUseID: toolUseID, sessionID: event.sessionID)
+    }
+
+    private func schedulePermissionTimeout(toolUseID: String, sessionID: String) {
+        queue.asyncAfter(deadline: .now() + permissionTimeoutSeconds) { [weak self] in
+            self?.cleanupTimedOutPermission(toolUseID: toolUseID, sessionID: sessionID)
+        }
+    }
+
+    private func cleanupTimedOutPermission(toolUseID: String, sessionID: String) {
+        permissionsLock.lock()
+        guard let pending = pendingPermissions[toolUseID] else {
+            // Already handled (approved/denied/cancelled)
+            permissionsLock.unlock()
+            return
+        }
+
+        // Verify this is actually the same permission (not a reused toolUseID)
+        guard pending.sessionID == sessionID else {
+            permissionsLock.unlock()
+            return
+        }
+
+        // Check if it's actually timed out (could have been refreshed)
+        let age = Date().timeIntervalSince(pending.receivedAt)
+        guard age >= permissionTimeoutSeconds else {
+            permissionsLock.unlock()
+            return
+        }
+
+        pendingPermissions.removeValue(forKey: toolUseID)
+        permissionsLock.unlock()
+
+        logger.warning("Permission timed out after \(Int(age))s for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+        close(pending.clientSocket)
+
+        // Notify of failure
+        permissionFailureHandler?(sessionID, toolUseID)
     }
 
     private func sendPermissionResponse(toolUseID: String, decision: String, reason: String?) {
         permissionsLock.lock()
+
+        // Check if already responded (race condition with terminal approval)
+        if respondedPermissions.contains(toolUseID) {
+            permissionsLock.unlock()
+            logger.debug("Permission already responded for toolUseId: \(toolUseID.prefix(12), privacy: .public) - skipping duplicate")
+            return
+        }
+
         guard let pending = pendingPermissions.removeValue(forKey: toolUseID) else {
             permissionsLock.unlock()
             logger.debug("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public)")
             return
         }
+
+        // Mark as responded
+        markPermissionResponded(toolUseID: toolUseID)
         permissionsLock.unlock()
 
         let response = HookResponse(decision: decision, reason: reason)
@@ -573,7 +753,15 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
             return
         }
 
+        // Check if already responded (race condition with terminal approval)
+        if respondedPermissions.contains(pending.toolUseID) {
+            permissionsLock.unlock()
+            logger.debug("Permission already responded for session: \(sessionID.prefix(8), privacy: .public) - skipping duplicate")
+            return
+        }
+
         pendingPermissions.removeValue(forKey: pending.toolUseID)
+        markPermissionResponded(toolUseID: pending.toolUseID)
         permissionsLock.unlock()
 
         let response = HookResponse(decision: decision, reason: reason)
@@ -616,6 +804,16 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
 
 /// Type-erasing codable wrapper for heterogeneous values
 /// Used to decode JSON objects with mixed value types
+///
+/// `@unchecked Sendable` safety justification:
+/// 1. The `value` property is immutable (`let`) - once set, it cannot be changed
+/// 2. In practice, values are only JSON-compatible types (String, Int, Double, Bool, Array, Dict)
+/// 3. These JSON-compatible types are all either value types or immutable reference types
+/// 4. The struct is created from JSON decoding and immediately passed across actor boundaries
+/// 5. No mutation occurs after initialization - it's effectively a "frozen" value container
+///
+/// Note: For types that need true Sendable safety (like PermissionContext), we serialize
+/// the AnyCodable content to a JSON string instead. See PermissionContext.toolInputJSON.
 struct AnyCodable: Codable, @unchecked Sendable {
     // MARK: Lifecycle
 
@@ -649,7 +847,9 @@ struct AnyCodable: Codable, @unchecked Sendable {
 
     // MARK: Internal
 
-    /// The underlying value (nonisolated(unsafe) because Any is not Sendable)
+    /// The underlying value
+    /// `nonisolated(unsafe)` is required because `Any` is not Sendable, but we ensure safety
+    /// through immutability (let) and limiting to JSON-compatible value types only
     nonisolated(unsafe) let value: Any
 
     /// Encode to JSON

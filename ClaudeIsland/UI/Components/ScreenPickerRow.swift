@@ -12,7 +12,8 @@ import SwiftUI
 struct ScreenPickerRow: View {
     // MARK: Internal
 
-    @ObservedObject var screenSelector: ScreenSelector
+    /// ScreenSelector is @Observable, so SwiftUI automatically tracks property access
+    var screenSelector: ScreenSelector
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,6 +91,7 @@ struct ScreenPickerRow: View {
     // MARK: Private
 
     @State private var isHovered = false
+    @State private var collapseTask: Task<Void, Never>?
 
     private var isExpanded: Bool { screenSelector.isPickerExpanded }
 
@@ -133,7 +135,10 @@ struct ScreenPickerRow: View {
     }
 
     private func collapseAfterDelay() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        collapseTask?.cancel()
+        collapseTask = Task {
+            try? await Task.sleep(for: .seconds(0.3))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
                 setExpanded(false)
             }

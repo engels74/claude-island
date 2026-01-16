@@ -30,7 +30,13 @@ actor SessionStore {
 
     // MARK: - State
 
-    /// All sessions keyed by sessionID (internal for extension access)
+    /// All sessions keyed by sessionID
+    ///
+    /// **IMPORTANT:** Do not access directly from outside SessionStore.
+    /// All state mutations must flow through `process(_ event:)` to maintain
+    /// the event-driven state machine. Internal visibility is required for
+    /// SessionStore extensions (e.g., SessionStore+Subagents.swift).
+    /// Use `session(for:)` or `allSessions()` for read-only access.
     var sessions: [String: SessionState] = [:]
 
     /// Public publisher for UI subscription
@@ -43,6 +49,9 @@ actor SessionStore {
     /// Process any session event - the ONLY way to mutate state
     func process(_ event: SessionEvent) async { // swiftlint:disable:this cyclomatic_complexity
         Self.logger.debug("Processing: \(String(describing: event), privacy: .public)")
+
+        // Record to audit trail
+        recordAuditEntry(event: event)
 
         switch event {
         case let .hookReceived(hookEvent):
@@ -121,7 +130,21 @@ actor SessionStore {
         Array(sessions.values)
     }
 
+    /// Get recent events for debugging (most recent first)
+    func recentEvents(limit: Int = 20) -> [(timestamp: Date, event: String, sessionID: String?)] {
+        eventAuditTrail.suffix(limit).reversed().map {
+            (timestamp: $0.timestamp, event: $0.event, sessionID: $0.sessionID)
+        }
+    }
+
     // MARK: Private
+
+    /// An entry in the event audit trail
+    private struct AuditEntry {
+        let timestamp: Date
+        let event: String
+        let sessionID: String?
+    }
 
     /// Pending file syncs (debounced)
     private var pendingSyncs: [String: Task<Void, Never>] = [:]
@@ -129,10 +152,38 @@ actor SessionStore {
     /// Sync debounce interval (100ms)
     private let syncDebounceNs: UInt64 = 100_000_000
 
+    // MARK: - Event Audit Trail
+
+    /// Ring buffer of recent events for debugging
+    private var eventAuditTrail: [AuditEntry] = []
+    private let maxAuditEntries = 100
+
     // MARK: - Published State (for UI)
 
-    /// Publisher for session state changes (nonisolated for Combine subscription from any context)
+    /// Publisher for session state changes
+    ///
+    /// `nonisolated(unsafe)` is safe here because:
+    /// 1. `CurrentValueSubject` is thread-safe by design (uses internal locking)
+    /// 2. Writes only happen from within the actor's `publishState()` method
+    /// 3. Reads via `sessionsPublisher` are safe from any thread due to Combine's thread-safety
+    /// 4. The subject is immutable after initialization (only `send()` is called, never reassigned)
     private nonisolated(unsafe) let sessionsSubject = CurrentValueSubject<[SessionState], Never>([])
+
+    /// Record an event to the audit trail
+    private func recordAuditEntry(event: SessionEvent) {
+        let entry = AuditEntry(
+            timestamp: Date(),
+            event: String(describing: event).prefix(200).description,
+            sessionID: event.sessionID
+        )
+
+        eventAuditTrail.append(entry)
+
+        // Trim if over limit (ring buffer)
+        if eventAuditTrail.count > maxAuditEntries {
+            eventAuditTrail.removeFirst(eventAuditTrail.count - maxAuditEntries)
+        }
+    }
 
     // MARK: - Hook Event Processing
 
@@ -803,9 +854,13 @@ actor SessionStore {
         cancelPendingSync(sessionID: sessionID)
 
         // Schedule new debounced sync
-        pendingSyncs[sessionID] = Task { [weak self, syncDebounceNs] in
-            try? await Task.sleep(nanoseconds: syncDebounceNs)
+        // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
+        pendingSyncs[sessionID] = Task {
+            try? await Task.sleep(nanoseconds: self.syncDebounceNs)
             guard !Task.isCancelled else { return }
+
+            // Revalidate session still exists after sleep (actor reentrancy protection)
+            guard sessions[sessionID] != nil else { return }
 
             // Parse incrementally - only get NEW messages since last call
             let result = await ConversationParser.shared.parseIncremental(
@@ -813,13 +868,21 @@ actor SessionStore {
                 cwd: cwd
             )
 
+            // Recheck cancellation after await
+            guard !Task.isCancelled else { return }
+
             if result.clearDetected {
-                await self?.process(.clearDetected(sessionID: sessionID))
+                await process(.clearDetected(sessionID: sessionID))
+                // Recheck cancellation after clear processing
+                guard !Task.isCancelled else { return }
             }
 
             guard !result.newMessages.isEmpty || result.clearDetected else {
                 return
             }
+
+            // Revalidate session still exists before processing file update
+            guard sessions[sessionID] != nil else { return }
 
             let payload = FileUpdatePayload(
                 sessionID: sessionID,
@@ -831,7 +894,7 @@ actor SessionStore {
                 structuredResults: result.structuredResults
             )
 
-            await self?.process(.fileUpdated(payload))
+            await process(.fileUpdated(payload))
         }
     }
 

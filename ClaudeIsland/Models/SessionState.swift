@@ -228,17 +228,17 @@ struct ToolTracker: Equatable, Sendable {
     var lastSyncTime: Date?
 
     /// Mark a tool ID as seen, returns true if it was new
-    nonisolated mutating func markSeen(_ id: String) -> Bool {
+    mutating func markSeen(_ id: String) -> Bool {
         seenIDs.insert(id).inserted
     }
 
     /// Check if a tool ID has been seen
-    nonisolated func hasSeen(_ id: String) -> Bool {
+    func hasSeen(_ id: String) -> Bool {
         seenIDs.contains(id)
     }
 
     /// Start tracking a tool
-    nonisolated mutating func startTool(id: String, name: String) {
+    mutating func startTool(id: String, name: String) {
         guard markSeen(id) else { return }
         inProgress[id] = ToolInProgress(
             id: id,
@@ -249,7 +249,7 @@ struct ToolTracker: Equatable, Sendable {
     }
 
     /// Complete a tool
-    nonisolated mutating func completeTool(id: String, success: Bool) {
+    mutating func completeTool(id: String, success: Bool) {
         inProgress.removeValue(forKey: id)
     }
 }
@@ -298,12 +298,12 @@ struct SubagentState: Equatable, Sendable {
     var agentDescriptions: [String: String]
 
     /// Whether there's an active subagent
-    nonisolated var hasActiveSubagent: Bool {
+    var hasActiveSubagent: Bool {
         !activeTasks.isEmpty
     }
 
     /// Start tracking a Task tool
-    nonisolated mutating func startTask(taskToolID: String, description: String? = nil) {
+    mutating func startTask(taskToolID: String, description: String? = nil) {
         activeTasks[taskToolID] = TaskContext(
             taskToolID: taskToolID,
             startTime: Date(),
@@ -314,12 +314,12 @@ struct SubagentState: Equatable, Sendable {
     }
 
     /// Stop tracking a Task tool
-    nonisolated mutating func stopTask(taskToolID: String) {
+    mutating func stopTask(taskToolID: String) {
         activeTasks.removeValue(forKey: taskToolID)
     }
 
     /// Set the agentID for a Task (called when agent file is discovered)
-    nonisolated mutating func setAgentID(_ agentID: String, for taskToolID: String) {
+    mutating func setAgentID(_ agentID: String, for taskToolID: String) {
         activeTasks[taskToolID]?.agentID = agentID
         if let description = activeTasks[taskToolID]?.description {
             agentDescriptions[agentID] = description
@@ -327,17 +327,17 @@ struct SubagentState: Equatable, Sendable {
     }
 
     /// Add a subagent tool to a specific Task by ID
-    nonisolated mutating func addSubagentToolToTask(_ tool: SubagentToolCall, taskID: String) {
+    mutating func addSubagentToolToTask(_ tool: SubagentToolCall, taskID: String) {
         activeTasks[taskID]?.subagentTools.append(tool)
     }
 
     /// Set all subagent tools for a specific Task (used when updating from agent file)
-    nonisolated mutating func setSubagentTools(_ tools: [SubagentToolCall], for taskID: String) {
+    mutating func setSubagentTools(_ tools: [SubagentToolCall], for taskID: String) {
         activeTasks[taskID]?.subagentTools = tools
     }
 
     /// Add a subagent tool to the most recent active Task
-    nonisolated mutating func addSubagentTool(_ tool: SubagentToolCall) {
+    mutating func addSubagentTool(_ tool: SubagentToolCall) {
         // Find most recent active task (for parallel Task support)
         guard let mostRecentTaskID = activeTasks.keys.max(by: {
             (activeTasks[$0]?.startTime ?? .distantPast) < (activeTasks[$1]?.startTime ?? .distantPast)
@@ -348,7 +348,7 @@ struct SubagentState: Equatable, Sendable {
     }
 
     /// Update the status of a subagent tool across all active Tasks
-    nonisolated mutating func updateSubagentToolStatus(toolID: String, status: ToolStatus) {
+    mutating func updateSubagentToolStatus(toolID: String, status: ToolStatus) {
         for taskID in activeTasks.keys {
             if let index = activeTasks[taskID]?.subagentTools.firstIndex(where: { $0.id == toolID }) {
                 activeTasks[taskID]?.subagentTools[index].status = status

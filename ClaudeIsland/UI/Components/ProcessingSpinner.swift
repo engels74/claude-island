@@ -28,7 +28,8 @@ struct ProcessingSpinner: View {
     private let symbols = ["·", "✢", "✳", "∗", "✻", "✽"]
     private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
 
-    private let timer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    /// @State ensures timer persists across view updates rather than being recreated
+    @State private var timer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 }
 
 #Preview {

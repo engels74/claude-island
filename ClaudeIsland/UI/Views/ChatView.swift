@@ -5,7 +5,6 @@
 //  Redesigned chat interface with clean visual hierarchy
 //
 
-import Combine
 import SwiftUI
 
 // swiftlint:disable file_length
@@ -20,7 +19,7 @@ struct ChatView: View {
         self.sessionID = sessionID
         self.initialSession = initialSession
         self.sessionMonitor = sessionMonitor
-        self._viewModel = ObservedObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
         self._session = State(initialValue: initialSession)
 
         // Initialize from cache if available (prevents loading flicker on view recreation)
@@ -33,7 +32,8 @@ struct ChatView: View {
 
     // MARK: Internal
 
-    @ObservedObject var viewModel: NotchViewModel
+    /// View model is @Observable, so SwiftUI automatically tracks property access
+    var viewModel: NotchViewModel
 
     let sessionID: String
     let initialSession: SessionState
@@ -98,39 +98,40 @@ struct ChatView: View {
                 isLoading = false
             }
         }
-        .onReceive(ChatHistoryManager.shared.$histories) { histories in
+        .onChange(of: chatManagerHistory) { _, newHistory in
             // Update when count changes, last item differs, or content changes (e.g., tool status)
-            if let newHistory = histories[sessionID] {
-                let countChanged = newHistory.count != history.count
-                let lastItemChanged = newHistory.last?.id != history.last?.id
-                // Always update - the @Published ensures we only get notified on real changes
-                // This allows tool status updates (waitingForApproval -> running) to reflect
-                if countChanged || lastItemChanged || newHistory != history {
-                    // Track new messages when autoscroll is paused
-                    if isAutoscrollPaused && newHistory.count > previousHistoryCount {
-                        let addedCount = newHistory.count - previousHistoryCount
-                        newMessageCount += addedCount
-                        previousHistoryCount = newHistory.count
-                    }
-
-                    history = newHistory
-
-                    // Auto-scroll to bottom only if autoscroll is NOT paused
-                    if !isAutoscrollPaused && countChanged {
-                        shouldScrollToBottom = true
-                    }
-
-                    // If we have data, skip loading state (handles view recreation)
-                    if isLoading && !newHistory.isEmpty {
-                        isLoading = false
-                    }
+            let countChanged = newHistory.count != history.count
+            let lastItemChanged = newHistory.last?.id != history.last?.id
+            // Always update - @Observable ensures we only get notified on real changes
+            // This allows tool status updates (waitingForApproval -> running) to reflect
+            if countChanged || lastItemChanged || newHistory != history {
+                // Track new messages when autoscroll is paused
+                if isAutoscrollPaused && newHistory.count > previousHistoryCount {
+                    let addedCount = newHistory.count - previousHistoryCount
+                    newMessageCount += addedCount
+                    previousHistoryCount = newHistory.count
                 }
-            } else if hasLoadedOnce {
-                // Session was loaded but is now gone (removed via /clear) - navigate back
+
+                history = newHistory
+
+                // Auto-scroll to bottom only if autoscroll is NOT paused
+                if !isAutoscrollPaused && countChanged {
+                    shouldScrollToBottom = true
+                }
+
+                // If we have data, skip loading state (handles view recreation)
+                if isLoading && !newHistory.isEmpty {
+                    isLoading = false
+                }
+            }
+        }
+        .onChange(of: chatManagerHistories) { _, newHistories in
+            // Handle session removal (via /clear) - navigate back if session is gone
+            if hasLoadedOnce && newHistories[sessionID] == nil {
                 viewModel.exitChat()
             }
         }
-        .onReceive(sessionMonitor.$instances) { sessions in
+        .onChange(of: sessionMonitor.instances) { _, sessions in
             if let updated = sessions.first(where: { $0.sessionID == sessionID }),
                updated != session {
                 // Check if permission was just accepted (transition from waitingForApproval to processing)
@@ -140,7 +141,10 @@ struct ChatView: View {
 
                 if wasWaiting && isNowProcessing {
                     // Scroll to bottom after permission accepted (with slight delay)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    scrollToBottomTask?.cancel()
+                    scrollToBottomTask = Task {
+                        try? await Task.sleep(for: .seconds(0.3))
+                        guard !Task.isCancelled else { return }
                         shouldScrollToBottom = true
                     }
                 }
@@ -149,14 +153,20 @@ struct ChatView: View {
         .onChange(of: canSendMessages) { _, canSend in
             // Auto-focus input when tmux messaging becomes available
             if canSend && !isInputFocused {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusInputTask?.cancel()
+                focusInputTask = Task {
+                    try? await Task.sleep(for: .seconds(0.1))
+                    guard !Task.isCancelled else { return }
                     isInputFocused = true
                 }
             }
         }
         .onAppear {
             // Auto-focus input when chat opens and tmux messaging is available
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            focusInputTask?.cancel()
+            focusInputTask = Task {
+                try? await Task.sleep(for: .seconds(0.3))
+                guard !Task.isCancelled else { return }
                 if canSendMessages {
                     isInputFocused = true
                 }
@@ -176,6 +186,8 @@ struct ChatView: View {
     @State private var newMessageCount = 0
     @State private var previousHistoryCount = 0
     @State private var isBottomVisible = true
+    @State private var scrollToBottomTask: Task<Void, Never>?
+    @State private var focusInputTask: Task<Void, Never>?
     @FocusState private var isInputFocused: Bool
 
     // MARK: - Header
@@ -186,6 +198,16 @@ struct ChatView: View {
 
     /// Background color for fade gradients
     private let fadeColor = Color(red: 0.00, green: 0.00, blue: 0.00)
+
+    /// Access to chat history from @Observable manager for SwiftUI observation
+    private var chatManagerHistory: [ChatHistoryItem] {
+        ChatHistoryManager.shared.histories[sessionID] ?? []
+    }
+
+    /// Access to all histories from @Observable manager for session removal detection
+    private var chatManagerHistories: [String: [ChatHistoryItem]] {
+        ChatHistoryManager.shared.histories
+    }
 
     /// Whether we're waiting for approval
     private var isWaitingForApproval: Bool {
@@ -622,11 +644,12 @@ struct ProcessingIndicatorView: View {
 
     @State private var dotCount = 1
 
+    /// @State ensures timer persists across view updates rather than being recreated
+    @State private var timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
     private let baseTexts = ["Processing", "Working"]
     private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
     private let baseText: String
-
-    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
     private var dots: String {
         String(repeating: ".", count: dotCount)

@@ -3,17 +3,21 @@
 //  ClaudeIsland
 //
 //  MainActor wrapper around SessionStore for UI binding.
-//  Publishes SessionState arrays for SwiftUI observation.
+//  Uses @Observable for efficient property-level change tracking (macOS 14+).
 //
 
 import AppKit
 import Combine
 import Foundation
+import Observation
 
 // MARK: - ClaudeSessionMonitor
 
+/// Session monitor using modern @Observable macro for efficient SwiftUI updates.
+/// Subscribes to SessionStore's Combine publisher to receive session state changes.
+@Observable
 @MainActor
-class ClaudeSessionMonitor: ObservableObject {
+final class ClaudeSessionMonitor {
     // MARK: Lifecycle
 
     init() {
@@ -29,52 +33,68 @@ class ClaudeSessionMonitor: ObservableObject {
 
     // MARK: Internal
 
-    @Published var instances: [SessionState] = []
-    @Published var pendingInstances: [SessionState] = []
+    var instances: [SessionState] = []
+    var pendingInstances: [SessionState] = []
 
     // MARK: - Monitoring Lifecycle
 
     func startMonitoring() {
         HookSocketServer.shared.start(
-            onEvent: { event in
-                Task {
-                    await SessionStore.shared.process(.hookReceived(event))
-                }
+            onEvent: { [weak self] event in
+                // HookSocketServer calls this callback on its internal socket queue.
+                // We must hop to MainActor before accessing self (a @MainActor type).
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
 
-                if event.sessionPhase == .processing {
-                    Task { @MainActor in
-                        InterruptWatcherManager.shared.startWatching(
-                            sessionID: event.sessionID,
-                            cwd: event.cwd
-                        )
+                    let task = Task {
+                        await SessionStore.shared.process(.hookReceived(event))
                     }
-                }
+                    trackTask(task)
 
-                if event.status == "ended" {
-                    Task { @MainActor in
-                        InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
+                    if event.sessionPhase == .processing {
+                        let watchTask = Task { @MainActor in
+                            InterruptWatcherManager.shared.startWatching(
+                                sessionID: event.sessionID,
+                                cwd: event.cwd
+                            )
+                        }
+                        trackTask(watchTask)
                     }
-                }
 
-                if event.event == "Stop" {
-                    HookSocketServer.shared.cancelPendingPermissions(sessionID: event.sessionID)
-                }
+                    if event.status == "ended" {
+                        let stopTask = Task { @MainActor in
+                            InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
+                        }
+                        trackTask(stopTask)
+                    }
 
-                if event.event == "PostToolUse", let toolUseID = event.toolUseID {
-                    HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
+                    if event.event == "Stop" {
+                        HookSocketServer.shared.cancelPendingPermissions(sessionID: event.sessionID)
+                    }
+
+                    if event.event == "PostToolUse", let toolUseID = event.toolUseID {
+                        HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
+                    }
                 }
             },
-            onPermissionFailure: { sessionID, toolUseID in
-                Task {
-                    await SessionStore.shared.process(
-                        .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
-                    )
+            onPermissionFailure: { [weak self] sessionID, toolUseID in
+                // Same as above - hop to MainActor before accessing self
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+
+                    let task = Task {
+                        await SessionStore.shared.process(
+                            .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
+                        )
+                    }
+                    trackTask(task)
                 }
             }
         )
     }
 
     func stopMonitoring() {
+        cancelAllTasks()
         HookSocketServer.shared.stop()
     }
 
@@ -137,7 +157,40 @@ class ClaudeSessionMonitor: ObservableObject {
 
     // MARK: Private
 
-    private var cancellables = Set<AnyCancellable>()
+    /// Combine subscriptions - ignored by Observation since these don't affect UI state
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+
+    /// Active tasks that should be cancelled when monitoring stops
+    @ObservationIgnored private var activeTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private let tasksLock = NSLock()
+
+    /// Track a task for cancellation on stop
+    private func trackTask(_ task: Task<Void, Never>) {
+        let id = UUID()
+        tasksLock.lock()
+        activeTasks[id] = task
+        tasksLock.unlock()
+
+        // Auto-remove when task completes
+        Task {
+            _ = await task.result
+            tasksLock.lock()
+            activeTasks.removeValue(forKey: id)
+            tasksLock.unlock()
+        }
+    }
+
+    /// Cancel all tracked tasks
+    private func cancelAllTasks() {
+        tasksLock.lock()
+        let tasks = activeTasks.values
+        activeTasks.removeAll()
+        tasksLock.unlock()
+
+        for task in tasks {
+            task.cancel()
+        }
+    }
 
     // MARK: - State Update
 
@@ -151,11 +204,9 @@ class ClaudeSessionMonitor: ObservableObject {
 
 extension ClaudeSessionMonitor: JSONLInterruptWatcherDelegate {
     nonisolated func didDetectInterrupt(sessionID: String) {
-        Task {
-            await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
-        }
-
+        // Combined task for interrupt handling - both actions should complete together
         Task { @MainActor in
+            await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
             InterruptWatcherManager.shared.stopWatching(sessionID: sessionID)
         }
     }

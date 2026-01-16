@@ -7,6 +7,7 @@
 
 import AppKit
 import Combine
+import Observation
 import SwiftUI
 
 // MARK: - NotchStatus
@@ -47,8 +48,11 @@ enum NotchContentType: Equatable {
 
 // MARK: - NotchViewModel
 
+/// State management for the dynamic island notch UI
+/// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
+@Observable
 @MainActor
-class NotchViewModel: ObservableObject {
+final class NotchViewModel {
     // MARK: Lifecycle
 
     // MARK: - Initialization
@@ -66,12 +70,12 @@ class NotchViewModel: ObservableObject {
 
     // MARK: Internal
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
-    @Published var status: NotchStatus = .closed
-    @Published var openReason: NotchOpenReason = .unknown
-    @Published var contentType: NotchContentType = .instances
-    @Published var isHovering = false
+    var status: NotchStatus = .closed
+    var openReason: NotchOpenReason = .unknown
+    var contentType: NotchContentType = .instances
+    var isHovering = false
 
     // MARK: - Geometry
 
@@ -79,12 +83,20 @@ class NotchViewModel: ObservableObject {
     let spacing: CGFloat = 12
     let hasPhysicalNotch: Bool
 
+    /// Tracks selector expansion state changes to trigger view updates
+    /// (With @Observable, views reading openedSize will observe this and re-compute when selectors change)
+    private(set) var selectorUpdateToken: UInt = 0
+
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
     var windowHeight: CGFloat { geometry.windowHeight }
 
     /// Dynamic opened size based on content type
+    /// Note: References selectorUpdateToken to ensure views re-compute when pickers expand/collapse
     var openedSize: CGSize {
+        // Touch token to establish observation dependency
+        _ = selectorUpdateToken
+
         switch contentType {
         case .chat:
             // Large size for chat view
@@ -172,8 +184,10 @@ class NotchViewModel: ObservableObject {
     /// Perform boot animation: expand briefly then collapse
     func performBootAnimation() {
         notchOpen(reason: .boot)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self, openReason == .boot else { return }
+        bootAnimationTask?.cancel()
+        bootAnimationTask = Task {
+            try? await Task.sleep(for: .seconds(1.0))
+            guard !Task.isCancelled, openReason == .boot else { return }
             notchClose()
         }
     }
@@ -185,12 +199,21 @@ class NotchViewModel: ObservableObject {
     private let screenSelector = ScreenSelector.shared
     private let soundSelector = SoundSelector.shared
 
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     private let events = EventMonitors.shared
-    private var hoverTimer: DispatchWorkItem?
+
+    /// Task for hover delay before opening notch
+    @ObservationIgnored private var hoverTask: Task<Void, Never>?
+    /// Task for boot animation auto-close
+    @ObservationIgnored private var bootAnimationTask: Task<Void, Never>?
+    /// Task for reposting mouse clicks to windows behind us
+    @ObservationIgnored private var repostClickTask: Task<Void, Never>?
 
     /// The chat session we're viewing (persists across close/open)
     private var currentChatSession: SessionState?
+
+    /// Tracks whether observation loop is active
+    @ObservationIgnored private var isObservingSelectors = false
 
     /// Whether we're in chat mode (sticky behavior)
     private var isInChatMode: Bool {
@@ -199,13 +222,29 @@ class NotchViewModel: ObservableObject {
     }
 
     private func observeSelectors() {
-        screenSelector.$isPickerExpanded
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+        // Use withObservationTracking to observe @Observable properties across objects
+        startSelectorObservation()
+    }
 
-        soundSelector.$isPickerExpanded
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+    private func startSelectorObservation() {
+        guard !isObservingSelectors else { return }
+        isObservingSelectors = true
+        observeSelectorChanges()
+    }
+
+    private func observeSelectorChanges() {
+        withObservationTracking {
+            // Access the properties we want to observe
+            _ = screenSelector.isPickerExpanded
+            _ = soundSelector.isPickerExpanded
+        } onChange: { [weak self] in
+            // Dispatch to main actor since onChange may be called from any context
+            Task { @MainActor [weak self] in
+                self?.selectorUpdateToken &+= 1
+                // Re-register for next change
+                self?.observeSelectorChanges()
+            }
+        }
     }
 
     // MARK: - Event Handling
@@ -237,18 +276,17 @@ class NotchViewModel: ObservableObject {
 
         isHovering = newHovering
 
-        // Cancel any pending hover timer
-        hoverTimer?.cancel()
-        hoverTimer = nil
+        // Cancel any pending hover task
+        hoverTask?.cancel()
+        hoverTask = nil
 
         // Start hover timer to auto-expand after 1 second
         if isHovering && (status == .closed || status == .popping) {
-            let workItem = DispatchWorkItem { [weak self] in
-                guard let self, isHovering else { return }
+            hoverTask = Task {
+                try? await Task.sleep(for: .seconds(1.0))
+                guard !Task.isCancelled, isHovering else { return }
                 notchOpen(reason: .hover)
             }
-            hoverTimer = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
         }
     }
 
@@ -277,8 +315,13 @@ class NotchViewModel: ObservableObject {
 
     /// Re-posts a mouse click at the given screen location so it reaches windows behind us
     private func repostClickAt(_ location: CGPoint) {
+        // Cancel any pending repost task
+        repostClickTask?.cancel()
         // Small delay to let the window's ignoresMouseEvents update
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        repostClickTask = Task {
+            try? await Task.sleep(for: .seconds(0.05))
+            guard !Task.isCancelled else { return }
+
             // Convert to CGEvent coordinate system (screen coordinates with Y from top-left)
             guard let screen = NSScreen.main else { return }
             let screenHeight = screen.frame.height

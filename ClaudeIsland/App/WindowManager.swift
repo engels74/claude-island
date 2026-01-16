@@ -13,7 +13,10 @@ private let logger = Logger(subsystem: "com.claudeisland", category: "Window")
 
 // MARK: - WindowManager
 
-class WindowManager {
+/// Manages the notch window lifecycle.
+/// Requires @MainActor as it performs UI operations (orderOut, close, showWindow).
+@MainActor
+final class WindowManager {
     private(set) var windowController: NotchWindowController?
 
     /// Set up or recreate the notch window

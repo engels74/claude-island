@@ -5,7 +5,6 @@
 //  Minimal instances list matching Dynamic Island aesthetic
 //
 
-import Combine
 import SwiftUI
 
 // MARK: - ClaudeInstancesView
@@ -13,8 +12,11 @@ import SwiftUI
 struct ClaudeInstancesView: View {
     // MARK: Internal
 
-    @ObservedObject var sessionMonitor: ClaudeSessionMonitor
-    @ObservedObject var viewModel: NotchViewModel
+    /// Session monitor is @Observable, so SwiftUI automatically tracks property access
+    var sessionMonitor: ClaudeSessionMonitor
+
+    /// View model is @Observable, so SwiftUI automatically tracks property access
+    var viewModel: NotchViewModel
 
     var body: some View {
         if sessionMonitor.instances.isEmpty {
@@ -289,7 +291,8 @@ struct InstanceRow: View {
 
     private let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
     private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
-    private let spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    /// @State ensures timer persists across view updates rather than being recreated
+    @State private var spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
     /// Whether we're showing the approval UI
     private var isWaitingForApproval: Bool {

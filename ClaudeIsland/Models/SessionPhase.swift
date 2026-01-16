@@ -11,10 +11,33 @@ import Foundation
 // MARK: - PermissionContext
 
 /// Permission context for tools waiting for approval
+/// Note: Uses serialized JSON string for toolInput to ensure true Sendable safety
+/// (AnyCodable contains `Any` which can hold mutable reference types)
 struct PermissionContext: Sendable {
+    // MARK: Lifecycle
+
+    /// Initialize with raw tool input dictionary (serializes to JSON)
+    init(toolUseID: String, toolName: String, toolInput: [String: AnyCodable]?, receivedAt: Date) {
+        self.toolUseID = toolUseID
+        self.toolName = toolName
+        self.receivedAt = receivedAt
+
+        // Serialize tool input to JSON string for Sendable safety
+        if let input = toolInput,
+           let data = try? JSONEncoder().encode(input),
+           let jsonString = String(data: data, encoding: .utf8) {
+            self.toolInputJSON = jsonString
+        } else {
+            self.toolInputJSON = nil
+        }
+    }
+
+    // MARK: Internal
+
     let toolUseID: String
     let toolName: String
-    let toolInput: [String: AnyCodable]?
+    /// Tool input serialized as JSON string for Sendable safety
+    let toolInputJSON: String?
     let receivedAt: Date
 
     /// Format tool input for display
@@ -22,7 +45,7 @@ struct PermissionContext: Sendable {
         guard let input = toolInput else { return nil }
         var parts: [String] = []
         for (key, value) in input {
-            let valueStr: String = switch value.value {
+            let valueStr: String = switch value {
             case let str as String:
                 str.count > 100 ? String(str.prefix(100)) + "..." : str
             case let num as Int:
@@ -38,15 +61,29 @@ struct PermissionContext: Sendable {
         }
         return parts.joined(separator: "\n")
     }
+
+    // MARK: Private
+
+    /// Decode tool input from JSON when needed
+    private var toolInput: [String: Any]? {
+        guard let json = toolInputJSON,
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+        return dict
+    }
 }
 
 // MARK: Equatable
 
 extension PermissionContext: Equatable {
     nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
-        // Compare by identity fields only (AnyCodable doesn't conform to Equatable)
+        // Compare by identity fields and serialized input
         lhs.toolUseID == rhs.toolUseID &&
             lhs.toolName == rhs.toolName &&
+            lhs.toolInputJSON == rhs.toolInputJSON &&
             lhs.receivedAt == rhs.receivedAt
     }
 }
