@@ -17,6 +17,12 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "N
 // MARK: - NotchMenuView
 
 struct NotchMenuView: View {
+    // MARK: Lifecycle
+
+    init(viewModel: NotchViewModel) {
+        self.viewModel = viewModel
+    }
+
     // MARK: Internal
 
     /// View model is @Observable, so SwiftUI automatically tracks property access
@@ -124,11 +130,12 @@ struct NotchMenuView: View {
 
     /// UpdateManager inherits from NSObject for Sparkle integration - intentional exception to @Observable pattern
     @ObservedObject private var updateManager = UpdateManager.shared
+    @State private var hooksInstalled = false
+    @State private var launchAtLogin = false
+
     /// Singletons are @Observable, so SwiftUI automatically tracks property access
     private var screenSelector = ScreenSelector.shared
     private var soundSelector = SoundSelector.shared
-    @State private var hooksInstalled = false
-    @State private var launchAtLogin = false
 
     private func refreshStates() {
         hooksInstalled = HookInstaller.isInstalled()

@@ -45,7 +45,7 @@ class NotchViewController: NSViewController {
         let hosting = PassThroughHostingView(rootView: NotchView(viewModel: viewModel))
 
         // Calculate the hit-test rect based on panel state
-        hosting.hitTestRect = { [weak self] in
+        hosting.hitTestRect = { [weak self] () -> CGRect in
             guard let self else { return .zero }
             let vm = viewModel
             let geometry = vm.geometry

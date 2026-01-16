@@ -70,9 +70,6 @@ final class NotchViewModel {
 
     // MARK: Internal
 
-    // MARK: - Observable State
-
-    var status: NotchStatus = .closed
     var openReason: NotchOpenReason = .unknown
     var contentType: NotchContentType = .instances
     var isHovering = false
@@ -87,6 +84,19 @@ final class NotchViewModel {
     /// (With @Observable, views reading openedSize will observe this and re-compute when selectors change)
     private(set) var selectorUpdateToken: UInt = 0
 
+    // MARK: - Observable State
+
+    var status: NotchStatus = .closed {
+        didSet {
+            statusSubject.send(status)
+        }
+    }
+
+    /// Combine publisher for status changes (for use in non-SwiftUI contexts like window controllers)
+    var statusPublisher: AnyPublisher<NotchStatus, Never> {
+        statusSubject.eraseToAnyPublisher()
+    }
+
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
     var windowHeight: CGFloat { geometry.windowHeight }
@@ -100,18 +110,18 @@ final class NotchViewModel {
         switch contentType {
         case .chat:
             // Large size for chat view
-            CGSize(
+            return CGSize(
                 width: min(screenRect.width * 0.5, 600),
                 height: 580
             )
         case .menu:
             // Compact size for settings menu
-            CGSize(
+            return CGSize(
                 width: min(screenRect.width * 0.4, 480),
                 height: 420 + screenSelector.expandedPickerHeight + soundSelector.expandedPickerHeight
             )
         case .instances:
-            CGSize(
+            return CGSize(
                 width: min(screenRect.width * 0.4, 480),
                 height: 320
             )
@@ -193,6 +203,8 @@ final class NotchViewModel {
     }
 
     // MARK: Private
+
+    private let statusSubject = CurrentValueSubject<NotchStatus, Never>(.closed)
 
     // MARK: - Dependencies
 
