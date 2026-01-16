@@ -33,22 +33,25 @@ final class EventMonitors {
     private var mouseDraggedMonitor: EventMonitor?
 
     private func setupMonitors() {
+        // Note: Apple documents that NSEvent monitor handlers run on the main thread.
+        // Using DispatchQueue.main.async provides defensive safety in case this ever changes,
+        // avoiding potential crashes from MainActor.assumeIsolated violations.
         mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 self?.mouseLocation.send(NSEvent.mouseLocation)
             }
         }
         mouseMoveMonitor?.start()
 
         mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 self?.mouseDown.send(event)
             }
         }
         mouseDownMonitor?.start()
 
         mouseDraggedMonitor = EventMonitor(mask: .leftMouseDragged) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 self?.mouseLocation.send(NSEvent.mouseLocation)
             }
         }

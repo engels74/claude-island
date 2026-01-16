@@ -5,6 +5,7 @@
 //  Unix domain socket server for real-time hook events
 //  Supports request/response for permission decisions
 //
+// swiftlint:disable file_length
 
 import Foundation
 import os.log
@@ -178,6 +179,11 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
 
     /// Stop the socket server
     func stop() {
+        // Mark as stopped to prevent pending retries from restarting
+        queue.sync {
+            isStopped = true
+        }
+
         // Cancel accept source if active
         if let source = acceptSource {
             source.cancel()
@@ -257,6 +263,9 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
     private let queue = DispatchQueue(label: "com.claudeisland.socket", qos: .userInitiated)
     private let reconnectionManager = SocketReconnectionManager()
 
+    /// Explicit stopped state to prevent retries after stop() is called
+    private var isStopped = false
+
     /// Pending permission requests indexed by toolUseID
     private var pendingPermissions: [String: PendingPermission] = [:]
     private let permissionsLock = NSLock()
@@ -278,6 +287,9 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
     private func startServer(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler?) {
         guard serverSocket < 0 else { return }
 
+        // Reset stopped state when explicitly starting
+        isStopped = false
+
         eventHandler = onEvent
         permissionFailureHandler = onPermissionFailure
 
@@ -285,6 +297,12 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
     }
 
     private func attemptServerStart() {
+        // Check if stopped to prevent restarts after stop() was called
+        guard !isStopped else {
+            logger.debug("Server start aborted - server has been stopped")
+            return
+        }
+
         // Clean up stale socket file before attempting
         unlink(Self.socketPath)
 
@@ -352,8 +370,22 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
     }
 
     private func scheduleRetry() {
+        // Check if stopped before scheduling retry
+        guard !isStopped else {
+            logger.debug("Retry aborted - server has been stopped")
+            return
+        }
+
         Task { [weak self] in
             guard let self else { return }
+
+            // Check again after Task starts in case stop() was called
+            let stopped = await MainActor.run { self.queue.sync { self.isStopped } }
+            guard !stopped else {
+                logger.debug("Retry cancelled - server has been stopped")
+                return
+            }
+
             guard let delay = await reconnectionManager.nextDelay() else {
                 let attempts = await reconnectionManager.currentAttempt
                 logger.error("Socket server failed after \(attempts) attempts - giving up")
@@ -364,6 +396,14 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
             logger.warning("Socket server failed, retrying in \(String(format: "%.1f", delay))s (attempt \(attempt))")
 
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+            // Final check after sleep before actually restarting
+            let stoppedAfterSleep = self.queue.sync { self.isStopped }
+            guard !stoppedAfterSleep else {
+                logger.debug("Retry cancelled after sleep - server has been stopped")
+                return
+            }
+
             queue.async { [weak self] in
                 self?.attemptServerStart()
             }

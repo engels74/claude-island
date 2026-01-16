@@ -41,45 +41,54 @@ final class ClaudeSessionMonitor {
     func startMonitoring() {
         HookSocketServer.shared.start(
             onEvent: { [weak self] event in
-                let task = Task {
-                    await SessionStore.shared.process(.hookReceived(event))
-                }
-                self?.trackTask(task)
+                // HookSocketServer calls this callback on its internal socket queue.
+                // We must hop to MainActor before accessing self (a @MainActor type).
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
 
-                if event.sessionPhase == .processing {
-                    let watchTask = Task { @MainActor [weak self] in
-                        InterruptWatcherManager.shared.startWatching(
-                            sessionID: event.sessionID,
-                            cwd: event.cwd
-                        )
-                        _ = self // Silence unused warning
+                    let task = Task {
+                        await SessionStore.shared.process(.hookReceived(event))
                     }
-                    self?.trackTask(watchTask)
-                }
+                    trackTask(task)
 
-                if event.status == "ended" {
-                    let stopTask = Task { @MainActor [weak self] in
-                        InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
-                        _ = self // Silence unused warning
+                    if event.sessionPhase == .processing {
+                        let watchTask = Task { @MainActor in
+                            InterruptWatcherManager.shared.startWatching(
+                                sessionID: event.sessionID,
+                                cwd: event.cwd
+                            )
+                        }
+                        trackTask(watchTask)
                     }
-                    self?.trackTask(stopTask)
-                }
 
-                if event.event == "Stop" {
-                    HookSocketServer.shared.cancelPendingPermissions(sessionID: event.sessionID)
-                }
+                    if event.status == "ended" {
+                        let stopTask = Task { @MainActor in
+                            InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
+                        }
+                        trackTask(stopTask)
+                    }
 
-                if event.event == "PostToolUse", let toolUseID = event.toolUseID {
-                    HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
+                    if event.event == "Stop" {
+                        HookSocketServer.shared.cancelPendingPermissions(sessionID: event.sessionID)
+                    }
+
+                    if event.event == "PostToolUse", let toolUseID = event.toolUseID {
+                        HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
+                    }
                 }
             },
             onPermissionFailure: { [weak self] sessionID, toolUseID in
-                let task = Task {
-                    await SessionStore.shared.process(
-                        .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
-                    )
+                // Same as above - hop to MainActor before accessing self
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+
+                    let task = Task {
+                        await SessionStore.shared.process(
+                            .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
+                        )
+                    }
+                    trackTask(task)
                 }
-                self?.trackTask(task)
             }
         )
     }
