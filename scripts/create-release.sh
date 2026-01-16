@@ -184,6 +184,7 @@ SPARKLE_SIGN=""
 GENERATE_APPCAST=""
 
 POSSIBLE_PATHS=(
+    "$BUILD_DIR/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
     "$HOME/Library/Developer/Xcode/DerivedData/ClaudeIsland-*/SourcePackages/artifacts/sparkle/Sparkle/bin"
 )
 
