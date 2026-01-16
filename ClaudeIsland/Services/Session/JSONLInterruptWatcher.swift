@@ -29,13 +29,17 @@ class JSONLInterruptWatcher {
         self.sessionID = sessionID
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
-        self.filePath = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
+        self.directoryPath = NSHomeDirectory() + "/.claude/projects/" + projectDir
+        self.filePath = directoryPath + "/" + sessionID + ".jsonl"
     }
 
     deinit {
-        // Cancel the source - the cancel handler will close the file handle
+        // Cancel the sources - the cancel handlers will close the file handles
         if let source {
             source.cancel()
+        }
+        if let directorySource {
+            directorySource.cancel()
         }
     }
 
@@ -70,17 +74,28 @@ class JSONLInterruptWatcher {
 
     private var fileHandle: FileHandle?
     private var source: DispatchSourceFileSystemObject?
+    private var directorySource: DispatchSourceFileSystemObject?
+    private var directoryHandle: FileHandle?
     private var lastOffset: UInt64 = 0
     private let sessionID: String
     private let filePath: String
+    private let directoryPath: String
     private let queue = DispatchQueue(label: "com.claudeisland.interruptwatcher", qos: .userInteractive)
 
     private func startWatching() {
         stopInternal()
 
-        guard FileManager.default.fileExists(atPath: filePath),
-              let handle = FileHandle(forReadingAtPath: filePath)
-        else {
+        // Try to watch the file directly
+        if FileManager.default.fileExists(atPath: filePath) {
+            startFileWatcher()
+        } else {
+            // File doesn't exist yet - watch the parent directory
+            startDirectoryWatcher()
+        }
+    }
+
+    private func startFileWatcher() {
+        guard let handle = FileHandle(forReadingAtPath: filePath) else {
             logger.warning("Failed to open file: \(filePath, privacy: .public)")
             return
         }
@@ -113,7 +128,61 @@ class JSONLInterruptWatcher {
         source = newSource
         newSource.resume()
 
-        logger.debug("Started watching: \(sessionID.prefix(8), privacy: .public)...")
+        logger.debug("Started watching file: \(sessionID.prefix(8), privacy: .public)...")
+    }
+
+    private func startDirectoryWatcher() {
+        // Ensure the directory exists
+        guard FileManager.default.fileExists(atPath: directoryPath) else {
+            logger.warning("Directory doesn't exist: \(directoryPath, privacy: .public)")
+            return
+        }
+
+        guard let handle = FileHandle(forReadingAtPath: directoryPath) else {
+            logger.warning("Failed to open directory for watching: \(directoryPath, privacy: .public)")
+            return
+        }
+
+        directoryHandle = handle
+        let fd = handle.fileDescriptor
+
+        let newSource = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write],
+            queue: queue
+        )
+
+        newSource.setEventHandler { [weak self] in
+            self?.checkForFileAppearance()
+        }
+
+        newSource.setCancelHandler { [weak self] in
+            try? self?.directoryHandle?.close()
+            self?.directoryHandle = nil
+        }
+
+        directorySource = newSource
+        newSource.resume()
+
+        logger.debug("Started watching directory for file appearance: \(sessionID.prefix(8), privacy: .public)...")
+    }
+
+    private func checkForFileAppearance() {
+        // Check if the file now exists
+        guard FileManager.default.fileExists(atPath: filePath) else {
+            return
+        }
+
+        logger.debug("File appeared, switching to file watcher: \(sessionID.prefix(8), privacy: .public)")
+
+        // Stop directory watcher
+        if let existingDirSource = directorySource {
+            existingDirSource.cancel()
+            directorySource = nil
+        }
+
+        // Start file watcher
+        startFileWatcher()
     }
 
     private func checkForInterrupt() {
@@ -177,11 +246,18 @@ class JSONLInterruptWatcher {
     }
 
     private func stopInternal() {
-        guard let existingSource = source else { return }
+        // Stop file watcher
+        if let existingSource = source {
+            existingSource.cancel()
+            source = nil
+        }
+        // Stop directory watcher
+        if let existingDirSource = directorySource {
+            existingDirSource.cancel()
+            directorySource = nil
+        }
+        // fileHandle and directoryHandle closed by cancel handlers
         logger.debug("Stopped watching: \(sessionID.prefix(8), privacy: .public)...")
-        existingSource.cancel()
-        source = nil
-        // fileHandle closed by cancel handler
     }
 }
 

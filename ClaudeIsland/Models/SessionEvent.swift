@@ -200,6 +200,36 @@ extension HookEvent {
     }
 }
 
+// MARK: - SessionEvent + sessionID
+
+extension SessionEvent {
+    /// Extract the session ID from this event (if available)
+    nonisolated var sessionID: String? {
+        switch self {
+        case let .hookReceived(event):
+            event.sessionID
+        case let .permissionApproved(sessionID, _),
+             let .permissionDenied(sessionID, _, _),
+             let .permissionSocketFailed(sessionID, _),
+             let .interruptDetected(sessionID),
+             let .clearDetected(sessionID),
+             let .sessionEnded(sessionID),
+             let .loadHistory(sessionID, _),
+             let .toolCompleted(sessionID, _, _),
+             let .subagentStarted(sessionID, _),
+             let .subagentToolExecuted(sessionID, _),
+             let .subagentToolCompleted(sessionID, _, _),
+             let .subagentStopped(sessionID, _),
+             let .agentFileUpdated(sessionID, _, _):
+            sessionID
+        case let .fileUpdated(payload):
+            payload.sessionID
+        case let .historyLoaded(payload):
+            payload.sessionID
+        }
+    }
+}
+
 // MARK: - SessionEvent + CustomStringConvertible
 
 extension SessionEvent: CustomStringConvertible {

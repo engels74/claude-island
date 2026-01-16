@@ -40,24 +40,29 @@ final class ClaudeSessionMonitor {
 
     func startMonitoring() {
         HookSocketServer.shared.start(
-            onEvent: { event in
-                Task {
+            onEvent: { [weak self] event in
+                let task = Task {
                     await SessionStore.shared.process(.hookReceived(event))
                 }
+                self?.trackTask(task)
 
                 if event.sessionPhase == .processing {
-                    Task { @MainActor in
+                    let watchTask = Task { @MainActor [weak self] in
                         InterruptWatcherManager.shared.startWatching(
                             sessionID: event.sessionID,
                             cwd: event.cwd
                         )
+                        _ = self // Silence unused warning
                     }
+                    self?.trackTask(watchTask)
                 }
 
                 if event.status == "ended" {
-                    Task { @MainActor in
+                    let stopTask = Task { @MainActor [weak self] in
                         InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
+                        _ = self // Silence unused warning
                     }
+                    self?.trackTask(stopTask)
                 }
 
                 if event.event == "Stop" {
@@ -68,17 +73,19 @@ final class ClaudeSessionMonitor {
                     HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
                 }
             },
-            onPermissionFailure: { sessionID, toolUseID in
-                Task {
+            onPermissionFailure: { [weak self] sessionID, toolUseID in
+                let task = Task {
                     await SessionStore.shared.process(
                         .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
                     )
                 }
+                self?.trackTask(task)
             }
         )
     }
 
     func stopMonitoring() {
+        cancelAllTasks()
         HookSocketServer.shared.stop()
     }
 
@@ -143,6 +150,38 @@ final class ClaudeSessionMonitor {
 
     /// Combine subscriptions - ignored by Observation since these don't affect UI state
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+
+    /// Active tasks that should be cancelled when monitoring stops
+    @ObservationIgnored private var activeTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private let tasksLock = NSLock()
+
+    /// Track a task for cancellation on stop
+    private func trackTask(_ task: Task<Void, Never>) {
+        let id = UUID()
+        tasksLock.lock()
+        activeTasks[id] = task
+        tasksLock.unlock()
+
+        // Auto-remove when task completes
+        Task {
+            _ = await task.result
+            tasksLock.lock()
+            activeTasks.removeValue(forKey: id)
+            tasksLock.unlock()
+        }
+    }
+
+    /// Cancel all tracked tasks
+    private func cancelAllTasks() {
+        tasksLock.lock()
+        let tasks = activeTasks.values
+        activeTasks.removeAll()
+        tasksLock.unlock()
+
+        for task in tasks {
+            task.cancel()
+        }
+    }
 
     // MARK: - State Update
 

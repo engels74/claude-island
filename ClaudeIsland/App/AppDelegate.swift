@@ -93,6 +93,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Stop socket server and clean up socket file
+        HookSocketServer.shared.stop()
+
+        // Stop interrupt watchers
+        InterruptWatcherManager.shared.stopAll()
+
         Mixpanel.mainInstance().flush()
         updateCheckTimer?.invalidate()
         screenObserver = nil
