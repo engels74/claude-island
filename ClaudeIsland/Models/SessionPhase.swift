@@ -116,62 +116,66 @@ enum SessionPhase: Sendable {
     // MARK: - State Machine Transitions
 
     /// Check if a transition to the target phase is valid
-    nonisolated func canTransition(to next: SessionPhase) -> Bool {
-        switch (self, next) {
+    nonisolated func canTransition(to next: Self) -> Bool {
         // Terminal state - no transitions out
-        case (.ended, _):
-            false
+        if case .ended = self { return false }
         // Any state can transition to ended
-        case (_, .ended):
-            true
-        // Idle transitions
-        case (.idle, .processing):
-            true
-        case (.idle, .waitingForApproval):
-            true // Direct permission request on idle session
-        case (.idle, .compacting):
-            true
-        // Processing transitions
-        case (.processing, .waitingForInput):
-            true
-        case (.processing, .waitingForApproval):
-            true
-        case (.processing, .compacting):
-            true
-        case (.processing, .idle):
-            true // Interrupt or quick completion
-        // WaitingForInput transitions
-        case (.waitingForInput, .processing):
-            true
-        case (.waitingForInput, .idle):
-            true // Can become idle
-        case (.waitingForInput, .compacting):
-            true
-        // WaitingForApproval transitions
-        case (.waitingForApproval, .processing):
-            true // Approved - tool will run
-        case (.waitingForApproval, .idle):
-            true // Denied or cancelled
-        case (.waitingForApproval, .waitingForInput):
-            true // Denied and Claude stopped
-        case (.waitingForApproval, .waitingForApproval):
-            true // Another tool needs approval (multiple pending permissions)
-        // Compacting transitions
-        case (.compacting, .processing):
-            true
-        case (.compacting, .idle):
-            true
-        case (.compacting, .waitingForInput):
-            true
+        if case .ended = next { return true }
         // Allow staying in same state (no-op transitions)
-        default:
-            self == next
-        }
+        if self == next { return true }
+
+        return Self.allowedTransitions(from: self).contains { $0.matches(next) }
     }
 
     /// Attempt to transition to a new phase, returns the new phase if valid
-    nonisolated func transition(to next: SessionPhase) -> SessionPhase? {
+    nonisolated func transition(to next: Self) -> Self? {
         canTransition(to: next) ? next : nil
+    }
+
+    // MARK: Private
+
+    /// Simplified phase key for transition lookup (strips associated values)
+    private enum PhaseKey: Hashable {
+        case idle
+        case processing
+        case waitingForInput
+        case waitingForApproval
+        case compacting
+        case ended
+
+        // MARK: Internal
+
+        func matches(_ phase: SessionPhase) -> Bool {
+            switch (self, phase) {
+            case (.idle, .idle),
+                 (.processing, .processing),
+                 (.waitingForInput, .waitingForInput),
+                 (.waitingForApproval, .waitingForApproval),
+                 (.compacting, .compacting),
+                 (.ended, .ended):
+                true
+            default:
+                false
+            }
+        }
+    }
+
+    /// Valid transitions from each phase
+    private static func allowedTransitions(from phase: Self) -> [PhaseKey] {
+        switch phase {
+        case .idle:
+            [.processing, .waitingForApproval, .compacting]
+        case .processing:
+            [.waitingForInput, .waitingForApproval, .compacting, .idle]
+        case .waitingForInput:
+            [.processing, .idle, .compacting]
+        case .waitingForApproval:
+            [.processing, .idle, .waitingForInput, .waitingForApproval]
+        case .compacting:
+            [.processing, .idle, .waitingForInput]
+        case .ended:
+            []
+        }
     }
 }
 

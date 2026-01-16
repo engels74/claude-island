@@ -76,14 +76,19 @@ enum SessionEvent: Sendable {
     case loadHistory(sessionID: String, cwd: String)
 
     /// History load completed
-    case historyLoaded(
-        sessionID: String,
-        messages: [ChatMessage],
-        completedTools: Set<String>,
-        toolResults: [String: ConversationParser.ToolResult],
-        structuredResults: [String: ToolResultData],
-        conversationInfo: ConversationInfo
-    )
+    case historyLoaded(HistoryLoadedPayload)
+}
+
+// MARK: - HistoryLoadedPayload
+
+/// Payload for history loaded events
+struct HistoryLoadedPayload: Sendable {
+    let sessionID: String
+    let messages: [ChatMessage]
+    let completedTools: Set<String>
+    let toolResults: [String: ConversationParser.ToolResult]
+    let structuredResults: [String: ToolResultData]
+    let conversationInfo: ConversationInfo
 }
 
 // MARK: - FileUpdatePayload
@@ -110,7 +115,7 @@ struct ToolCompletionResult: Sendable {
     let result: String?
     let structuredResult: ToolResultData?
 
-    nonisolated static func from(parserResult: ConversationParser.ToolResult?, structuredResult: ToolResultData?) -> ToolCompletionResult {
+    nonisolated static func from(parserResult: ConversationParser.ToolResult?, structuredResult: ToolResultData?) -> Self {
         let status: ToolStatus = if parserResult?.isInterrupted == true {
             .interrupted
         } else if parserResult?.isError == true {
@@ -119,20 +124,20 @@ struct ToolCompletionResult: Sendable {
             .success
         }
 
-        var resultText: String? = nil
-        if let r = parserResult {
-            if !r.isInterrupted {
-                if let stdout = r.stdout, !stdout.isEmpty {
+        var resultText: String?
+        if let parsedResult = parserResult {
+            if !parsedResult.isInterrupted {
+                if let stdout = parsedResult.stdout, !stdout.isEmpty {
                     resultText = stdout
-                } else if let stderr = r.stderr, !stderr.isEmpty {
+                } else if let stderr = parsedResult.stderr, !stderr.isEmpty {
                     resultText = stderr
-                } else if let content = r.content, !content.isEmpty {
+                } else if let content = parsedResult.content, !content.isEmpty {
                     resultText = content
                 }
             }
         }
 
-        return ToolCompletionResult(status: status, result: resultText, structuredResult: structuredResult)
+        return Self(status: status, result: resultText, structuredResult: structuredResult)
     }
 }
 
@@ -218,8 +223,8 @@ extension SessionEvent: CustomStringConvertible {
             "sessionEnded(session: \(sessionID.prefix(8)))"
         case let .loadHistory(sessionID, _):
             "loadHistory(session: \(sessionID.prefix(8)))"
-        case let .historyLoaded(sessionID, messages, _, _, _, _):
-            "historyLoaded(session: \(sessionID.prefix(8)), messages: \(messages.count))"
+        case let .historyLoaded(payload):
+            "historyLoaded(session: \(payload.sessionID.prefix(8)), messages: \(payload.messages.count))"
         case let .toolCompleted(sessionID, toolUseID, result):
             "toolCompleted(session: \(sessionID.prefix(8)), tool: \(toolUseID.prefix(12)), status: \(result.status))"
         case let .subagentStarted(sessionID, taskToolID):

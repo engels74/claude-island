@@ -31,14 +31,14 @@ struct ClaudeCrabIcon: View {
             let xOffset = (canvasSize.width - 66 * scale) / 2
 
             // Left antenna
-            let leftAntenna = Path { p in
-                p.addRect(CGRect(x: 0, y: 13, width: 6, height: 13))
+            let leftAntenna = Path { path in
+                path.addRect(CGRect(x: 0, y: 13, width: 6, height: 13))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
             context.fill(leftAntenna, with: .color(color))
 
             // Right antenna
-            let rightAntenna = Path { p in
-                p.addRect(CGRect(x: 60, y: 13, width: 6, height: 13))
+            let rightAntenna = Path { path in
+                path.addRect(CGRect(x: 60, y: 13, width: 6, height: 13))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
             context.fill(rightAntenna, with: .color(color))
 
@@ -60,27 +60,27 @@ struct ClaudeCrabIcon: View {
             for (index, xPos) in baseLegPositions.enumerated() {
                 let heightOffset = currentHeightOffsets[index]
                 let legHeight = baseLegHeight + heightOffset
-                let leg = Path { p in
-                    p.addRect(CGRect(x: xPos, y: 39, width: 6, height: legHeight))
+                let leg = Path { path in
+                    path.addRect(CGRect(x: xPos, y: 39, width: 6, height: legHeight))
                 }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
                 context.fill(leg, with: .color(color))
             }
 
             // Main body
-            let body = Path { p in
-                p.addRect(CGRect(x: 6, y: 0, width: 54, height: 39))
+            let body = Path { path in
+                path.addRect(CGRect(x: 6, y: 0, width: 54, height: 39))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
             context.fill(body, with: .color(color))
 
             // Left eye
-            let leftEye = Path { p in
-                p.addRect(CGRect(x: 12, y: 13, width: 6, height: 6.5))
+            let leftEye = Path { path in
+                path.addRect(CGRect(x: 12, y: 13, width: 6, height: 6.5))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
             context.fill(leftEye, with: .color(.black))
 
             // Right eye
-            let rightEye = Path { p in
-                p.addRect(CGRect(x: 48, y: 13, width: 6, height: 6.5))
+            let rightEye = Path { path in
+                path.addRect(CGRect(x: 48, y: 13, width: 6, height: 6.5))
             }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
             context.fill(rightEye, with: .color(.black))
         }

@@ -7,9 +7,12 @@
 
 import ApplicationServices
 import Combine
+import os
 import ServiceManagement
 import Sparkle
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchMenuView")
 
 // MARK: - NotchMenuView
 
@@ -55,7 +58,7 @@ struct NotchMenuView: View {
                         launchAtLogin = true
                     }
                 } catch {
-                    print("Failed to toggle launch at login: \(error)")
+                    logger.error("Failed to toggle launch at login: \(error.localizedDescription)")
                 }
             }
 

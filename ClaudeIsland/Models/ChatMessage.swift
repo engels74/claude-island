@@ -17,15 +17,17 @@ struct ChatMessage: Identifiable, Equatable {
 
     /// Plain text content combined
     var textContent: String {
-        content.compactMap { block in
-            if case let .text(text) = block {
-                return text
+        content
+            .compactMap { block in
+                if case let .text(text) = block {
+                    return text
+                }
+                return nil
             }
-            return nil
-        }.joined(separator: "\n")
+            .joined(separator: "\n")
     }
 
-    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id
     }
 }

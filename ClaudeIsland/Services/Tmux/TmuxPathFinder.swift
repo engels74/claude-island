@@ -30,11 +30,9 @@ actor TmuxPathFinder {
             "/bin/tmux",
         ]
 
-        for path in possiblePaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                cachedPath = path
-                return path
-            }
+        if let foundPath = possiblePaths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
+            cachedPath = foundPath
+            return foundPath
         }
 
         return nil

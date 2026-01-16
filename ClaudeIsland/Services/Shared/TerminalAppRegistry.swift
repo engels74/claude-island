@@ -57,10 +57,8 @@ struct TerminalAppRegistry: Sendable {
         let lower = appNameOrCommand.lowercased()
 
         // Check if any known app name is contained in the command (case-insensitive)
-        for name in appNames {
-            if lower.contains(name.lowercased()) {
-                return true
-            }
+        if appNames.contains(where: { lower.contains($0.lowercased()) }) {
+            return true
         }
 
         // Additional checks for common patterns

@@ -8,8 +8,11 @@
 import Combine
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // MARK: - ChatView
 
+// swiftlint:disable:next type_body_length
 struct ChatView: View {
     // MARK: Lifecycle
 
@@ -419,9 +422,8 @@ struct ChatView: View {
     /// Bar for interactive tools like AskUserQuestion that need terminal input
     private var interactivePromptBar: some View {
         ChatInteractivePromptBar(
-            isInTmux: session.isInTmux,
-            onGoToTerminal: { focusTerminal() }
-        )
+            isInTmux: session.isInTmux
+        ) { focusTerminal() }
     }
 
     // MARK: - Approval Bar

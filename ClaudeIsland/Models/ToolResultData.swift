@@ -249,7 +249,7 @@ struct MCPResult: Equatable, @unchecked Sendable {
     let toolName: String
     let rawResult: [String: Any]
 
-    static func == (lhs: MCPResult, rhs: MCPResult) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.serverName == rhs.serverName &&
             lhs.toolName == rhs.toolName &&
             NSDictionary(dictionary: lhs.rawResult).isEqual(to: rhs.rawResult)
@@ -262,7 +262,7 @@ struct GenericResult: Equatable, @unchecked Sendable {
     let rawContent: String?
     let rawData: [String: Any]?
 
-    static func == (lhs: GenericResult, rhs: GenericResult) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.rawContent == rhs.rawContent
     }
 }
@@ -270,123 +270,117 @@ struct GenericResult: Equatable, @unchecked Sendable {
 // MARK: - ToolStatusDisplay
 
 struct ToolStatusDisplay {
+    // MARK: Internal
+
     let text: String
     let isRunning: Bool
 
     /// Get running status text for a tool
-    static func running(for toolName: String, input: [String: String]) -> ToolStatusDisplay {
-        switch toolName {
-        case "Read":
-            return ToolStatusDisplay(text: "Reading...", isRunning: true)
-        case "Edit":
-            return ToolStatusDisplay(text: "Editing...", isRunning: true)
-        case "Write":
-            return ToolStatusDisplay(text: "Writing...", isRunning: true)
-        case "Bash":
-            if let desc = input["description"], !desc.isEmpty {
-                return ToolStatusDisplay(text: desc, isRunning: true)
-            }
-            return ToolStatusDisplay(text: "Running...", isRunning: true)
-        case "Grep",
-             "Glob":
-            if let pattern = input["pattern"] {
-                return ToolStatusDisplay(text: "Searching: \(pattern)", isRunning: true)
-            }
-            return ToolStatusDisplay(text: "Searching...", isRunning: true)
-        case "WebSearch":
-            if let query = input["query"] {
-                return ToolStatusDisplay(text: "Searching: \(query)", isRunning: true)
-            }
-            return ToolStatusDisplay(text: "Searching...", isRunning: true)
-        case "WebFetch":
-            return ToolStatusDisplay(text: "Fetching...", isRunning: true)
-        case "Task":
-            if let desc = input["description"], !desc.isEmpty {
-                return ToolStatusDisplay(text: desc, isRunning: true)
-            }
-            return ToolStatusDisplay(text: "Running agent...", isRunning: true)
-        case "TodoWrite":
-            return ToolStatusDisplay(text: "Updating todos...", isRunning: true)
-        case "EnterPlanMode":
-            return ToolStatusDisplay(text: "Entering plan mode...", isRunning: true)
-        case "ExitPlanMode":
-            return ToolStatusDisplay(text: "Exiting plan mode...", isRunning: true)
-        default:
-            return ToolStatusDisplay(text: "Running...", isRunning: true)
+    static func running(for toolName: String, input: [String: String]) -> Self {
+        if let text = runningStatusText(for: toolName, input: input) {
+            return Self(text: text, isRunning: true)
         }
+        return Self(text: "Running...", isRunning: true)
     }
 
     /// Get completed status text for a tool result
-    static func completed(for toolName: String, result: ToolResultData?) -> ToolStatusDisplay {
+    static func completed(for toolName: String, result: ToolResultData?) -> Self {
         guard let result else {
-            return ToolStatusDisplay(text: "Completed", isRunning: false)
+            return Self(text: "Completed", isRunning: false)
         }
+        return Self(text: completedStatusText(for: result), isRunning: false)
+    }
 
+    // MARK: Private
+
+    private static let simpleRunningStatus: [String: String] = [
+        "Read": "Reading...",
+        "Edit": "Editing...",
+        "Write": "Writing...",
+        "WebFetch": "Fetching...",
+        "TodoWrite": "Updating todos...",
+        "EnterPlanMode": "Entering plan mode...",
+        "ExitPlanMode": "Exiting plan mode...",
+    ]
+
+    private static func runningStatusText(for toolName: String, input: [String: String]) -> String? {
+        if let simple = simpleRunningStatus[toolName] {
+            return simple
+        }
+        return inputBasedRunningStatus(for: toolName, input: input)
+    }
+
+    private static func inputBasedRunningStatus(for toolName: String, input: [String: String]) -> String? {
+        switch toolName {
+        case "Bash":
+            input["description"].flatMap { $0.isEmpty ? nil : $0 }
+        case "Grep",
+             "Glob":
+            input["pattern"].map { "Searching: \($0)" } ?? "Searching..."
+        case "WebSearch":
+            input["query"].map { "Searching: \($0)" } ?? "Searching..."
+        case "Task":
+            input["description"].flatMap { $0.isEmpty ? nil : $0 } ?? "Running agent..."
+        default:
+            nil
+        }
+    }
+
+    private static func completedStatusText(for result: ToolResultData) -> String {
         switch result {
-        case let .read(r):
-            let lineText = r.totalLines > r.numLines ? "\(r.numLines)+ lines" : "\(r.numLines) lines"
-            return ToolStatusDisplay(text: "Read \(r.filename) (\(lineText))", isRunning: false)
-
-        case let .edit(r):
-            return ToolStatusDisplay(text: "Edited \(r.filename)", isRunning: false)
-
-        case let .write(r):
-            let action = r.type == .create ? "Created" : "Wrote"
-            return ToolStatusDisplay(text: "\(action) \(r.filename)", isRunning: false)
-
-        case let .bash(r):
-            if let bgID = r.backgroundTaskID {
-                return ToolStatusDisplay(text: "Running in background (\(bgID))", isRunning: false)
-            }
-            if let interpretation = r.returnCodeInterpretation {
-                return ToolStatusDisplay(text: interpretation, isRunning: false)
-            }
-            return ToolStatusDisplay(text: "Completed", isRunning: false)
-
-        case let .grep(r):
-            let fileWord = r.numFiles == 1 ? "file" : "files"
-            return ToolStatusDisplay(text: "Found \(r.numFiles) \(fileWord)", isRunning: false)
-
-        case let .glob(r):
-            let fileWord = r.numFiles == 1 ? "file" : "files"
-            if r.numFiles == 0 {
-                return ToolStatusDisplay(text: "No files found", isRunning: false)
-            }
-            return ToolStatusDisplay(text: "Found \(r.numFiles) \(fileWord)", isRunning: false)
-
+        case let .read(readRes):
+            formatReadStatus(readRes)
+        case let .edit(editRes):
+            "Edited \(editRes.filename)"
+        case let .write(writeRes):
+            "\(writeRes.type == .create ? "Created" : "Wrote") \(writeRes.filename)"
+        case let .bash(bashRes):
+            formatBashStatus(bashRes)
+        case let .grep(grepRes):
+            formatCountStatus("Found", grepRes.numFiles, "file")
+        case let .glob(globRes):
+            globRes.numFiles == 0 ? "No files found" : formatCountStatus("Found", globRes.numFiles, "file")
         case .todoWrite:
-            return ToolStatusDisplay(text: "Updated todos", isRunning: false)
-
-        case let .task(r):
-            return ToolStatusDisplay(text: r.status.capitalized, isRunning: false)
-
-        case let .webFetch(r):
-            return ToolStatusDisplay(text: "\(r.code) \(r.codeText)", isRunning: false)
-
-        case let .webSearch(r):
-            let time = r.durationSeconds >= 1 ?
-                "\(Int(r.durationSeconds))s" :
-                "\(Int(r.durationSeconds * 1000))ms"
-            let searchWord = r.results.count == 1 ? "search" : "searches"
-            return ToolStatusDisplay(text: "Did 1 \(searchWord) in \(time)", isRunning: false)
-
+            "Updated todos"
+        case let .task(taskRes):
+            taskRes.status.capitalized
+        case let .webFetch(fetchRes):
+            "\(fetchRes.code) \(fetchRes.codeText)"
+        case let .webSearch(searchRes):
+            formatSearchStatus(searchRes)
         case .askUserQuestion:
-            return ToolStatusDisplay(text: "Answered", isRunning: false)
-
-        case let .bashOutput(r):
-            return ToolStatusDisplay(text: "Status: \(r.status)", isRunning: false)
-
+            "Answered"
+        case let .bashOutput(outputRes):
+            "Status: \(outputRes.status)"
         case .killShell:
-            return ToolStatusDisplay(text: "Terminated", isRunning: false)
-
+            "Terminated"
         case .exitPlanMode:
-            return ToolStatusDisplay(text: "Plan ready", isRunning: false)
-
-        case .mcp:
-            return ToolStatusDisplay(text: "Completed", isRunning: false)
-
-        case .generic:
-            return ToolStatusDisplay(text: "Completed", isRunning: false)
+            "Plan ready"
+        case .mcp,
+             .generic:
+            "Completed"
         }
+    }
+
+    private static func formatReadStatus(_ result: ReadResult) -> String {
+        let lineText = result.totalLines > result.numLines ? "\(result.numLines)+ lines" : "\(result.numLines) lines"
+        return "Read \(result.filename) (\(lineText))"
+    }
+
+    private static func formatBashStatus(_ result: BashResult) -> String {
+        if let bgID = result.backgroundTaskID { return "Running in background (\(bgID))" }
+        if let interpretation = result.returnCodeInterpretation { return interpretation }
+        return "Completed"
+    }
+
+    private static func formatCountStatus(_ prefix: String, _ count: Int, _ word: String) -> String {
+        "\(prefix) \(count) \(count == 1 ? word : word + "s")"
+    }
+
+    private static func formatSearchStatus(_ result: WebSearchResult) -> String {
+        let time = result.durationSeconds >= 1 ?
+            "\(Int(result.durationSeconds))s" : "\(Int(result.durationSeconds * 1000))ms"
+        let searchWord = result.results.count == 1 ? "search" : "searches"
+        return "Did 1 \(searchWord) in \(time)"
     }
 }

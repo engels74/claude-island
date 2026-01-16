@@ -42,10 +42,10 @@ class NotchViewController: NSViewController {
     // MARK: Internal
 
     override func loadView() {
-        hostingView = PassThroughHostingView(rootView: NotchView(viewModel: viewModel))
+        let hosting = PassThroughHostingView(rootView: NotchView(viewModel: viewModel))
 
         // Calculate the hit-test rect based on panel state
-        hostingView.hitTestRect = { [weak self] in
+        hosting.hitTestRect = { [weak self] in
             guard let self else { return .zero }
             let vm = viewModel
             let geometry = vm.geometry
@@ -82,11 +82,19 @@ class NotchViewController: NSViewController {
             }
         }
 
-        view = hostingView
+        hostingView = hosting
+        view = hosting
     }
 
     // MARK: Private
 
     private let viewModel: NotchViewModel
-    private var hostingView: PassThroughHostingView<NotchView>!
+    private var hostingView: PassThroughHostingView<NotchView>?
+
+    private var unwrappedHostingView: PassThroughHostingView<NotchView> {
+        guard let hostingView else {
+            fatalError("hostingView accessed before loadView()")
+        }
+        return hostingView
+    }
 }

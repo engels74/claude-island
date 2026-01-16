@@ -29,8 +29,12 @@ struct SessionState: Equatable, Identifiable, Sendable {
         toolTracker: ToolTracker = ToolTracker(),
         subagentState: SubagentState = SubagentState(),
         conversationInfo: ConversationInfo = ConversationInfo(
-            summary: nil, lastMessage: nil, lastMessageRole: nil,
-            lastToolName: nil, firstUserMessage: nil, lastUserMessageDate: nil
+            summary: nil,
+            lastMessage: nil,
+            lastMessageRole: nil,
+            lastToolName: nil,
+            firstUserMessage: nil,
+            lastUserMessageDate: nil
         ),
         needsClearReconciliation: Bool = false,
         lastActivity: Date = Date(),

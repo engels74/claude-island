@@ -163,7 +163,7 @@ private struct BlockRenderer: View {
                             if let para = child as? Paragraph {
                                 InlineRenderer(children: Array(para.inlineChildren), baseColor: baseColor, fontSize: fontSize)
                             } else {
-                                BlockRenderer(markup: child, baseColor: baseColor, fontSize: fontSize)
+                                Self(markup: child, baseColor: baseColor, fontSize: fontSize)
                             }
                         }
                     }
@@ -187,7 +187,7 @@ private struct BlockRenderer: View {
                             if let para = child as? Paragraph {
                                 InlineRenderer(children: Array(para.inlineChildren), baseColor: baseColor, fontSize: fontSize)
                             } else {
-                                BlockRenderer(markup: child, baseColor: baseColor, fontSize: fontSize)
+                                Self(markup: child, baseColor: baseColor, fontSize: fontSize)
                             }
                         }
                     }
@@ -213,7 +213,7 @@ private struct InlineRenderer: View {
     func asText() -> SwiftUI.Text {
         var result = SwiftUI.Text("")
         for child in children {
-            result = result + renderInline(child)
+            result += renderInline(child)
         }
         return result
     }
@@ -259,7 +259,7 @@ private struct InlineRenderer: View {
     private func renderChildren(_ children: [InlineMarkup]) -> SwiftUI.Text {
         var result = SwiftUI.Text("")
         for child in children {
-            result = result + renderInline(child)
+            result += renderInline(child)
         }
         return result
     }

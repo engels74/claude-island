@@ -1,8 +1,13 @@
 import AppKit
 import IOKit
 import Mixpanel
+import os
 import Sparkle
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
+
+// MARK: - AppDelegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Lifecycle
@@ -16,12 +21,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             delegate: nil
         )
         super.init()
-        AppDelegate.shared = self
+        Self.shared = self
 
         do {
             try updater.start()
         } catch {
-            print("Failed to start Sparkle updater: \(error)")
+            logger.error("Failed to start Sparkle updater: \(error.localizedDescription)")
         }
     }
 
@@ -158,7 +163,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for file in files where file.pathExtension == "jsonl" && !file.lastPathComponent.hasPrefix("agent-") {
                 if let attrs = try? file.resourceValues(forKeys: [.contentModificationDateKey]),
                    let modDate = attrs.contentModificationDate {
-                    if latestDate == nil || modDate > latestDate! {
+                    if let existingDate = latestDate {
+                        if modDate > existingDate {
+                            latestDate = modDate
+                            latestFile = file
+                        }
+                    } else {
                         latestDate = modDate
                         latestFile = file
                     }

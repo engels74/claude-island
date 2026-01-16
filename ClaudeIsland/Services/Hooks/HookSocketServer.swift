@@ -131,7 +131,7 @@ typealias PermissionFailureHandler = @Sendable (_ sessionID: String, _ toolUseID
 
 /// Unix domain socket server that receives events from Claude Code hooks
 /// Uses GCD DispatchSource for non-blocking I/O
-class HookSocketServer {
+class HookSocketServer { // swiftlint:disable:this type_body_length
     // MARK: Lifecycle
 
     private init() {}
@@ -409,6 +409,27 @@ class HookSocketServer {
         let flags = fcntl(clientSocket, F_GETFL)
         _ = fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK)
 
+        guard let data = readClientData(clientSocket: clientSocket) else {
+            close(clientSocket)
+            return
+        }
+
+        guard let event = parseHookEvent(from: data) else {
+            close(clientSocket)
+            return
+        }
+
+        processEventActions(event)
+
+        if event.expectsResponse {
+            handlePermissionRequest(event: event, clientSocket: clientSocket)
+        } else {
+            close(clientSocket)
+            eventHandler?(event)
+        }
+    }
+
+    private func readClientData(clientSocket: Int32) -> Data? {
         var allData = Data()
         var buffer = [UInt8](repeating: 0, count: 131_072)
         var pollFd = pollfd(fd: clientSocket, events: Int16(POLLIN), revents: 0)
@@ -419,96 +440,88 @@ class HookSocketServer {
 
             if pollResult > 0 && (pollFd.revents & Int16(POLLIN)) != 0 {
                 let bytesRead = read(clientSocket, &buffer, buffer.count)
-
                 if bytesRead > 0 {
                     allData.append(contentsOf: buffer[0 ..< bytesRead])
-                } else if bytesRead == 0 {
-                    break
-                } else if errno != EAGAIN && errno != EWOULDBLOCK {
+                } else if bytesRead == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
                     break
                 }
-            } else if pollResult == 0 {
-                if !allData.isEmpty {
-                    break
-                }
-            } else {
+            } else if pollResult == 0 && !allData.isEmpty {
+                break
+            } else if pollResult != 0 {
                 break
             }
         }
 
-        guard !allData.isEmpty else {
-            close(clientSocket)
-            return
-        }
+        return allData.isEmpty ? nil : allData
+    }
 
-        let data = allData
-
+    private func parseHookEvent(from data: Data) -> HookEvent? {
         guard let event = try? JSONDecoder().decode(HookEvent.self, from: data) else {
             logger.warning("Failed to parse event: \(String(data: data, encoding: .utf8) ?? "?", privacy: .public)")
-            close(clientSocket)
-            return
+            return nil
         }
-
         logger.debug("Received: \(event.event, privacy: .public) for \(event.sessionID.prefix(8), privacy: .public)")
+        return event
+    }
 
+    private func processEventActions(_ event: HookEvent) {
         if event.event == "PreToolUse" {
             cacheToolUseID(event: event)
         }
-
         if event.event == "SessionEnd" {
             cleanupCache(sessionID: event.sessionID)
         }
+    }
 
-        if event.expectsResponse {
-            let toolUseID: String
-            if let eventToolUseID = event.toolUseID {
-                toolUseID = eventToolUseID
-            } else if let cachedToolUseID = popCachedToolUseID(event: event) {
-                toolUseID = cachedToolUseID
-            } else {
-                logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - no cache hit")
-                close(clientSocket)
-                eventHandler?(event)
-                return
-            }
-
-            logger
-                .debug(
-                    "Permission request - keeping socket open for \(event.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)"
-                )
-
-            let updatedEvent = HookEvent(
-                sessionID: event.sessionID,
-                cwd: event.cwd,
-                event: event.event,
-                status: event.status,
-                pid: event.pid,
-                tty: event.tty,
-                tool: event.tool,
-                toolInput: event.toolInput,
-                toolUseID: toolUseID, // Use resolved toolUseID
-                notificationType: event.notificationType,
-                message: event.message
-            )
-
-            let pending = PendingPermission(
-                sessionID: event.sessionID,
-                toolUseID: toolUseID,
-                clientSocket: clientSocket,
-                event: updatedEvent,
-                receivedAt: Date()
-            )
-            permissionsLock.lock()
-            pendingPermissions[toolUseID] = pending
-            permissionsLock.unlock()
-
-            eventHandler?(updatedEvent)
-            return
-        } else {
+    private func handlePermissionRequest(event: HookEvent, clientSocket: Int32) {
+        guard let toolUseID = resolveToolUseID(for: event) else {
+            logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - no cache hit")
             close(clientSocket)
+            eventHandler?(event)
+            return
         }
 
-        eventHandler?(event)
+        logger.debug("Permission request - keeping socket open for \(event.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+
+        let updatedEvent = createUpdatedEvent(from: event, with: toolUseID)
+        storePendingPermission(event: updatedEvent, toolUseID: toolUseID, clientSocket: clientSocket)
+        eventHandler?(updatedEvent)
+    }
+
+    private func resolveToolUseID(for event: HookEvent) -> String? {
+        if let eventToolUseID = event.toolUseID {
+            return eventToolUseID
+        }
+        return popCachedToolUseID(event: event)
+    }
+
+    private func createUpdatedEvent(from event: HookEvent, with toolUseID: String) -> HookEvent {
+        HookEvent(
+            sessionID: event.sessionID,
+            cwd: event.cwd,
+            event: event.event,
+            status: event.status,
+            pid: event.pid,
+            tty: event.tty,
+            tool: event.tool,
+            toolInput: event.toolInput,
+            toolUseID: toolUseID,
+            notificationType: event.notificationType,
+            message: event.message
+        )
+    }
+
+    private func storePendingPermission(event: HookEvent, toolUseID: String, clientSocket: Int32) {
+        let pending = PendingPermission(
+            sessionID: event.sessionID,
+            toolUseID: toolUseID,
+            clientSocket: clientSocket,
+            event: event,
+            receivedAt: Date()
+        )
+        permissionsLock.lock()
+        pendingPermissions[toolUseID] = pending
+        permissionsLock.unlock()
     }
 
     private func sendPermissionResponse(toolUseID: String, decision: String, reason: String?) {
@@ -552,8 +565,7 @@ class HookSocketServer {
         permissionsLock.lock()
         let matchingPending = pendingPermissions.values
             .filter { $0.sessionID == sessionID }
-            .sorted { $0.receivedAt > $1.receivedAt }
-            .first
+            .max { $0.receivedAt < $1.receivedAt }
 
         guard let pending = matchingPending else {
             permissionsLock.unlock()
@@ -626,9 +638,9 @@ struct AnyCodable: Codable, @unchecked Sendable {
             self.value = double
         } else if let string = try? container.decode(String.self) {
             self.value = string
-        } else if let array = try? container.decode([AnyCodable].self) {
+        } else if let array = try? container.decode([Self].self) {
             self.value = array.map(\.value)
-        } else if let dict = try? container.decode([String: AnyCodable].self) {
+        } else if let dict = try? container.decode([String: Self].self) {
             self.value = dict.mapValues { $0.value }
         } else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode value")
@@ -656,9 +668,9 @@ struct AnyCodable: Codable, @unchecked Sendable {
         case let string as String:
             try container.encode(string)
         case let array as [Any]:
-            try container.encode(array.map { AnyCodable($0) })
+            try container.encode(array.map { Self($0) })
         case let dict as [String: Any]:
-            try container.encode(dict.mapValues { AnyCodable($0) })
+            try container.encode(dict.mapValues { Self($0) })
         default:
             throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: [], debugDescription: "Cannot encode value"))
         }

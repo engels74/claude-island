@@ -36,11 +36,13 @@ actor TmuxSessionMatcher {
             return nil
         }
 
-        guard let sessionFiles = try? FileManager.default.contentsOfDirectory(
-            at: projectDir,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ).filter({ $0.pathExtension == "jsonl" && !$0.lastPathComponent.hasPrefix("agent-") })
+        guard let sessionFiles = try? FileManager.default
+            .contentsOfDirectory(
+                at: projectDir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+            .filter({ $0.pathExtension == "jsonl" && !$0.lastPathComponent.hasPrefix("agent-") })
         else {
             return nil
         }
@@ -51,8 +53,14 @@ actor TmuxSessionMatcher {
             let sessionID = sessionURL.deletingPathExtension().lastPathComponent
             let score = countMatchingSnippets(snippets: snippets, inFile: sessionURL)
 
-            if score > 0 && (bestMatch == nil || score > bestMatch!.score) {
-                bestMatch = (sessionID, score)
+            if score > 0 {
+                if let existing = bestMatch {
+                    if score > existing.score {
+                        bestMatch = (sessionID, score)
+                    }
+                } else {
+                    bestMatch = (sessionID, score)
+                }
             }
         }
 
@@ -135,13 +143,6 @@ actor TmuxSessionMatcher {
             return 0
         }
 
-        var matchCount = 0
-        for snippet in snippets {
-            if content.contains(snippet) {
-                matchCount += 1
-            }
-        }
-
-        return matchCount
+        return snippets.filter { content.contains($0) }.count
     }
 }

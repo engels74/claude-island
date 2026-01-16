@@ -32,17 +32,17 @@ struct ClaudeInstancesView: View {
     /// Secondary sort: by last user message date (stable - doesn't change when agent responds)
     /// Note: approval requests stay in their date-based position to avoid layout shift
     private var sortedInstances: [SessionState] {
-        sessionMonitor.instances.sorted { a, b in
-            let priorityA = phasePriority(a.phase)
-            let priorityB = phasePriority(b.phase)
-            if priorityA != priorityB {
-                return priorityA < priorityB
+        sessionMonitor.instances.sorted { lhs, rhs in
+            let priorityLhs = phasePriority(lhs.phase)
+            let priorityRhs = phasePriority(rhs.phase)
+            if priorityLhs != priorityRhs {
+                return priorityLhs < priorityRhs
             }
             // Sort by last user message date (more recent first)
             // Fall back to lastActivity if no user messages yet
-            let dateA = a.lastUserMessageDate ?? a.lastActivity
-            let dateB = b.lastUserMessageDate ?? b.lastActivity
-            return dateA > dateB
+            let dateLhs = lhs.lastUserMessageDate ?? lhs.lastActivity
+            let dateRhs = rhs.lastUserMessageDate ?? rhs.lastActivity
+            return dateLhs > dateRhs
         }
     }
 
@@ -227,9 +227,8 @@ struct InstanceRow: View {
                     // Go to Terminal button (only if yabai available)
                     if isYabaiAvailable {
                         TerminalButton(
-                            isEnabled: session.isInTmux,
-                            onTap: { onFocus() }
-                        )
+                            isEnabled: session.isInTmux
+                        ) { onFocus() }
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
