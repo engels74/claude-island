@@ -616,6 +616,16 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
 
 /// Type-erasing codable wrapper for heterogeneous values
 /// Used to decode JSON objects with mixed value types
+///
+/// `@unchecked Sendable` safety justification:
+/// 1. The `value` property is immutable (`let`) - once set, it cannot be changed
+/// 2. In practice, values are only JSON-compatible types (String, Int, Double, Bool, Array, Dict)
+/// 3. These JSON-compatible types are all either value types or immutable reference types
+/// 4. The struct is created from JSON decoding and immediately passed across actor boundaries
+/// 5. No mutation occurs after initialization - it's effectively a "frozen" value container
+///
+/// Note: For types that need true Sendable safety (like PermissionContext), we serialize
+/// the AnyCodable content to a JSON string instead. See PermissionContext.toolInputJSON.
 struct AnyCodable: Codable, @unchecked Sendable {
     // MARK: Lifecycle
 
@@ -649,7 +659,9 @@ struct AnyCodable: Codable, @unchecked Sendable {
 
     // MARK: Internal
 
-    /// The underlying value (nonisolated(unsafe) because Any is not Sendable)
+    /// The underlying value
+    /// `nonisolated(unsafe)` is required because `Any` is not Sendable, but we ensure safety
+    /// through immutability (let) and limiting to JSON-compatible value types only
     nonisolated(unsafe) let value: Any
 
     /// Encode to JSON

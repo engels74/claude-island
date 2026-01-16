@@ -21,7 +21,8 @@ private let cornerRadiusInsets = (
 struct NotchView: View {
     // MARK: Internal
 
-    @ObservedObject var viewModel: NotchViewModel
+    /// View model is @Observable, so SwiftUI automatically tracks property access
+    var viewModel: NotchViewModel
 
     // MARK: - Body
 
@@ -102,7 +103,8 @@ struct NotchView: View {
     // MARK: Private
 
     @StateObject private var sessionMonitor = ClaudeSessionMonitor()
-    @StateObject private var activityCoordinator = NotchActivityCoordinator.shared
+    /// Singleton is @Observable, so SwiftUI automatically tracks property access
+    private var activityCoordinator = NotchActivityCoordinator.shared
     @ObservedObject private var updateManager = UpdateManager.shared
     @State private var previousPendingIDs: Set<String> = []
     @State private var previousWaitingForInputIDs: Set<String> = []

@@ -12,7 +12,8 @@ import SwiftUI
 struct ScreenPickerRow: View {
     // MARK: Internal
 
-    @ObservedObject var screenSelector: ScreenSelector
+    /// ScreenSelector is @Observable, so SwiftUI automatically tracks property access
+    var screenSelector: ScreenSelector
 
     var body: some View {
         VStack(spacing: 0) {

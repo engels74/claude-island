@@ -7,6 +7,7 @@
 
 import AppKit
 import Combine
+import Observation
 import SwiftUI
 
 // MARK: - NotchStatus
@@ -47,8 +48,11 @@ enum NotchContentType: Equatable {
 
 // MARK: - NotchViewModel
 
+/// State management for the dynamic island notch UI
+/// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
+@Observable
 @MainActor
-class NotchViewModel: ObservableObject {
+final class NotchViewModel {
     // MARK: Lifecycle
 
     // MARK: - Initialization
@@ -66,12 +70,12 @@ class NotchViewModel: ObservableObject {
 
     // MARK: Internal
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
-    @Published var status: NotchStatus = .closed
-    @Published var openReason: NotchOpenReason = .unknown
-    @Published var contentType: NotchContentType = .instances
-    @Published var isHovering = false
+    var status: NotchStatus = .closed
+    var openReason: NotchOpenReason = .unknown
+    var contentType: NotchContentType = .instances
+    var isHovering = false
 
     // MARK: - Geometry
 
@@ -79,12 +83,20 @@ class NotchViewModel: ObservableObject {
     let spacing: CGFloat = 12
     let hasPhysicalNotch: Bool
 
+    /// Tracks selector expansion state changes to trigger view updates
+    /// (With @Observable, views reading openedSize will observe this and re-compute when selectors change)
+    private(set) var selectorUpdateToken: UInt = 0
+
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
     var windowHeight: CGFloat { geometry.windowHeight }
 
     /// Dynamic opened size based on content type
+    /// Note: References selectorUpdateToken to ensure views re-compute when pickers expand/collapse
     var openedSize: CGSize {
+        // Touch token to establish observation dependency
+        _ = selectorUpdateToken
+
         switch contentType {
         case .chat:
             // Large size for chat view
@@ -192,6 +204,9 @@ class NotchViewModel: ObservableObject {
     /// The chat session we're viewing (persists across close/open)
     private var currentChatSession: SessionState?
 
+    /// Tracks whether observation loop is active
+    @ObservationIgnored private var isObservingSelectors = false
+
     /// Whether we're in chat mode (sticky behavior)
     private var isInChatMode: Bool {
         if case .chat = contentType { return true }
@@ -199,13 +214,29 @@ class NotchViewModel: ObservableObject {
     }
 
     private func observeSelectors() {
-        screenSelector.$isPickerExpanded
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+        // Use withObservationTracking to observe @Observable properties across objects
+        startSelectorObservation()
+    }
 
-        soundSelector.$isPickerExpanded
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+    private func startSelectorObservation() {
+        guard !isObservingSelectors else { return }
+        isObservingSelectors = true
+        observeSelectorChanges()
+    }
+
+    private func observeSelectorChanges() {
+        withObservationTracking {
+            // Access the properties we want to observe
+            _ = screenSelector.isPickerExpanded
+            _ = soundSelector.isPickerExpanded
+        } onChange: { [weak self] in
+            // Dispatch to main actor since onChange may be called from any context
+            Task { @MainActor [weak self] in
+                self?.selectorUpdateToken &+= 1
+                // Re-register for next change
+                self?.observeSelectorChanges()
+            }
+        }
     }
 
     // MARK: - Event Handling

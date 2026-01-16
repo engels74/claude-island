@@ -20,7 +20,7 @@ struct ChatView: View {
         self.sessionID = sessionID
         self.initialSession = initialSession
         self.sessionMonitor = sessionMonitor
-        self._viewModel = ObservedObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
         self._session = State(initialValue: initialSession)
 
         // Initialize from cache if available (prevents loading flicker on view recreation)
@@ -33,7 +33,8 @@ struct ChatView: View {
 
     // MARK: Internal
 
-    @ObservedObject var viewModel: NotchViewModel
+    /// View model is @Observable, so SwiftUI automatically tracks property access
+    var viewModel: NotchViewModel
 
     let sessionID: String
     let initialSession: SessionState

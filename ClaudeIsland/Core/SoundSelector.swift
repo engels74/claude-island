@@ -5,11 +5,14 @@
 //  Manages sound selection state for the settings menu
 //
 
-import Combine
 import Foundation
+import Observation
 
+/// Manages sound selection state for the settings menu
+/// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
+@Observable
 @MainActor
-class SoundSelector: ObservableObject {
+final class SoundSelector {
     // MARK: Lifecycle
 
     private init() {}
@@ -18,9 +21,9 @@ class SoundSelector: ObservableObject {
 
     static let shared = SoundSelector()
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
-    @Published var isPickerExpanded = false
+    var isPickerExpanded = false
 
     // MARK: - Public API
 

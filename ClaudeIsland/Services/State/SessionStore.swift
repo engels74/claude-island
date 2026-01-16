@@ -131,7 +131,13 @@ actor SessionStore {
 
     // MARK: - Published State (for UI)
 
-    /// Publisher for session state changes (nonisolated for Combine subscription from any context)
+    /// Publisher for session state changes
+    ///
+    /// `nonisolated(unsafe)` is safe here because:
+    /// 1. `CurrentValueSubject` is thread-safe by design (uses internal locking)
+    /// 2. Writes only happen from within the actor's `publishState()` method
+    /// 3. Reads via `sessionsPublisher` are safe from any thread due to Combine's thread-safety
+    /// 4. The subject is immutable after initialization (only `send()` is called, never reassigned)
     private nonisolated(unsafe) let sessionsSubject = CurrentValueSubject<[SessionState], Never>([])
 
     // MARK: - Hook Event Processing

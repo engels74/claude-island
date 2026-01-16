@@ -14,7 +14,9 @@ struct ClaudeInstancesView: View {
     // MARK: Internal
 
     @ObservedObject var sessionMonitor: ClaudeSessionMonitor
-    @ObservedObject var viewModel: NotchViewModel
+
+    /// View model is @Observable, so SwiftUI automatically tracks property access
+    var viewModel: NotchViewModel
 
     var body: some View {
         if sessionMonitor.instances.isEmpty {

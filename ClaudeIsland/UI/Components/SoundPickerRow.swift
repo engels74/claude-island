@@ -13,7 +13,8 @@ import SwiftUI
 struct SoundPickerRow: View {
     // MARK: Internal
 
-    @ObservedObject var soundSelector: SoundSelector
+    /// SoundSelector is @Observable, so SwiftUI automatically tracks property access
+    var soundSelector: SoundSelector
 
     var body: some View {
         VStack(spacing: 0) {

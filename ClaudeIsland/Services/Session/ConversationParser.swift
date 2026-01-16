@@ -69,6 +69,13 @@ actor ConversationParser {
 
     /// Parse a JSONL file to extract conversation info
     /// Uses caching based on file modification time
+    ///
+    /// Note: This method loads the entire file into memory. For incremental updates during
+    /// active sessions, use `parseIncremental` instead which uses FileHandle for streaming.
+    /// Full file loading is acceptable here because:
+    /// 1. This is called infrequently (only when cache is stale)
+    /// 2. The algorithm requires both forward and backward iteration
+    /// 3. For very long conversations, the summary is typically updated, invalidating old data
     func parse(sessionID: String, cwd: String) -> ConversationInfo {
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
         let sessionFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
