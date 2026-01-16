@@ -20,10 +20,10 @@ struct ClaudeInstancesView: View {
     var viewModel: NotchViewModel
 
     var body: some View {
-        if sessionMonitor.instances.isEmpty {
-            emptyState
+        if self.sessionMonitor.instances.isEmpty {
+            self.emptyState
         } else {
-            instancesList
+            self.instancesList
         }
     }
 
@@ -35,9 +35,9 @@ struct ClaudeInstancesView: View {
     /// Secondary sort: by last user message date (stable - doesn't change when agent responds)
     /// Note: approval requests stay in their date-based position to avoid layout shift
     private var sortedInstances: [SessionState] {
-        sessionMonitor.instances.sorted { lhs, rhs in
-            let priorityLhs = phasePriority(lhs.phase)
-            let priorityRhs = phasePriority(rhs.phase)
+        self.sessionMonitor.instances.sorted { lhs, rhs in
+            let priorityLhs = self.phasePriority(lhs.phase)
+            let priorityRhs = self.phasePriority(rhs.phase)
             if priorityLhs != priorityRhs {
                 return priorityLhs < priorityRhs
             }
@@ -67,14 +67,14 @@ struct ClaudeInstancesView: View {
     private var instancesList: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 2) {
-                ForEach(sortedInstances) { session in
+                ForEach(self.sortedInstances) { session in
                     InstanceRow(
                         session: session,
-                        onFocus: { focusSession(session) },
-                        onChat: { openChat(session) },
-                        onArchive: { archiveSession(session) },
-                        onApprove: { approveSession(session) },
-                        onReject: { rejectSession(session) }
+                        onFocus: { self.focusSession(session) },
+                        onChat: { self.openChat(session) },
+                        onArchive: { self.archiveSession(session) },
+                        onApprove: { self.approveSession(session) },
+                        onReject: { self.rejectSession(session) }
                     )
                     .id(session.stableID)
                 }
@@ -110,19 +110,19 @@ struct ClaudeInstancesView: View {
     }
 
     private func openChat(_ session: SessionState) {
-        viewModel.showChat(for: session)
+        self.viewModel.showChat(for: session)
     }
 
     private func approveSession(_ session: SessionState) {
-        sessionMonitor.approvePermission(sessionID: session.sessionID)
+        self.sessionMonitor.approvePermission(sessionID: session.sessionID)
     }
 
     private func rejectSession(_ session: SessionState) {
-        sessionMonitor.denyPermission(sessionID: session.sessionID, reason: nil)
+        self.sessionMonitor.denyPermission(sessionID: session.sessionID, reason: nil)
     }
 
     private func archiveSession(_ session: SessionState) {
-        sessionMonitor.archiveSession(sessionID: session.sessionID)
+        self.sessionMonitor.archiveSession(sessionID: session.sessionID)
     }
 }
 
@@ -141,24 +141,24 @@ struct InstanceRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             // State indicator on left
-            stateIndicator
+            self.stateIndicator
                 .frame(width: 14)
 
             // Text content
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.displayTitle)
+                Text(self.session.displayTitle)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
 
                 // Show tool call when waiting for approval, otherwise last activity
-                if isWaitingForApproval, let toolName = session.pendingToolName {
+                if self.isWaitingForApproval, let toolName = session.pendingToolName {
                     // Show tool name in amber + input on same line
                     HStack(spacing: 4) {
                         Text(MCPToolFormatter.formatToolName(toolName))
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundColor(TerminalColors.amber.opacity(0.9))
-                        if isInteractiveTool {
+                        if self.isInteractiveTool {
                             Text("Needs your input")
                                 .font(.system(size: 11))
                                 .foregroundColor(.white.opacity(0.5))
@@ -220,46 +220,46 @@ struct InstanceRow: View {
             Spacer(minLength: 0)
 
             // Action icons or approval buttons
-            if isWaitingForApproval && isInteractiveTool {
+            if self.isWaitingForApproval && self.isInteractiveTool {
                 // Interactive tools like AskUserQuestion - show chat + terminal buttons
                 HStack(spacing: 8) {
                     IconButton(icon: "bubble.left") {
-                        onChat()
+                        self.onChat()
                     }
 
                     // Go to Terminal button (only if yabai available)
-                    if isYabaiAvailable {
+                    if self.isYabaiAvailable {
                         TerminalButton(
-                            isEnabled: session.isInTmux
-                        ) { onFocus() }
+                            isEnabled: self.session.isInTmux
+                        ) { self.onFocus() }
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else if isWaitingForApproval {
+            } else if self.isWaitingForApproval {
                 InlineApprovalButtons(
-                    onChat: onChat,
-                    onApprove: onApprove,
-                    onReject: onReject
+                    onChat: self.onChat,
+                    onApprove: self.onApprove,
+                    onReject: self.onReject
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
             } else {
                 HStack(spacing: 8) {
                     // Chat icon - always show
                     IconButton(icon: "bubble.left") {
-                        onChat()
+                        self.onChat()
                     }
 
                     // Focus icon (only for tmux instances with yabai)
-                    if session.isInTmux && isYabaiAvailable {
+                    if self.session.isInTmux && self.isYabaiAvailable {
                         IconButton(icon: "eye") {
-                            onFocus()
+                            self.onFocus()
                         }
                     }
 
                     // Archive button - only for idle or completed sessions
-                    if session.phase == .idle || session.phase == .waitingForInput {
+                    if self.session.phase == .idle || self.session.phase == .waitingForInput {
                         IconButton(icon: "archivebox") {
-                            onArchive()
+                            self.onArchive()
                         }
                     }
                 }
@@ -270,17 +270,17 @@ struct InstanceRow: View {
         .padding(.trailing, 14)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            onChat()
+        .onTapGesture {
+            self.onChat()
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWaitingForApproval)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: self.isWaitingForApproval)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(isHovered ? Color.white.opacity(0.06) : Color.clear)
+                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
         )
-        .onHover { isHovered = $0 }
+        .onHover { self.isHovered = $0 }
         .task {
-            isYabaiAvailable = await WindowFinder.shared.isYabaiAvailable()
+            self.isYabaiAvailable = await WindowFinder.shared.isYabaiAvailable()
         }
     }
 
@@ -297,7 +297,7 @@ struct InstanceRow: View {
 
     /// Whether we're showing the approval UI
     private var isWaitingForApproval: Bool {
-        session.phase.isWaitingForApproval
+        self.session.phase.isWaitingForApproval
     }
 
     /// Whether the pending tool requires interactive input (not just approve/deny)
@@ -307,21 +307,21 @@ struct InstanceRow: View {
     }
 
     @ViewBuilder private var stateIndicator: some View {
-        switch session.phase {
+        switch self.session.phase {
         case .processing,
              .compacting:
-            Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
+            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(claudeOrange)
-                .onReceive(spinnerTimer) { _ in
-                    spinnerPhase = (spinnerPhase + 1) % spinnerSymbols.count
+                .foregroundColor(self.claudeOrange)
+                .onReceive(self.spinnerTimer) { _ in
+                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
                 }
         case .waitingForApproval:
-            Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
+            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(TerminalColors.amber)
-                .onReceive(spinnerTimer) { _ in
-                    spinnerPhase = (spinnerPhase + 1) % spinnerSymbols.count
+                .onReceive(self.spinnerTimer) { _ in
+                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
                 }
         case .waitingForInput:
             Circle()
@@ -350,13 +350,13 @@ struct InlineApprovalButtons: View {
         HStack(spacing: 6) {
             // Chat button
             IconButton(icon: "bubble.left") {
-                onChat()
+                self.onChat()
             }
-            .opacity(showChatButton ? 1 : 0)
-            .scaleEffect(showChatButton ? 1 : 0.8)
+            .opacity(self.showChatButton ? 1 : 0)
+            .scaleEffect(self.showChatButton ? 1 : 0.8)
 
             Button {
-                onReject()
+                self.onReject()
             } label: {
                 Text("Deny")
                     .font(.system(size: 11, weight: .medium))
@@ -367,11 +367,11 @@ struct InlineApprovalButtons: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .opacity(showDenyButton ? 1 : 0)
-            .scaleEffect(showDenyButton ? 1 : 0.8)
+            .opacity(self.showDenyButton ? 1 : 0)
+            .scaleEffect(self.showDenyButton ? 1 : 0.8)
 
             Button {
-                onApprove()
+                self.onApprove()
             } label: {
                 Text("Allow")
                     .font(.system(size: 11, weight: .medium))
@@ -382,18 +382,18 @@ struct InlineApprovalButtons: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .opacity(showAllowButton ? 1 : 0)
-            .scaleEffect(showAllowButton ? 1 : 0.8)
+            .opacity(self.showAllowButton ? 1 : 0)
+            .scaleEffect(self.showAllowButton ? 1 : 0.8)
         }
         .onAppear {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7).delay(0.0)) {
-                showChatButton = true
+                self.showChatButton = true
             }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7).delay(0.05)) {
-                showDenyButton = true
+                self.showDenyButton = true
             }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7).delay(0.1)) {
-                showAllowButton = true
+                self.showAllowButton = true
             }
         }
     }
@@ -415,19 +415,19 @@ struct IconButton: View {
 
     var body: some View {
         Button {
-            action()
+            self.action()
         } label: {
-            Image(systemName: icon)
+            Image(systemName: self.icon)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(isHovered ? .white.opacity(0.8) : .white.opacity(0.4))
+                .foregroundColor(self.isHovered ? .white.opacity(0.8) : .white.opacity(0.4))
                 .frame(width: 24, height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(isHovered ? Color.white.opacity(0.1) : Color.clear)
+                        .fill(self.isHovered ? Color.white.opacity(0.1) : Color.clear)
                 )
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { self.isHovered = $0 }
     }
 
     // MARK: Private
@@ -443,8 +443,8 @@ struct CompactTerminalButton: View {
 
     var body: some View {
         Button {
-            if isEnabled {
-                onTap()
+            if self.isEnabled {
+                self.onTap()
             }
         } label: {
             HStack(spacing: 2) {
@@ -453,10 +453,10 @@ struct CompactTerminalButton: View {
                 Text("Go to Terminal")
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(isEnabled ? .white.opacity(0.9) : .white.opacity(0.3))
+            .foregroundColor(self.isEnabled ? .white.opacity(0.9) : .white.opacity(0.3))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(isEnabled ? Color.white.opacity(0.15) : Color.white.opacity(0.05))
+            .background(self.isEnabled ? Color.white.opacity(0.15) : Color.white.opacity(0.05))
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -471,8 +471,8 @@ struct TerminalButton: View {
 
     var body: some View {
         Button {
-            if isEnabled {
-                onTap()
+            if self.isEnabled {
+                self.onTap()
             }
         } label: {
             HStack(spacing: 3) {
@@ -481,10 +481,10 @@ struct TerminalButton: View {
                 Text("Terminal")
                     .font(.system(size: 11, weight: .medium))
             }
-            .foregroundColor(isEnabled ? .black : .white.opacity(0.4))
+            .foregroundColor(self.isEnabled ? .black : .white.opacity(0.4))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(isEnabled ? Color.white.opacity(0.95) : Color.white.opacity(0.1))
+            .background(self.isEnabled ? Color.white.opacity(0.95) : Color.white.opacity(0.1))
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
