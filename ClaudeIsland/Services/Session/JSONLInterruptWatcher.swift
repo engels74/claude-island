@@ -10,7 +10,7 @@ import Foundation
 import os.log
 
 /// Logger for interrupt watcher
-private let logger = Logger(subsystem: "com.claudeisland", category: "Interrupt")
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
 
 // MARK: - JSONLInterruptWatcherDelegate
 

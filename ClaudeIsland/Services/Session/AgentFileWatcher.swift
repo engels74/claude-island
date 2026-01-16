@@ -10,7 +10,7 @@ import Foundation
 import os.log
 
 /// Logger for agent file watcher
-private let logger = Logger(subsystem: "com.claudeisland", category: "AgentFileWatcher")
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AgentFileWatcher")
 
 // MARK: - AgentFileWatcherDelegate
 

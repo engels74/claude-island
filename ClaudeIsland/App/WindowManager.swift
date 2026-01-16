@@ -9,7 +9,7 @@ import AppKit
 import os.log
 
 /// Logger for window management
-private let logger = Logger(subsystem: "com.claudeisland", category: "Window")
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Window")
 
 // MARK: - WindowManager
 

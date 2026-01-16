@@ -1,0 +1,79 @@
+name: Build and Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without v prefix)'
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-15  # Use macos-15 for Xcode 16.x support (macos-latest becomes macos-15 in Aug 2025)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build with ad-hoc signing
+        run: ./scripts/build.sh
+
+      - name: Install create-dmg
+        run: brew install create-dmg || true
+
+      - name: Setup Sparkle key
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          mkdir -p .sparkle-keys
+          echo "$SPARKLE_PRIVATE_KEY" > .sparkle-keys/eddsa_private_key
+
+      - name: Create DMG and sign with Sparkle
+        run: ./scripts/create-release.sh --skip-notarization --skip-github --skip-website
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          files: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
+          body: |
+            ## Claude Island v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            **First Launch (Required):** macOS will block this app since it's not notarized.
+
+            **Option 1 (GUI):**
+            1. Download the DMG and drag Claude Island to Applications
+            2. Try to open — it will be blocked
+            3. Go to **System Settings → Privacy & Security**
+            4. Find "Claude Island was blocked" and click **Open Anyway**
+
+            **Option 2 (Terminal):**
+            ```bash
+            xattr -d com.apple.quarantine "/Applications/Claude Island.app"
+            ```
+
+            ### Auto-updates
+            After first launch, auto-updates via Sparkle work normally.
+
+      - name: Upload appcast artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appcast
+          path: releases/appcast/appcast.xml

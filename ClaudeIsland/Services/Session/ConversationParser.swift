@@ -69,7 +69,7 @@ actor ConversationParser {
     static let shared = ConversationParser()
 
     /// Logger for conversation parser (nonisolated static for cross-context access)
-    nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "Parser")
+    nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Parser")
 
     /// Parse a JSONL file to extract conversation info
     /// Uses caching based on file modification time

@@ -69,7 +69,7 @@ actor ProcessExecutor: ProcessExecuting {
     static let shared = ProcessExecutor()
 
     /// Logger for process execution (nonisolated static for cross-context access)
-    nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "ProcessExecutor")
+    nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ProcessExecutor")
 
     /// Run a command asynchronously and return output (throws on failure)
     func run(_ executable: String, arguments: [String]) async throws -> String {
