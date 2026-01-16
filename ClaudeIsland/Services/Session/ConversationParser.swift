@@ -11,7 +11,7 @@ import os.log
 
 // MARK: - ConversationInfo
 
-struct ConversationInfo: Equatable {
+struct ConversationInfo: Equatable, Sendable {
     let summary: String?
     let lastMessage: String?
     let lastMessageRole: String? // "user", "assistant", or "tool"
@@ -27,7 +27,7 @@ actor ConversationParser {
     // MARK: Internal
 
     /// Parsed tool result data
-    struct ToolResult {
+    struct ToolResult: Sendable {
         // MARK: Lifecycle
 
         init(content: String?, stdout: String?, stderr: String?, isError: Bool) {

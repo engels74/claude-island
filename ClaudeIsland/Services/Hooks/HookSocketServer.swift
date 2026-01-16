@@ -96,7 +96,7 @@ struct HookEvent: Codable, Sendable {
     let notificationType: String?
     let message: String?
 
-    var sessionPhase: SessionPhase {
+    nonisolated var sessionPhase: SessionPhase {
         if event == "PreCompact" {
             return .compacting
         }
