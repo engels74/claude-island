@@ -17,6 +17,8 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "W
 /// Requires @MainActor as it performs UI operations (orderOut, close, showWindow).
 @MainActor
 final class WindowManager {
+    // MARK: Internal
+
     private(set) var windowController: NotchWindowController?
 
     /// Set up or recreate the notch window
@@ -30,15 +32,33 @@ final class WindowManager {
             return nil
         }
 
+        // Skip recreation if screen frame hasn't meaningfully changed
+        if let existingController = windowController,
+           let existingFrame = currentScreenFrame,
+           existingFrame == screen.frame {
+            logger.debug("Screen unchanged, skipping window recreation")
+            return existingController
+        }
+
+        // Only animate on initial app launch, not on screen changes
+        let shouldAnimate = isInitialLaunch
+        isInitialLaunch = false
+
         if let existingController = windowController {
             existingController.window?.orderOut(nil)
             existingController.window?.close()
             windowController = nil
         }
 
-        windowController = NotchWindowController(screen: screen)
+        currentScreenFrame = screen.frame
+        windowController = NotchWindowController(screen: screen, animateOnLaunch: shouldAnimate)
         windowController?.showWindow(nil)
 
         return windowController
     }
+
+    // MARK: Private
+
+    private var isInitialLaunch = true
+    private var currentScreenFrame: NSRect?
 }

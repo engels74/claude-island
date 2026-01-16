@@ -12,7 +12,7 @@ import SwiftUI
 class NotchWindowController: NSWindowController {
     // MARK: Lifecycle
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, animateOnLaunch: Bool = true) {
         self.screen = screen
 
         let screenFrame = screen.frame
@@ -85,11 +85,13 @@ class NotchWindowController: NSWindowController {
         // Start with ignoring mouse events (closed state)
         notchWindow.ignoresMouseEvents = true
 
-        // Perform boot animation after a brief delay
-        self.bootAnimationTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(0.3))
-            guard !Task.isCancelled else { return }
-            self?.viewModel.performBootAnimation()
+        // Perform boot animation after a brief delay (only on initial launch)
+        if animateOnLaunch {
+            self.bootAnimationTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(0.3))
+                guard !Task.isCancelled else { return }
+                self?.viewModel.performBootAnimation()
+            }
         }
     }
 
