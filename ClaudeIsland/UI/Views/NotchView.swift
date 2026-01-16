@@ -130,6 +130,9 @@ struct NotchView: View {
     private let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
     private let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
 
+    /// Prefix indicating context was resumed (not a true "done" state)
+    private let contextResumePrefix = "This session is being continued from a previous conversation"
+
     /// Whether any Claude session is currently processing or compacting
     private var isAnyProcessing: Bool {
         sessionMonitor.instances.contains { $0.phase == .processing || $0.phase == .compacting }
@@ -477,8 +480,23 @@ struct NotchView: View {
 
         // Bounce the notch when a session newly enters waitingForInput state
         if !newWaitingIDs.isEmpty {
-            // Get the sessions that just entered waitingForInput
-            let newlyWaitingSessions = waitingForInputSessions.filter { newWaitingIDs.contains($0.stableID) }
+            // Get the sessions that just entered waitingForInput, excluding context resumes
+            let newlyWaitingSessions = waitingForInputSessions.filter { session in
+                guard newWaitingIDs.contains(session.stableID) else { return false }
+
+                // Don't alert for context resume (ran out of context window)
+                if let lastMessage = session.lastMessage,
+                   lastMessage.hasPrefix(contextResumePrefix) {
+                    return false
+                }
+                return true
+            }
+
+            // Skip all alerts if only context resumes remain
+            guard !newlyWaitingSessions.isEmpty else {
+                previousWaitingForInputIDs = currentIDs
+                return
+            }
 
             // Play notification sound if the session is not actively focused
             if let soundName = AppSettings.notificationSound.soundName {
