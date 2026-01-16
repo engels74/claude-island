@@ -644,11 +644,12 @@ struct ProcessingIndicatorView: View {
 
     @State private var dotCount = 1
 
+    /// @State ensures timer persists across view updates rather than being recreated
+    @State private var timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
     private let baseTexts = ["Processing", "Working"]
     private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
     private let baseText: String
-
-    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
     private var dots: String {
         String(repeating: ".", count: dotCount)

@@ -33,7 +33,10 @@ class JSONLInterruptWatcher {
     }
 
     deinit {
-        source?.cancel()
+        // Cancel the source - the cancel handler will close the file handle
+        if let source {
+            source.cancel()
+        }
     }
 
     // MARK: Internal
@@ -174,10 +177,9 @@ class JSONLInterruptWatcher {
     }
 
     private func stopInternal() {
-        if source != nil {
-            logger.debug("Stopped watching: \(sessionID.prefix(8), privacy: .public)...")
-        }
-        source?.cancel()
+        guard let existingSource = source else { return }
+        logger.debug("Stopped watching: \(sessionID.prefix(8), privacy: .public)...")
+        existingSource.cancel()
         source = nil
         // fileHandle closed by cancel handler
     }

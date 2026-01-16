@@ -809,9 +809,10 @@ actor SessionStore {
         cancelPendingSync(sessionID: sessionID)
 
         // Schedule new debounced sync
-        pendingSyncs[sessionID] = Task { [weak self, syncDebounceNs] in
-            try? await Task.sleep(nanoseconds: syncDebounceNs)
-            guard !Task.isCancelled, let self else { return }
+        // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
+        pendingSyncs[sessionID] = Task {
+            try? await Task.sleep(nanoseconds: self.syncDebounceNs)
+            guard !Task.isCancelled else { return }
 
             // Revalidate session still exists after sleep (actor reentrancy protection)
             guard sessions[sessionID] != nil else { return }

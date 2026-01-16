@@ -291,7 +291,8 @@ struct InstanceRow: View {
 
     private let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
     private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
-    private let spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    /// @State ensures timer persists across view updates rather than being recreated
+    @State private var spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
     /// Whether we're showing the approval UI
     private var isWaitingForApproval: Bool {

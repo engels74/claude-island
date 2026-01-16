@@ -8,17 +8,15 @@
 import AppKit
 import Combine
 
-class EventMonitors {
+/// Singleton that aggregates all event monitors.
+/// @MainActor ensures thread-safe access to mutable state and Combine publishers
+/// since NSEvent monitors dispatch handlers on the main thread.
+@MainActor
+final class EventMonitors {
     // MARK: Lifecycle
 
     private init() {
         setupMonitors()
-    }
-
-    deinit {
-        mouseMoveMonitor?.stop()
-        mouseDownMonitor?.stop()
-        mouseDraggedMonitor?.stop()
     }
 
     // MARK: Internal
@@ -36,17 +34,23 @@ class EventMonitors {
 
     private func setupMonitors() {
         mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
-            self?.mouseLocation.send(NSEvent.mouseLocation)
+            MainActor.assumeIsolated {
+                self?.mouseLocation.send(NSEvent.mouseLocation)
+            }
         }
         mouseMoveMonitor?.start()
 
         mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
-            self?.mouseDown.send(event)
+            MainActor.assumeIsolated {
+                self?.mouseDown.send(event)
+            }
         }
         mouseDownMonitor?.start()
 
         mouseDraggedMonitor = EventMonitor(mask: .leftMouseDragged) { [weak self] _ in
-            self?.mouseLocation.send(NSEvent.mouseLocation)
+            MainActor.assumeIsolated {
+                self?.mouseLocation.send(NSEvent.mouseLocation)
+            }
         }
         mouseDraggedMonitor?.start()
     }

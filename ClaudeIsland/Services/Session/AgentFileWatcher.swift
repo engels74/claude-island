@@ -37,7 +37,11 @@ class AgentFileWatcher {
     }
 
     deinit {
-        source?.cancel()
+        // Suspend before cancel ensures cancel handler executes properly
+        // if the source was in a suspended state
+        if let source {
+            source.cancel()
+        }
     }
 
     // MARK: Internal
@@ -136,10 +140,9 @@ class AgentFileWatcher {
     }
 
     private func stopInternal() {
-        if source != nil {
-            logger.debug("Stopped watching agent file: \(agentID.prefix(8), privacy: .public)")
-        }
-        source?.cancel()
+        guard let existingSource = source else { return }
+        logger.debug("Stopped watching agent file: \(agentID.prefix(8), privacy: .public)")
+        existingSource.cancel()
         source = nil
     }
 }

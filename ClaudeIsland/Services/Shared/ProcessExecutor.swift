@@ -64,12 +64,9 @@ actor ProcessExecutor: ProcessExecuting {
 
     // MARK: Internal
 
-    /// Shared instance
-    /// `nonisolated(unsafe)` is safe here because:
-    /// 1. The static `let` ensures single initialization (Swift guarantees thread-safe lazy init)
-    /// 2. Actors are inherently thread-safe - all access goes through the actor's executor
-    /// 3. This pattern is the standard way to create actor singletons in Swift
-    nonisolated(unsafe) static let shared = ProcessExecutor()
+    /// Shared instance - actors are inherently thread-safe and static let is lazily initialized
+    /// with thread-safety guaranteed by Swift, so no special annotations are needed.
+    static let shared = ProcessExecutor()
 
     /// Logger for process execution (nonisolated static for cross-context access)
     nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "ProcessExecutor")

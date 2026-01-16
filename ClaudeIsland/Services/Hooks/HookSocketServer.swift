@@ -150,10 +150,14 @@ class HookSocketServer { // swiftlint:disable:this type_body_length
 
     /// Stop the socket server
     func stop() {
-        acceptSource?.cancel()
-        acceptSource = nil
+        // Cancel accept source if active
+        if let source = acceptSource {
+            source.cancel()
+            acceptSource = nil
+        }
         unlink(Self.socketPath)
 
+        // Clean up pending permissions
         permissionsLock.lock()
         for (_, pending) in pendingPermissions {
             close(pending.clientSocket)
