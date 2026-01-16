@@ -5,7 +5,9 @@
 //  Redesigned chat interface with clean visual hierarchy
 //
 
+import AppKit
 import Combine
+import os
 import SwiftUI
 
 // swiftlint:disable file_length
@@ -172,10 +174,21 @@ struct ChatView: View {
                     self.isInputFocused = true
                 }
             }
+            // Install keyboard event monitor for Cmd+V paste
+            self.installKeyEventMonitor()
+        }
+        .onDisappear {
+            // Clean up key event monitor to prevent memory leaks
+            self.removeKeyEventMonitor()
         }
     }
 
     // MARK: Private
+
+    // MARK: - Keyboard Event Monitoring
+
+    /// Logger for image paste operations
+    private static let logger = Logger(subsystem: "com.claude-island", category: "ChatView")
 
     @State private var inputText = ""
     @State private var history: [ChatHistoryItem] = []
@@ -189,6 +202,8 @@ struct ChatView: View {
     @State private var isBottomVisible = true
     @State private var scrollToBottomTask: Task<Void, Never>?
     @State private var focusInputTask: Task<Void, Never>?
+    @State private var pendingImage: NSImage?
+    @State private var keyEventMonitor: Any?
     @FocusState private var isInputFocused: Bool
 
     // MARK: - Header
@@ -240,6 +255,11 @@ struct ChatView: View {
     /// Can send messages only if session is in tmux
     private var canSendMessages: Bool {
         self.session.isInTmux && self.session.tty != nil
+    }
+
+    /// Whether there is content to send (text or image)
+    private var canSendContent: Bool {
+        !self.inputText.isEmpty || self.pendingImage != nil
     }
 
     private var chatHeader: some View {
@@ -393,36 +413,55 @@ struct ChatView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField(self.canSendMessages ? "Message Claude..." : "Open Claude Code in tmux to enable messaging", text: self.$inputText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundColor(self.canSendMessages ? .white : .white.opacity(0.4))
-                .focused(self.$isInputFocused)
-                .disabled(!self.canSendMessages)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white.opacity(self.canSendMessages ? 0.08 : 0.04))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .onSubmit {
-                    self.sendMessage()
-                }
-
-            Button {
-                self.sendMessage()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(!self.canSendMessages || self.inputText.isEmpty ? .white.opacity(0.2) : .white.opacity(0.9))
+        VStack(spacing: 8) {
+            // Image preview (if pending)
+            if let image = self.pendingImage {
+                self.imagePreview(image: image)
             }
-            .buttonStyle(.plain)
-            .disabled(!self.canSendMessages || self.inputText.isEmpty)
+
+            HStack(spacing: 10) {
+                // Paste image button
+                Button {
+                    self.pasteImageFromClipboard()
+                } label: {
+                    Image(systemName: "photo")
+                        .font(.system(size: 16))
+                        .foregroundColor(self.canSendMessages ? .white.opacity(0.6) : .white.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+                .disabled(!self.canSendMessages)
+                .help("Paste image from clipboard")
+
+                TextField(self.canSendMessages ? "Message Claude..." : "Open Claude Code in tmux to enable messaging", text: self.$inputText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundColor(self.canSendMessages ? .white : .white.opacity(0.4))
+                    .focused(self.$isInputFocused)
+                    .disabled(!self.canSendMessages)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.white.opacity(self.canSendMessages ? 0.08 : 0.04))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                    .onSubmit {
+                        self.sendMessage()
+                    }
+
+                Button {
+                    self.sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(!self.canSendMessages || !self.canSendContent ? .white.opacity(0.2) : .white.opacity(0.9))
+                }
+                .buttonStyle(.plain)
+                .disabled(!self.canSendMessages || !self.canSendContent)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -447,6 +486,41 @@ struct ChatView: View {
         ChatInteractivePromptBar(
             isInTmux: self.session.isInTmux
         ) { self.focusTerminal() }
+    }
+
+    // MARK: - Image Preview
+
+    private func imagePreview(image: NSImage) -> some View {
+        HStack {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxHeight: 80)
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                )
+
+            Button {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    self.pendingImage = nil
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .help("Remove image")
+
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.95)),
+            removal: .opacity
+        ))
     }
 
     // MARK: - Approval Bar
@@ -475,6 +549,95 @@ struct ChatView: View {
         self.previousHistoryCount = self.history.count
     }
 
+    /// Install local event monitor for Cmd+V paste shortcut
+    private func installKeyEventMonitor() {
+        // Remove any existing monitor first
+        self.removeKeyEventMonitor()
+
+        self.keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+            // Check for Cmd+V when input is focused
+            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" && self.isInputFocused {
+                // Check if clipboard has image data
+                let pasteboard = NSPasteboard.general
+                if pasteboard.data(forType: .tiff) != nil || pasteboard.data(forType: .png) != nil {
+                    self.pasteImageFromClipboard()
+                    return nil // Consume the event
+                }
+            }
+            return event // Pass through other events
+        }
+    }
+
+    /// Remove the key event monitor
+    private func removeKeyEventMonitor() {
+        if let monitor = self.keyEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            self.keyEventMonitor = nil
+        }
+    }
+
+    // MARK: - Image Handling
+
+    /// Paste image from clipboard
+    private func pasteImageFromClipboard() {
+        let pasteboard = NSPasteboard.general
+
+        // Try to get image data from pasteboard
+        if let tiffData = pasteboard.data(forType: .tiff),
+           let image = NSImage(data: tiffData) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                self.pendingImage = image
+            }
+            return
+        }
+
+        if let pngData = pasteboard.data(forType: .png),
+           let image = NSImage(data: pngData) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                self.pendingImage = image
+            }
+            return
+        }
+
+        // Try file URL for image files
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            for url in urls {
+                if let image = NSImage(contentsOf: url) {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        self.pendingImage = image
+                    }
+                    return
+                }
+            }
+        }
+
+        Self.logger.debug("No image found in clipboard")
+    }
+
+    /// Save image to temporary directory and return the file path
+    private func saveImageToTemp(_ image: NSImage) -> String? {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmapRep = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmapRep.representation(using: .png, properties: [:])
+        else {
+            Self.logger.error("Failed to convert image to PNG data")
+            return nil
+        }
+
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        let filename = "claude-island-\(timestamp).png"
+        let tempPath = NSTemporaryDirectory() + filename
+
+        do {
+            try pngData.write(to: URL(fileURLWithPath: tempPath))
+            Self.logger.debug("Saved image to \(tempPath)")
+            return tempPath
+        } catch {
+            Self.logger.error("Failed to save image to temp: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     private func focusTerminal() {
         Task {
             if let pid = session.pid {
@@ -495,17 +658,35 @@ struct ChatView: View {
 
     private func sendMessage() {
         let text = self.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let image = self.pendingImage
 
+        // Need either text or image to send
+        guard !text.isEmpty || image != nil else { return }
+
+        // Clear input state
         self.inputText = ""
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            self.pendingImage = nil
+        }
 
         // Resume autoscroll when user sends a message
         self.resumeAutoscroll()
         self.shouldScrollToBottom = true
 
+        // Build the message, including image path if present
+        var messageToSend = text
+        if let image, let imagePath = self.saveImageToTemp(image) {
+            // Prepend image path to message
+            if text.isEmpty {
+                messageToSend = imagePath
+            } else {
+                messageToSend = "\(imagePath) \(text)"
+            }
+        }
+
         // Don't add to history here - it will be synced from JSONL when UserPromptSubmit event fires
         Task {
-            await self.sendToSession(text)
+            await self.sendToSession(messageToSend)
         }
     }
 
