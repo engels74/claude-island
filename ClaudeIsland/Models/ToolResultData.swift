@@ -7,7 +7,7 @@
 
 import Foundation
 
-// MARK: - Tool Result Wrapper
+// MARK: - ToolResultData
 
 /// Structured tool result data - parsed from JSONL tool_result blocks
 enum ToolResultData: Equatable, Sendable {
@@ -29,7 +29,7 @@ enum ToolResultData: Equatable, Sendable {
     case generic(GenericResult)
 }
 
-// MARK: - Read Tool Result
+// MARK: - ReadResult
 
 struct ReadResult: Equatable, Sendable {
     let filePath: String
@@ -43,7 +43,7 @@ struct ReadResult: Equatable, Sendable {
     }
 }
 
-// MARK: - Edit Tool Result
+// MARK: - EditResult
 
 struct EditResult: Equatable, Sendable {
     let filePath: String
@@ -58,6 +58,8 @@ struct EditResult: Equatable, Sendable {
     }
 }
 
+// MARK: - PatchHunk
+
 struct PatchHunk: Equatable, Sendable {
     let oldStart: Int
     let oldLines: Int
@@ -66,7 +68,7 @@ struct PatchHunk: Equatable, Sendable {
     let lines: [String]
 }
 
-// MARK: - Write Tool Result
+// MARK: - WriteResult
 
 struct WriteResult: Equatable, Sendable {
     enum WriteType: String, Equatable, Sendable {
@@ -84,7 +86,7 @@ struct WriteResult: Equatable, Sendable {
     }
 }
 
-// MARK: - Bash Tool Result
+// MARK: - BashResult
 
 struct BashResult: Equatable, Sendable {
     let stdout: String
@@ -92,7 +94,7 @@ struct BashResult: Equatable, Sendable {
     let interrupted: Bool
     let isImage: Bool
     let returnCodeInterpretation: String?
-    let backgroundTaskId: String?
+    let backgroundTaskID: String?
 
     var hasOutput: Bool {
         !stdout.isEmpty || !stderr.isEmpty
@@ -109,7 +111,7 @@ struct BashResult: Equatable, Sendable {
     }
 }
 
-// MARK: - Grep Tool Result
+// MARK: - GrepResult
 
 struct GrepResult: Equatable, Sendable {
     enum Mode: String, Equatable, Sendable {
@@ -126,7 +128,7 @@ struct GrepResult: Equatable, Sendable {
     let appliedLimit: Int?
 }
 
-// MARK: - Glob Tool Result
+// MARK: - GlobResult
 
 struct GlobResult: Equatable, Sendable {
     let filenames: [String]
@@ -135,12 +137,14 @@ struct GlobResult: Equatable, Sendable {
     let truncated: Bool
 }
 
-// MARK: - TodoWrite Tool Result
+// MARK: - TodoWriteResult
 
 struct TodoWriteResult: Equatable, Sendable {
     let oldTodos: [TodoItem]
     let newTodos: [TodoItem]
 }
+
+// MARK: - TodoItem
 
 struct TodoItem: Equatable, Sendable {
     let content: String
@@ -148,10 +152,10 @@ struct TodoItem: Equatable, Sendable {
     let activeForm: String?
 }
 
-// MARK: - Task (Agent) Tool Result
+// MARK: - TaskResult
 
 struct TaskResult: Equatable, Sendable {
-    let agentId: String
+    let agentID: String
     let status: String
     let content: String
     let prompt: String?
@@ -160,7 +164,7 @@ struct TaskResult: Equatable, Sendable {
     let totalToolUseCount: Int?
 }
 
-// MARK: - WebFetch Tool Result
+// MARK: - WebFetchResult
 
 struct WebFetchResult: Equatable, Sendable {
     let url: String
@@ -171,7 +175,7 @@ struct WebFetchResult: Equatable, Sendable {
     let result: String
 }
 
-// MARK: - WebSearch Tool Result
+// MARK: - WebSearchResult
 
 struct WebSearchResult: Equatable, Sendable {
     let query: String
@@ -179,18 +183,22 @@ struct WebSearchResult: Equatable, Sendable {
     let results: [SearchResultItem]
 }
 
+// MARK: - SearchResultItem
+
 struct SearchResultItem: Equatable, Sendable {
     let title: String
     let url: String
     let snippet: String
 }
 
-// MARK: - AskUserQuestion Tool Result
+// MARK: - AskUserQuestionResult
 
 struct AskUserQuestionResult: Equatable, Sendable {
     let questions: [QuestionItem]
     let answers: [String: String]
 }
+
+// MARK: - QuestionItem
 
 struct QuestionItem: Equatable, Sendable {
     let question: String
@@ -198,15 +206,17 @@ struct QuestionItem: Equatable, Sendable {
     let options: [QuestionOption]
 }
 
+// MARK: - QuestionOption
+
 struct QuestionOption: Equatable, Sendable {
     let label: String
     let description: String?
 }
 
-// MARK: - BashOutput Tool Result
+// MARK: - BashOutputResult
 
 struct BashOutputResult: Equatable, Sendable {
-    let shellId: String
+    let shellID: String
     let status: String
     let stdout: String
     let stderr: String
@@ -217,14 +227,14 @@ struct BashOutputResult: Equatable, Sendable {
     let timestamp: String?
 }
 
-// MARK: - KillShell Tool Result
+// MARK: - KillShellResult
 
 struct KillShellResult: Equatable, Sendable {
-    let shellId: String
+    let shellID: String
     let message: String
 }
 
-// MARK: - ExitPlanMode Tool Result
+// MARK: - ExitPlanModeResult
 
 struct ExitPlanModeResult: Equatable, Sendable {
     let filePath: String?
@@ -232,7 +242,7 @@ struct ExitPlanModeResult: Equatable, Sendable {
     let isAgent: Bool
 }
 
-// MARK: - MCP Tool Result (Generic)
+// MARK: - MCPResult
 
 struct MCPResult: Equatable, @unchecked Sendable {
     let serverName: String
@@ -241,12 +251,12 @@ struct MCPResult: Equatable, @unchecked Sendable {
 
     static func == (lhs: MCPResult, rhs: MCPResult) -> Bool {
         lhs.serverName == rhs.serverName &&
-        lhs.toolName == rhs.toolName &&
-        NSDictionary(dictionary: lhs.rawResult).isEqual(to: rhs.rawResult)
+            lhs.toolName == rhs.toolName &&
+            NSDictionary(dictionary: lhs.rawResult).isEqual(to: rhs.rawResult)
     }
 }
 
-// MARK: - Generic Tool Result (Fallback)
+// MARK: - GenericResult
 
 struct GenericResult: Equatable, @unchecked Sendable {
     let rawContent: String?
@@ -257,7 +267,7 @@ struct GenericResult: Equatable, @unchecked Sendable {
     }
 }
 
-// MARK: - Tool Status Display
+// MARK: - ToolStatusDisplay
 
 struct ToolStatusDisplay {
     let text: String
@@ -277,7 +287,8 @@ struct ToolStatusDisplay {
                 return ToolStatusDisplay(text: desc, isRunning: true)
             }
             return ToolStatusDisplay(text: "Running...", isRunning: true)
-        case "Grep", "Glob":
+        case "Grep",
+             "Glob":
             if let pattern = input["pattern"] {
                 return ToolStatusDisplay(text: "Searching: \(pattern)", isRunning: true)
             }
@@ -307,36 +318,36 @@ struct ToolStatusDisplay {
 
     /// Get completed status text for a tool result
     static func completed(for toolName: String, result: ToolResultData?) -> ToolStatusDisplay {
-        guard let result = result else {
+        guard let result else {
             return ToolStatusDisplay(text: "Completed", isRunning: false)
         }
 
         switch result {
-        case .read(let r):
+        case let .read(r):
             let lineText = r.totalLines > r.numLines ? "\(r.numLines)+ lines" : "\(r.numLines) lines"
             return ToolStatusDisplay(text: "Read \(r.filename) (\(lineText))", isRunning: false)
 
-        case .edit(let r):
+        case let .edit(r):
             return ToolStatusDisplay(text: "Edited \(r.filename)", isRunning: false)
 
-        case .write(let r):
+        case let .write(r):
             let action = r.type == .create ? "Created" : "Wrote"
             return ToolStatusDisplay(text: "\(action) \(r.filename)", isRunning: false)
 
-        case .bash(let r):
-            if let bgId = r.backgroundTaskId {
-                return ToolStatusDisplay(text: "Running in background (\(bgId))", isRunning: false)
+        case let .bash(r):
+            if let bgID = r.backgroundTaskID {
+                return ToolStatusDisplay(text: "Running in background (\(bgID))", isRunning: false)
             }
             if let interpretation = r.returnCodeInterpretation {
                 return ToolStatusDisplay(text: interpretation, isRunning: false)
             }
             return ToolStatusDisplay(text: "Completed", isRunning: false)
 
-        case .grep(let r):
+        case let .grep(r):
             let fileWord = r.numFiles == 1 ? "file" : "files"
             return ToolStatusDisplay(text: "Found \(r.numFiles) \(fileWord)", isRunning: false)
 
-        case .glob(let r):
+        case let .glob(r):
             let fileWord = r.numFiles == 1 ? "file" : "files"
             if r.numFiles == 0 {
                 return ToolStatusDisplay(text: "No files found", isRunning: false)
@@ -346,13 +357,13 @@ struct ToolStatusDisplay {
         case .todoWrite:
             return ToolStatusDisplay(text: "Updated todos", isRunning: false)
 
-        case .task(let r):
+        case let .task(r):
             return ToolStatusDisplay(text: r.status.capitalized, isRunning: false)
 
-        case .webFetch(let r):
+        case let .webFetch(r):
             return ToolStatusDisplay(text: "\(r.code) \(r.codeText)", isRunning: false)
 
-        case .webSearch(let r):
+        case let .webSearch(r):
             let time = r.durationSeconds >= 1 ?
                 "\(Int(r.durationSeconds))s" :
                 "\(Int(r.durationSeconds * 1000))ms"
@@ -362,7 +373,7 @@ struct ToolStatusDisplay {
         case .askUserQuestion:
             return ToolStatusDisplay(text: "Answered", isRunning: false)
 
-        case .bashOutput(let r):
+        case let .bashOutput(r):
             return ToolStatusDisplay(text: "Status: \(r.status)", isRunning: false)
 
         case .killShell:

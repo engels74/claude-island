@@ -8,18 +8,12 @@
 import AppKit
 import SwiftUI
 
+// MARK: - SoundPickerRow
+
 struct SoundPickerRow: View {
+    // MARK: Internal
+
     @ObservedObject var soundSelector: SoundSelector
-    @State private var isHovered = false
-    @State private var selectedSound: NotificationSound = AppSettings.notificationSound
-
-    private var isExpanded: Bool {
-        soundSelector.isPickerExpanded
-    }
-
-    private func setExpanded(_ value: Bool) {
-        soundSelector.isPickerExpanded = value
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,19 +83,32 @@ struct SoundPickerRow: View {
         }
     }
 
+    // MARK: Private
+
+    @State private var isHovered = false
+    @State private var selectedSound: NotificationSound = AppSettings.notificationSound
+
+    private var isExpanded: Bool {
+        soundSelector.isPickerExpanded
+    }
+
     private var textColor: Color {
         .white.opacity(isHovered ? 1.0 : 0.7)
     }
+
+    private func setExpanded(_ value: Bool) {
+        soundSelector.isPickerExpanded = value
+    }
 }
 
-// MARK: - Sound Option Row (Inline version)
+// MARK: - SoundOptionRowInline
 
 private struct SoundOptionRowInline: View {
+    // MARK: Internal
+
     let sound: NotificationSound
     let isSelected: Bool
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -132,4 +139,8 @@ private struct SoundOptionRowInline: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }

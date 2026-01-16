@@ -9,25 +9,273 @@
 import Foundation
 import os.log
 
+// MARK: - ConversationInfo
+
 struct ConversationInfo: Equatable {
     let summary: String?
     let lastMessage: String?
-    let lastMessageRole: String?  // "user", "assistant", or "tool"
-    let lastToolName: String?  // Tool name if lastMessageRole is "tool"
-    let firstUserMessage: String?  // Fallback title when no summary
-    let lastUserMessageDate: Date?  // Timestamp of last user message (for stable sorting)
+    let lastMessageRole: String? // "user", "assistant", or "tool"
+    let lastToolName: String? // Tool name if lastMessageRole is "tool"
+    let firstUserMessage: String? // Fallback title when no summary
+    let lastUserMessageDate: Date? // Timestamp of last user message (for stable sorting)
 }
 
+// MARK: - ConversationParser
+
 actor ConversationParser {
+    // MARK: Internal
+
+    /// Parsed tool result data
+    struct ToolResult {
+        // MARK: Lifecycle
+
+        init(content: String?, stdout: String?, stderr: String?, isError: Bool) {
+            self.content = content
+            self.stdout = stdout
+            self.stderr = stderr
+            self.isError = isError
+            // Detect if this was an interrupt or rejection (various formats)
+            self.isInterrupted = isError && (
+                content?.contains("Interrupted by user") == true ||
+                    content?.contains("interrupted by user") == true ||
+                    content?.contains("user doesn't want to proceed") == true
+            )
+        }
+
+        // MARK: Internal
+
+        let content: String?
+        let stdout: String?
+        let stderr: String?
+        let isError: Bool
+        let isInterrupted: Bool
+    }
+
+    /// Result of incremental parsing
+    struct IncrementalParseResult {
+        let newMessages: [ChatMessage]
+        let allMessages: [ChatMessage]
+        let completedToolIDs: Set<String>
+        let toolResults: [String: ToolResult]
+        let structuredResults: [String: ToolResultData]
+        let clearDetected: Bool
+    }
+
     static let shared = ConversationParser()
 
     /// Logger for conversation parser (nonisolated static for cross-context access)
     nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "Parser")
 
-    /// Cache of parsed conversation info, keyed by session file path
-    private var cache: [String: CachedInfo] = [:]
+    /// Parse a JSONL file to extract conversation info
+    /// Uses caching based on file modification time
+    func parse(sessionID: String, cwd: String) -> ConversationInfo {
+        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
+        let sessionFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
 
-    private var incrementalState: [String: IncrementalParseState] = [:]
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: sessionFile),
+              let attrs = try? fileManager.attributesOfItem(atPath: sessionFile),
+              let modDate = attrs[.modificationDate] as? Date
+        else {
+            return ConversationInfo(
+                summary: nil,
+                lastMessage: nil,
+                lastMessageRole: nil,
+                lastToolName: nil,
+                firstUserMessage: nil,
+                lastUserMessageDate: nil
+            )
+        }
+
+        if let cached = cache[sessionFile], cached.modificationDate == modDate {
+            return cached.info
+        }
+
+        guard let data = fileManager.contents(atPath: sessionFile),
+              let content = String(data: data, encoding: .utf8)
+        else {
+            return ConversationInfo(
+                summary: nil,
+                lastMessage: nil,
+                lastMessageRole: nil,
+                lastToolName: nil,
+                firstUserMessage: nil,
+                lastUserMessageDate: nil
+            )
+        }
+
+        let info = parseContent(content)
+        cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
+
+        return info
+    }
+
+    // MARK: - Full Conversation Parsing
+
+    /// Parse full conversation history for chat view (returns ALL messages - use sparingly)
+    func parseFullConversation(sessionID: String, cwd: String) -> [ChatMessage] {
+        let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
+
+        guard FileManager.default.fileExists(atPath: sessionFile) else {
+            return []
+        }
+
+        var state = incrementalState[sessionID] ?? IncrementalParseState()
+        _ = parseNewLines(filePath: sessionFile, state: &state)
+        incrementalState[sessionID] = state
+
+        return state.messages
+    }
+
+    /// Parse only NEW messages since last call (efficient incremental updates)
+    func parseIncremental(sessionID: String, cwd: String) -> IncrementalParseResult {
+        let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
+
+        guard FileManager.default.fileExists(atPath: sessionFile) else {
+            return IncrementalParseResult(
+                newMessages: [],
+                allMessages: [],
+                completedToolIDs: [],
+                toolResults: [:],
+                structuredResults: [:],
+                clearDetected: false
+            )
+        }
+
+        var state = incrementalState[sessionID] ?? IncrementalParseState()
+        let newMessages = parseNewLines(filePath: sessionFile, state: &state)
+        let clearDetected = state.clearPending
+        if clearDetected {
+            state.clearPending = false
+        }
+        incrementalState[sessionID] = state
+
+        return IncrementalParseResult(
+            newMessages: newMessages,
+            allMessages: state.messages,
+            completedToolIDs: state.completedToolIDs,
+            toolResults: state.toolResults,
+            structuredResults: state.structuredResults,
+            clearDetected: clearDetected
+        )
+    }
+
+    /// Get set of completed tool IDs for a session
+    func completedToolIDs(for sessionID: String) -> Set<String> {
+        incrementalState[sessionID]?.completedToolIDs ?? []
+    }
+
+    /// Get tool results for a session
+    func toolResults(for sessionID: String) -> [String: ToolResult] {
+        incrementalState[sessionID]?.toolResults ?? [:]
+    }
+
+    /// Get structured tool results for a session
+    func structuredResults(for sessionID: String) -> [String: ToolResultData] {
+        incrementalState[sessionID]?.structuredResults ?? [:]
+    }
+
+    /// Reset incremental state for a session (call when reloading)
+    func resetState(for sessionID: String) {
+        incrementalState.removeValue(forKey: sessionID)
+    }
+
+    /// Check if a /clear command was detected during the last parse
+    /// Returns true once and consumes the pending flag
+    func checkAndConsumeClearDetected(for sessionID: String) -> Bool {
+        guard var state = incrementalState[sessionID], state.clearPending else {
+            return false
+        }
+        state.clearPending = false
+        incrementalState[sessionID] = state
+        return true
+    }
+
+    // MARK: - Subagent Tools Parsing
+
+    /// Parse subagent tools from an agent JSONL file
+    func parseSubagentTools(agentID: String, cwd: String) -> [SubagentToolInfo] {
+        guard !agentID.isEmpty else { return [] }
+
+        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
+        let agentFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/agent-" + agentID + ".jsonl"
+
+        guard FileManager.default.fileExists(atPath: agentFile),
+              let content = try? String(contentsOfFile: agentFile, encoding: .utf8)
+        else {
+            return []
+        }
+
+        var tools: [SubagentToolInfo] = []
+        var seenToolIDs: Set<String> = []
+        var completedToolIDs: Set<String> = []
+
+        for line in content.components(separatedBy: "\n") where !line.isEmpty {
+            if line.contains("\"tool_result\""),
+               let lineData = line.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+               let messageDict = json["message"] as? [String: Any],
+               let contentArray = messageDict["content"] as? [[String: Any]] {
+                for block in contentArray {
+                    if block["type"] as? String == "tool_result",
+                       let toolUseID = block["tool_use_id"] as? String {
+                        completedToolIDs.insert(toolUseID)
+                    }
+                }
+            }
+        }
+
+        for line in content.components(separatedBy: "\n") where !line.isEmpty {
+            guard line.contains("\"tool_use\""),
+                  let lineData = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let messageDict = json["message"] as? [String: Any],
+                  let contentArray = messageDict["content"] as? [[String: Any]]
+            else {
+                continue
+            }
+
+            for block in contentArray {
+                guard block["type"] as? String == "tool_use",
+                      let toolID = block["id"] as? String,
+                      let toolName = block["name"] as? String,
+                      !seenToolIDs.contains(toolID)
+                else {
+                    continue
+                }
+
+                seenToolIDs.insert(toolID)
+
+                var input: [String: String] = [:]
+                if let inputDict = block["input"] as? [String: Any] {
+                    for (key, value) in inputDict {
+                        if let strValue = value as? String {
+                            input[key] = strValue
+                        } else if let intValue = value as? Int {
+                            input[key] = String(intValue)
+                        } else if let boolValue = value as? Bool {
+                            input[key] = boolValue ? "true" : "false"
+                        }
+                    }
+                }
+
+                let isCompleted = completedToolIDs.contains(toolID)
+                let timestamp = json["timestamp"] as? String
+
+                tools.append(SubagentToolInfo(
+                    id: toolID,
+                    name: toolName,
+                    input: input,
+                    isCompleted: isCompleted,
+                    timestamp: timestamp
+                ))
+            }
+        }
+
+        return tools
+    }
+
+    // MARK: Private
 
     private struct CachedInfo {
         let modificationDate: Date
@@ -38,63 +286,393 @@ actor ConversationParser {
     private struct IncrementalParseState {
         var lastFileOffset: UInt64 = 0
         var messages: [ChatMessage] = []
-        var seenToolIds: Set<String> = []
-        var toolIdToName: [String: String] = [:]  // Map tool_use_id to tool name
-        var completedToolIds: Set<String> = []  // Tools that have received results
-        var toolResults: [String: ToolResult] = [:]  // Tool results keyed by tool_use_id
-        var structuredResults: [String: ToolResultData] = [:]  // Structured results keyed by tool_use_id
-        var lastClearOffset: UInt64 = 0  // Offset of last /clear command (0 = none or at start)
-        var clearPending: Bool = false  // True if a /clear was just detected
+        var seenToolIDs: Set<String> = []
+        var toolIDToName: [String: String] = [:] // Map tool_use_id to tool name
+        var completedToolIDs: Set<String> = [] // Tools that have received results
+        var toolResults: [String: ToolResult] = [:] // Tool results keyed by tool_use_id
+        var structuredResults: [String: ToolResultData] = [:] // Structured results keyed by tool_use_id
+        var lastClearOffset: UInt64 = 0 // Offset of last /clear command (0 = none or at start)
+        var clearPending = false // True if a /clear was just detected
     }
 
-    /// Parsed tool result data
-    struct ToolResult {
-        let content: String?
-        let stdout: String?
-        let stderr: String?
-        let isError: Bool
-        let isInterrupted: Bool
+    /// Cache of parsed conversation info, keyed by session file path
+    private var cache: [String: CachedInfo] = [:]
 
-        init(content: String?, stdout: String?, stderr: String?, isError: Bool) {
-            self.content = content
-            self.stdout = stdout
-            self.stderr = stderr
-            self.isError = isError
-            // Detect if this was an interrupt or rejection (various formats)
-            self.isInterrupted = isError && (
-                content?.contains("Interrupted by user") == true ||
-                content?.contains("interrupted by user") == true ||
-                content?.contains("user doesn't want to proceed") == true
-            )
+    private var incrementalState: [String: IncrementalParseState] = [:]
+
+    /// Format tool input for display in instance list
+    private static func formatToolInput(_ input: [String: Any]?, toolName: String) -> String {
+        guard let input else { return "" }
+
+        switch toolName {
+        case "Read",
+             "Write",
+             "Edit":
+            if let filePath = input["file_path"] as? String {
+                return (filePath as NSString).lastPathComponent
+            }
+        case "Bash":
+            if let command = input["command"] as? String {
+                return command
+            }
+        case "Grep":
+            if let pattern = input["pattern"] as? String {
+                return pattern
+            }
+        case "Glob":
+            if let pattern = input["pattern"] as? String {
+                return pattern
+            }
+        case "Task":
+            if let description = input["description"] as? String {
+                return description
+            }
+        case "WebFetch":
+            if let url = input["url"] as? String {
+                return url
+            }
+        case "WebSearch":
+            if let query = input["query"] as? String {
+                return query
+            }
+        default:
+            for (_, value) in input {
+                if let str = value as? String, !str.isEmpty {
+                    return str
+                }
+            }
         }
+        return ""
     }
 
-    /// Parse a JSONL file to extract conversation info
-    /// Uses caching based on file modification time
-    func parse(sessionId: String, cwd: String) -> ConversationInfo {
+    /// Truncate message for display
+    private static func truncateMessage(_ message: String?, maxLength: Int = 80) -> String? {
+        guard let msg = message else { return nil }
+        let cleaned = msg.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: " ")
+        if cleaned.count > maxLength {
+            return String(cleaned.prefix(maxLength - 3)) + "..."
+        }
+        return cleaned
+    }
+
+    /// Build session file path
+    private static func sessionFilePath(sessionID: String, cwd: String) -> String {
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let sessionFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionId + ".jsonl"
+        return NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
+    }
 
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: sessionFile),
-              let attrs = try? fileManager.attributesOfItem(atPath: sessionFile),
-              let modDate = attrs[.modificationDate] as? Date else {
-            return ConversationInfo(summary: nil, lastMessage: nil, lastMessageRole: nil, lastToolName: nil, firstUserMessage: nil, lastUserMessageDate: nil)
+    // MARK: - Structured Result Parsing
+
+    /// Parse tool result JSON into structured ToolResultData
+    private static func parseStructuredResult(
+        toolName: String,
+        toolUseResult: [String: Any],
+        isError: Bool
+    ) -> ToolResultData {
+        if toolName.hasPrefix("mcp__") {
+            let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
+            let serverName = parts.count > 0 ? String(parts[0]) : "unknown"
+            let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
+            return .mcp(MCPResult(
+                serverName: serverName,
+                toolName: mcpToolName,
+                rawResult: toolUseResult
+            ))
         }
 
-        if let cached = cache[sessionFile], cached.modificationDate == modDate {
-            return cached.info
+        switch toolName {
+        case "Read":
+            return parseReadResult(toolUseResult)
+        case "Edit":
+            return parseEditResult(toolUseResult)
+        case "Write":
+            return parseWriteResult(toolUseResult)
+        case "Bash":
+            return parseBashResult(toolUseResult)
+        case "Grep":
+            return parseGrepResult(toolUseResult)
+        case "Glob":
+            return parseGlobResult(toolUseResult)
+        case "TodoWrite":
+            return parseTodoWriteResult(toolUseResult)
+        case "Task":
+            return parseTaskResult(toolUseResult)
+        case "WebFetch":
+            return parseWebFetchResult(toolUseResult)
+        case "WebSearch":
+            return parseWebSearchResult(toolUseResult)
+        case "AskUserQuestion":
+            return parseAskUserQuestionResult(toolUseResult)
+        case "BashOutput":
+            return parseBashOutputResult(toolUseResult)
+        case "KillShell":
+            return parseKillShellResult(toolUseResult)
+        case "ExitPlanMode":
+            return parseExitPlanModeResult(toolUseResult)
+        default:
+            let content = toolUseResult["content"] as? String ??
+                toolUseResult["stdout"] as? String ??
+                toolUseResult["result"] as? String
+            return .generic(GenericResult(rawContent: content, rawData: toolUseResult))
+        }
+    }
+
+    // MARK: - Individual Tool Result Parsers
+
+    private static func parseReadResult(_ data: [String: Any]) -> ToolResultData {
+        if let fileData = data["file"] as? [String: Any] {
+            return .read(ReadResult(
+                filePath: fileData["filePath"] as? String ?? "",
+                content: fileData["content"] as? String ?? "",
+                numLines: fileData["numLines"] as? Int ?? 0,
+                startLine: fileData["startLine"] as? Int ?? 1,
+                totalLines: fileData["totalLines"] as? Int ?? 0
+            ))
+        }
+        return .read(ReadResult(
+            filePath: data["filePath"] as? String ?? "",
+            content: data["content"] as? String ?? "",
+            numLines: data["numLines"] as? Int ?? 0,
+            startLine: data["startLine"] as? Int ?? 1,
+            totalLines: data["totalLines"] as? Int ?? 0
+        ))
+    }
+
+    private static func parseEditResult(_ data: [String: Any]) -> ToolResultData {
+        var patches: [PatchHunk]? = nil
+        if let patchArray = data["structuredPatch"] as? [[String: Any]] {
+            patches = patchArray.compactMap { patch -> PatchHunk? in
+                guard let oldStart = patch["oldStart"] as? Int,
+                      let oldLines = patch["oldLines"] as? Int,
+                      let newStart = patch["newStart"] as? Int,
+                      let newLines = patch["newLines"] as? Int,
+                      let lines = patch["lines"] as? [String]
+                else {
+                    return nil
+                }
+                return PatchHunk(
+                    oldStart: oldStart,
+                    oldLines: oldLines,
+                    newStart: newStart,
+                    newLines: newLines,
+                    lines: lines
+                )
+            }
         }
 
-        guard let data = fileManager.contents(atPath: sessionFile),
-              let content = String(data: data, encoding: .utf8) else {
-            return ConversationInfo(summary: nil, lastMessage: nil, lastMessageRole: nil, lastToolName: nil, firstUserMessage: nil, lastUserMessageDate: nil)
+        return .edit(EditResult(
+            filePath: data["filePath"] as? String ?? "",
+            oldString: data["oldString"] as? String ?? "",
+            newString: data["newString"] as? String ?? "",
+            replaceAll: data["replaceAll"] as? Bool ?? false,
+            userModified: data["userModified"] as? Bool ?? false,
+            structuredPatch: patches
+        ))
+    }
+
+    private static func parseWriteResult(_ data: [String: Any]) -> ToolResultData {
+        let typeStr = data["type"] as? String ?? "create"
+        let writeType: WriteResult.WriteType = typeStr == "overwrite" ? .overwrite : .create
+
+        var patches: [PatchHunk]? = nil
+        if let patchArray = data["structuredPatch"] as? [[String: Any]] {
+            patches = patchArray.compactMap { patch -> PatchHunk? in
+                guard let oldStart = patch["oldStart"] as? Int,
+                      let oldLines = patch["oldLines"] as? Int,
+                      let newStart = patch["newStart"] as? Int,
+                      let newLines = patch["newLines"] as? Int,
+                      let lines = patch["lines"] as? [String]
+                else {
+                    return nil
+                }
+                return PatchHunk(
+                    oldStart: oldStart,
+                    oldLines: oldLines,
+                    newStart: newStart,
+                    newLines: newLines,
+                    lines: lines
+                )
+            }
         }
 
-        let info = parseContent(content)
-        cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
+        return .write(WriteResult(
+            type: writeType,
+            filePath: data["filePath"] as? String ?? "",
+            content: data["content"] as? String ?? "",
+            structuredPatch: patches
+        ))
+    }
 
-        return info
+    private static func parseBashResult(_ data: [String: Any]) -> ToolResultData {
+        .bash(BashResult(
+            stdout: data["stdout"] as? String ?? "",
+            stderr: data["stderr"] as? String ?? "",
+            interrupted: data["interrupted"] as? Bool ?? false,
+            isImage: data["isImage"] as? Bool ?? false,
+            returnCodeInterpretation: data["returnCodeInterpretation"] as? String,
+            backgroundTaskID: data["backgroundTaskId"] as? String
+        ))
+    }
+
+    private static func parseGrepResult(_ data: [String: Any]) -> ToolResultData {
+        let modeStr = data["mode"] as? String ?? "files_with_matches"
+        let mode: GrepResult.Mode = switch modeStr {
+        case "content": .content
+        case "count": .count
+        default: .filesWithMatches
+        }
+
+        return .grep(GrepResult(
+            mode: mode,
+            filenames: data["filenames"] as? [String] ?? [],
+            numFiles: data["numFiles"] as? Int ?? 0,
+            content: data["content"] as? String,
+            numLines: data["numLines"] as? Int,
+            appliedLimit: data["appliedLimit"] as? Int
+        ))
+    }
+
+    private static func parseGlobResult(_ data: [String: Any]) -> ToolResultData {
+        .glob(GlobResult(
+            filenames: data["filenames"] as? [String] ?? [],
+            durationMs: data["durationMs"] as? Int ?? 0,
+            numFiles: data["numFiles"] as? Int ?? 0,
+            truncated: data["truncated"] as? Bool ?? false
+        ))
+    }
+
+    private static func parseTodoWriteResult(_ data: [String: Any]) -> ToolResultData {
+        func parseTodos(_ array: [[String: Any]]?) -> [TodoItem] {
+            guard let array else { return [] }
+            return array.compactMap { item -> TodoItem? in
+                guard let content = item["content"] as? String,
+                      let status = item["status"] as? String
+                else {
+                    return nil
+                }
+                return TodoItem(
+                    content: content,
+                    status: status,
+                    activeForm: item["activeForm"] as? String
+                )
+            }
+        }
+
+        return .todoWrite(TodoWriteResult(
+            oldTodos: parseTodos(data["oldTodos"] as? [[String: Any]]),
+            newTodos: parseTodos(data["newTodos"] as? [[String: Any]])
+        ))
+    }
+
+    private static func parseTaskResult(_ data: [String: Any]) -> ToolResultData {
+        .task(TaskResult(
+            agentID: data["agentId"] as? String ?? "",
+            status: data["status"] as? String ?? "unknown",
+            content: data["content"] as? String ?? "",
+            prompt: data["prompt"] as? String,
+            totalDurationMs: data["totalDurationMs"] as? Int,
+            totalTokens: data["totalTokens"] as? Int,
+            totalToolUseCount: data["totalToolUseCount"] as? Int
+        ))
+    }
+
+    private static func parseWebFetchResult(_ data: [String: Any]) -> ToolResultData {
+        .webFetch(WebFetchResult(
+            url: data["url"] as? String ?? "",
+            code: data["code"] as? Int ?? 0,
+            codeText: data["codeText"] as? String ?? "",
+            bytes: data["bytes"] as? Int ?? 0,
+            durationMs: data["durationMs"] as? Int ?? 0,
+            result: data["result"] as? String ?? ""
+        ))
+    }
+
+    private static func parseWebSearchResult(_ data: [String: Any]) -> ToolResultData {
+        var results: [SearchResultItem] = []
+        if let resultsArray = data["results"] as? [[String: Any]] {
+            results = resultsArray.compactMap { item -> SearchResultItem? in
+                guard let title = item["title"] as? String,
+                      let url = item["url"] as? String
+                else {
+                    return nil
+                }
+                return SearchResultItem(
+                    title: title,
+                    url: url,
+                    snippet: item["snippet"] as? String ?? ""
+                )
+            }
+        }
+
+        return .webSearch(WebSearchResult(
+            query: data["query"] as? String ?? "",
+            durationSeconds: data["durationSeconds"] as? Double ?? 0,
+            results: results
+        ))
+    }
+
+    private static func parseAskUserQuestionResult(_ data: [String: Any]) -> ToolResultData {
+        var questions: [QuestionItem] = []
+        if let questionsArray = data["questions"] as? [[String: Any]] {
+            questions = questionsArray.compactMap { q -> QuestionItem? in
+                guard let question = q["question"] as? String else { return nil }
+                var options: [QuestionOption] = []
+                if let optionsArray = q["options"] as? [[String: Any]] {
+                    options = optionsArray.compactMap { opt -> QuestionOption? in
+                        guard let label = opt["label"] as? String else { return nil }
+                        return QuestionOption(
+                            label: label,
+                            description: opt["description"] as? String
+                        )
+                    }
+                }
+                return QuestionItem(
+                    question: question,
+                    header: q["header"] as? String,
+                    options: options
+                )
+            }
+        }
+
+        var answers: [String: String] = [:]
+        if let answersDict = data["answers"] as? [String: String] {
+            answers = answersDict
+        }
+
+        return .askUserQuestion(AskUserQuestionResult(
+            questions: questions,
+            answers: answers
+        ))
+    }
+
+    private static func parseBashOutputResult(_ data: [String: Any]) -> ToolResultData {
+        .bashOutput(BashOutputResult(
+            shellID: data["shellId"] as? String ?? "",
+            status: data["status"] as? String ?? "",
+            stdout: data["stdout"] as? String ?? "",
+            stderr: data["stderr"] as? String ?? "",
+            stdoutLines: data["stdoutLines"] as? Int ?? 0,
+            stderrLines: data["stderrLines"] as? Int ?? 0,
+            exitCode: data["exitCode"] as? Int,
+            command: data["command"] as? String,
+            timestamp: data["timestamp"] as? String
+        ))
+    }
+
+    private static func parseKillShellResult(_ data: [String: Any]) -> ToolResultData {
+        .killShell(KillShellResult(
+            shellID: data["shell_id"] as? String ?? data["shellId"] as? String ?? "",
+            message: data["message"] as? String ?? ""
+        ))
+    }
+
+    private static func parseExitPlanModeResult(_ data: [String: Any]) -> ToolResultData {
+        .exitPlanMode(ExitPlanModeResult(
+            filePath: data["filePath"] as? String,
+            plan: data["plan"] as? String,
+            isAgent: data["isAgent"] as? Bool ?? false
+        ))
     }
 
     /// Parse JSONL content
@@ -113,7 +691,8 @@ actor ConversationParser {
 
         for line in lines {
             guard let lineData = line.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+            else {
                 continue
             }
 
@@ -134,7 +713,8 @@ actor ConversationParser {
         var foundLastUserMessage = false
         for line in lines.reversed() {
             guard let lineData = line.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+            else {
                 continue
             }
 
@@ -145,7 +725,8 @@ actor ConversationParser {
                     let isMeta = json["isMeta"] as? Bool ?? false
                     if !isMeta, let message = json["message"] as? [String: Any] {
                         if let msgContent = message["content"] as? String {
-                            if !msgContent.hasPrefix("<command-name>") && !msgContent.hasPrefix("<local-command") && !msgContent.hasPrefix("Caveat:") {
+                            if !msgContent.hasPrefix("<command-name>") && !msgContent.hasPrefix("<local-command") && !msgContent
+                                .hasPrefix("Caveat:") {
                                 lastMessage = msgContent
                                 lastMessageRole = type
                             }
@@ -205,120 +786,6 @@ actor ConversationParser {
         )
     }
 
-    /// Format tool input for display in instance list
-    private static func formatToolInput(_ input: [String: Any]?, toolName: String) -> String {
-        guard let input = input else { return "" }
-
-        switch toolName {
-        case "Read", "Write", "Edit":
-            if let filePath = input["file_path"] as? String {
-                return (filePath as NSString).lastPathComponent
-            }
-        case "Bash":
-            if let command = input["command"] as? String {
-                return command
-            }
-        case "Grep":
-            if let pattern = input["pattern"] as? String {
-                return pattern
-            }
-        case "Glob":
-            if let pattern = input["pattern"] as? String {
-                return pattern
-            }
-        case "Task":
-            if let description = input["description"] as? String {
-                return description
-            }
-        case "WebFetch":
-            if let url = input["url"] as? String {
-                return url
-            }
-        case "WebSearch":
-            if let query = input["query"] as? String {
-                return query
-            }
-        default:
-            for (_, value) in input {
-                if let str = value as? String, !str.isEmpty {
-                    return str
-                }
-            }
-        }
-        return ""
-    }
-
-    /// Truncate message for display
-    private static func truncateMessage(_ message: String?, maxLength: Int = 80) -> String? {
-        guard let msg = message else { return nil }
-        let cleaned = msg.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\n", with: " ")
-        if cleaned.count > maxLength {
-            return String(cleaned.prefix(maxLength - 3)) + "..."
-        }
-        return cleaned
-    }
-
-    // MARK: - Full Conversation Parsing
-
-    /// Parse full conversation history for chat view (returns ALL messages - use sparingly)
-    func parseFullConversation(sessionId: String, cwd: String) -> [ChatMessage] {
-        let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd)
-
-        guard FileManager.default.fileExists(atPath: sessionFile) else {
-            return []
-        }
-
-        var state = incrementalState[sessionId] ?? IncrementalParseState()
-        _ = parseNewLines(filePath: sessionFile, state: &state)
-        incrementalState[sessionId] = state
-
-        return state.messages
-    }
-
-    /// Result of incremental parsing
-    struct IncrementalParseResult {
-        let newMessages: [ChatMessage]
-        let allMessages: [ChatMessage]
-        let completedToolIds: Set<String>
-        let toolResults: [String: ToolResult]
-        let structuredResults: [String: ToolResultData]
-        let clearDetected: Bool
-    }
-
-    /// Parse only NEW messages since last call (efficient incremental updates)
-    func parseIncremental(sessionId: String, cwd: String) -> IncrementalParseResult {
-        let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd)
-
-        guard FileManager.default.fileExists(atPath: sessionFile) else {
-            return IncrementalParseResult(
-                newMessages: [],
-                allMessages: [],
-                completedToolIds: [],
-                toolResults: [:],
-                structuredResults: [:],
-                clearDetected: false
-            )
-        }
-
-        var state = incrementalState[sessionId] ?? IncrementalParseState()
-        let newMessages = parseNewLines(filePath: sessionFile, state: &state)
-        let clearDetected = state.clearPending
-        if clearDetected {
-            state.clearPending = false
-        }
-        incrementalState[sessionId] = state
-
-        return IncrementalParseResult(
-            newMessages: newMessages,
-            allMessages: state.messages,
-            completedToolIds: state.completedToolIds,
-            toolResults: state.toolResults,
-            structuredResults: state.structuredResults,
-            clearDetected: clearDetected
-        )
-    }
-
     /// Parse only new lines since last read (incremental)
     private func parseNewLines(filePath: String, state: inout IncrementalParseState) -> [ChatMessage] {
         guard let fileHandle = FileHandle(forReadingAtPath: filePath) else {
@@ -348,7 +815,8 @@ actor ConversationParser {
         }
 
         guard let newData = try? fileHandle.readToEnd(),
-              let newContent = String(data: newData, encoding: .utf8) else {
+              let newContent = String(data: newData, encoding: .utf8)
+        else {
             return state.messages
         }
 
@@ -360,9 +828,9 @@ actor ConversationParser {
         for line in lines where !line.isEmpty {
             if line.contains("<command-name>/clear</command-name>") {
                 state.messages = []
-                state.seenToolIds = []
-                state.toolIdToName = [:]
-                state.completedToolIds = []
+                state.seenToolIDs = []
+                state.toolIDToName = [:]
+                state.completedToolIDs = []
                 state.toolResults = [:]
                 state.structuredResults = [:]
 
@@ -386,28 +854,28 @@ actor ConversationParser {
 
                     for block in contentArray {
                         if block["type"] as? String == "tool_result",
-                           let toolUseId = block["tool_use_id"] as? String {
-                            state.completedToolIds.insert(toolUseId)
+                           let toolUseID = block["tool_use_id"] as? String {
+                            state.completedToolIDs.insert(toolUseID)
 
                             let content = block["content"] as? String
                             let isError = block["is_error"] as? Bool ?? false
-                            state.toolResults[toolUseId] = ToolResult(
+                            state.toolResults[toolUseID] = ToolResult(
                                 content: content,
                                 stdout: stdout,
                                 stderr: stderr,
                                 isError: isError
                             )
 
-                            let toolName = topLevelToolName ?? state.toolIdToName[toolUseId]
+                            let toolName = topLevelToolName ?? state.toolIDToName[toolUseID]
 
-                            if let toolUseResult = toolUseResult,
+                            if let toolUseResult,
                                let name = toolName {
                                 let structured = Self.parseStructuredResult(
                                     toolName: name,
                                     toolUseResult: toolUseResult,
                                     isError: isError
                                 )
-                                state.structuredResults[toolUseId] = structured
+                                state.structuredResults[toolUseID] = structured
                             }
                         }
                     }
@@ -415,7 +883,7 @@ actor ConversationParser {
             } else if line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"") {
                 if let lineData = line.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                   let message = parseMessageLine(json, seenToolIds: &state.seenToolIds, toolIdToName: &state.toolIdToName) {
+                   let message = parseMessageLine(json, seenToolIDs: &state.seenToolIDs, toolIDToName: &state.toolIDToName) {
                     newMessages.append(message)
                     state.messages.append(message)
                 }
@@ -426,46 +894,10 @@ actor ConversationParser {
         return newMessages
     }
 
-    /// Get set of completed tool IDs for a session
-    func completedToolIds(for sessionId: String) -> Set<String> {
-        return incrementalState[sessionId]?.completedToolIds ?? []
-    }
-
-    /// Get tool results for a session
-    func toolResults(for sessionId: String) -> [String: ToolResult] {
-        return incrementalState[sessionId]?.toolResults ?? [:]
-    }
-
-    /// Get structured tool results for a session
-    func structuredResults(for sessionId: String) -> [String: ToolResultData] {
-        return incrementalState[sessionId]?.structuredResults ?? [:]
-    }
-
-    /// Reset incremental state for a session (call when reloading)
-    func resetState(for sessionId: String) {
-        incrementalState.removeValue(forKey: sessionId)
-    }
-
-    /// Check if a /clear command was detected during the last parse
-    /// Returns true once and consumes the pending flag
-    func checkAndConsumeClearDetected(for sessionId: String) -> Bool {
-        guard var state = incrementalState[sessionId], state.clearPending else {
-            return false
-        }
-        state.clearPending = false
-        incrementalState[sessionId] = state
-        return true
-    }
-
-    /// Build session file path
-    private static func sessionFilePath(sessionId: String, cwd: String) -> String {
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        return NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionId + ".jsonl"
-    }
-
-    private func parseMessageLine(_ json: [String: Any], seenToolIds: inout Set<String>, toolIdToName: inout [String: String]) -> ChatMessage? {
+    private func parseMessageLine(_ json: [String: Any], seenToolIDs: inout Set<String>, toolIDToName: inout [String: String]) -> ChatMessage? {
         guard let type = json["type"] as? String,
-              let uuid = json["uuid"] as? String else {
+              let uuid = json["uuid"] as? String
+        else {
             return nil
         }
 
@@ -514,13 +946,13 @@ actor ConversationParser {
                             }
                         }
                     case "tool_use":
-                        if let toolId = block["id"] as? String {
-                            if seenToolIds.contains(toolId) {
+                        if let toolID = block["id"] as? String {
+                            if seenToolIDs.contains(toolID) {
                                 continue
                             }
-                            seenToolIds.insert(toolId)
+                            seenToolIDs.insert(toolID)
                             if let toolName = block["name"] as? String {
-                                toolIdToName[toolId] = toolName
+                                toolIDToName[toolID] = toolName
                             }
                         }
                         if let toolBlock = parseToolUse(block) {
@@ -551,7 +983,8 @@ actor ConversationParser {
 
     private func parseToolUse(_ block: [String: Any]) -> ToolUseBlock? {
         guard let id = block["id"] as? String,
-              let name = block["name"] as? String else {
+              let name = block["name"] as? String
+        else {
             return nil
         }
 
@@ -570,398 +1003,9 @@ actor ConversationParser {
 
         return ToolUseBlock(id: id, name: name, input: input)
     }
-
-    // MARK: - Structured Result Parsing
-
-    /// Parse tool result JSON into structured ToolResultData
-    private static func parseStructuredResult(
-        toolName: String,
-        toolUseResult: [String: Any],
-        isError: Bool
-    ) -> ToolResultData {
-        if toolName.hasPrefix("mcp__") {
-            let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
-            let serverName = parts.count > 0 ? String(parts[0]) : "unknown"
-            let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
-            return .mcp(MCPResult(
-                serverName: serverName,
-                toolName: mcpToolName,
-                rawResult: toolUseResult
-            ))
-        }
-
-        switch toolName {
-        case "Read":
-            return parseReadResult(toolUseResult)
-        case "Edit":
-            return parseEditResult(toolUseResult)
-        case "Write":
-            return parseWriteResult(toolUseResult)
-        case "Bash":
-            return parseBashResult(toolUseResult)
-        case "Grep":
-            return parseGrepResult(toolUseResult)
-        case "Glob":
-            return parseGlobResult(toolUseResult)
-        case "TodoWrite":
-            return parseTodoWriteResult(toolUseResult)
-        case "Task":
-            return parseTaskResult(toolUseResult)
-        case "WebFetch":
-            return parseWebFetchResult(toolUseResult)
-        case "WebSearch":
-            return parseWebSearchResult(toolUseResult)
-        case "AskUserQuestion":
-            return parseAskUserQuestionResult(toolUseResult)
-        case "BashOutput":
-            return parseBashOutputResult(toolUseResult)
-        case "KillShell":
-            return parseKillShellResult(toolUseResult)
-        case "ExitPlanMode":
-            return parseExitPlanModeResult(toolUseResult)
-        default:
-            let content = toolUseResult["content"] as? String ??
-                          toolUseResult["stdout"] as? String ??
-                          toolUseResult["result"] as? String
-            return .generic(GenericResult(rawContent: content, rawData: toolUseResult))
-        }
-    }
-
-    // MARK: - Individual Tool Result Parsers
-
-    private static func parseReadResult(_ data: [String: Any]) -> ToolResultData {
-        if let fileData = data["file"] as? [String: Any] {
-            return .read(ReadResult(
-                filePath: fileData["filePath"] as? String ?? "",
-                content: fileData["content"] as? String ?? "",
-                numLines: fileData["numLines"] as? Int ?? 0,
-                startLine: fileData["startLine"] as? Int ?? 1,
-                totalLines: fileData["totalLines"] as? Int ?? 0
-            ))
-        }
-        return .read(ReadResult(
-            filePath: data["filePath"] as? String ?? "",
-            content: data["content"] as? String ?? "",
-            numLines: data["numLines"] as? Int ?? 0,
-            startLine: data["startLine"] as? Int ?? 1,
-            totalLines: data["totalLines"] as? Int ?? 0
-        ))
-    }
-
-    private static func parseEditResult(_ data: [String: Any]) -> ToolResultData {
-        var patches: [PatchHunk]? = nil
-        if let patchArray = data["structuredPatch"] as? [[String: Any]] {
-            patches = patchArray.compactMap { patch -> PatchHunk? in
-                guard let oldStart = patch["oldStart"] as? Int,
-                      let oldLines = patch["oldLines"] as? Int,
-                      let newStart = patch["newStart"] as? Int,
-                      let newLines = patch["newLines"] as? Int,
-                      let lines = patch["lines"] as? [String] else {
-                    return nil
-                }
-                return PatchHunk(
-                    oldStart: oldStart,
-                    oldLines: oldLines,
-                    newStart: newStart,
-                    newLines: newLines,
-                    lines: lines
-                )
-            }
-        }
-
-        return .edit(EditResult(
-            filePath: data["filePath"] as? String ?? "",
-            oldString: data["oldString"] as? String ?? "",
-            newString: data["newString"] as? String ?? "",
-            replaceAll: data["replaceAll"] as? Bool ?? false,
-            userModified: data["userModified"] as? Bool ?? false,
-            structuredPatch: patches
-        ))
-    }
-
-    private static func parseWriteResult(_ data: [String: Any]) -> ToolResultData {
-        let typeStr = data["type"] as? String ?? "create"
-        let writeType: WriteResult.WriteType = typeStr == "overwrite" ? .overwrite : .create
-
-        var patches: [PatchHunk]? = nil
-        if let patchArray = data["structuredPatch"] as? [[String: Any]] {
-            patches = patchArray.compactMap { patch -> PatchHunk? in
-                guard let oldStart = patch["oldStart"] as? Int,
-                      let oldLines = patch["oldLines"] as? Int,
-                      let newStart = patch["newStart"] as? Int,
-                      let newLines = patch["newLines"] as? Int,
-                      let lines = patch["lines"] as? [String] else {
-                    return nil
-                }
-                return PatchHunk(
-                    oldStart: oldStart,
-                    oldLines: oldLines,
-                    newStart: newStart,
-                    newLines: newLines,
-                    lines: lines
-                )
-            }
-        }
-
-        return .write(WriteResult(
-            type: writeType,
-            filePath: data["filePath"] as? String ?? "",
-            content: data["content"] as? String ?? "",
-            structuredPatch: patches
-        ))
-    }
-
-    private static func parseBashResult(_ data: [String: Any]) -> ToolResultData {
-        return .bash(BashResult(
-            stdout: data["stdout"] as? String ?? "",
-            stderr: data["stderr"] as? String ?? "",
-            interrupted: data["interrupted"] as? Bool ?? false,
-            isImage: data["isImage"] as? Bool ?? false,
-            returnCodeInterpretation: data["returnCodeInterpretation"] as? String,
-            backgroundTaskId: data["backgroundTaskId"] as? String
-        ))
-    }
-
-    private static func parseGrepResult(_ data: [String: Any]) -> ToolResultData {
-        let modeStr = data["mode"] as? String ?? "files_with_matches"
-        let mode: GrepResult.Mode
-        switch modeStr {
-        case "content": mode = .content
-        case "count": mode = .count
-        default: mode = .filesWithMatches
-        }
-
-        return .grep(GrepResult(
-            mode: mode,
-            filenames: data["filenames"] as? [String] ?? [],
-            numFiles: data["numFiles"] as? Int ?? 0,
-            content: data["content"] as? String,
-            numLines: data["numLines"] as? Int,
-            appliedLimit: data["appliedLimit"] as? Int
-        ))
-    }
-
-    private static func parseGlobResult(_ data: [String: Any]) -> ToolResultData {
-        return .glob(GlobResult(
-            filenames: data["filenames"] as? [String] ?? [],
-            durationMs: data["durationMs"] as? Int ?? 0,
-            numFiles: data["numFiles"] as? Int ?? 0,
-            truncated: data["truncated"] as? Bool ?? false
-        ))
-    }
-
-    private static func parseTodoWriteResult(_ data: [String: Any]) -> ToolResultData {
-        func parseTodos(_ array: [[String: Any]]?) -> [TodoItem] {
-            guard let array = array else { return [] }
-            return array.compactMap { item -> TodoItem? in
-                guard let content = item["content"] as? String,
-                      let status = item["status"] as? String else {
-                    return nil
-                }
-                return TodoItem(
-                    content: content,
-                    status: status,
-                    activeForm: item["activeForm"] as? String
-                )
-            }
-        }
-
-        return .todoWrite(TodoWriteResult(
-            oldTodos: parseTodos(data["oldTodos"] as? [[String: Any]]),
-            newTodos: parseTodos(data["newTodos"] as? [[String: Any]])
-        ))
-    }
-
-    private static func parseTaskResult(_ data: [String: Any]) -> ToolResultData {
-        return .task(TaskResult(
-            agentId: data["agentId"] as? String ?? "",
-            status: data["status"] as? String ?? "unknown",
-            content: data["content"] as? String ?? "",
-            prompt: data["prompt"] as? String,
-            totalDurationMs: data["totalDurationMs"] as? Int,
-            totalTokens: data["totalTokens"] as? Int,
-            totalToolUseCount: data["totalToolUseCount"] as? Int
-        ))
-    }
-
-    private static func parseWebFetchResult(_ data: [String: Any]) -> ToolResultData {
-        return .webFetch(WebFetchResult(
-            url: data["url"] as? String ?? "",
-            code: data["code"] as? Int ?? 0,
-            codeText: data["codeText"] as? String ?? "",
-            bytes: data["bytes"] as? Int ?? 0,
-            durationMs: data["durationMs"] as? Int ?? 0,
-            result: data["result"] as? String ?? ""
-        ))
-    }
-
-    private static func parseWebSearchResult(_ data: [String: Any]) -> ToolResultData {
-        var results: [SearchResultItem] = []
-        if let resultsArray = data["results"] as? [[String: Any]] {
-            results = resultsArray.compactMap { item -> SearchResultItem? in
-                guard let title = item["title"] as? String,
-                      let url = item["url"] as? String else {
-                    return nil
-                }
-                return SearchResultItem(
-                    title: title,
-                    url: url,
-                    snippet: item["snippet"] as? String ?? ""
-                )
-            }
-        }
-
-        return .webSearch(WebSearchResult(
-            query: data["query"] as? String ?? "",
-            durationSeconds: data["durationSeconds"] as? Double ?? 0,
-            results: results
-        ))
-    }
-
-    private static func parseAskUserQuestionResult(_ data: [String: Any]) -> ToolResultData {
-        var questions: [QuestionItem] = []
-        if let questionsArray = data["questions"] as? [[String: Any]] {
-            questions = questionsArray.compactMap { q -> QuestionItem? in
-                guard let question = q["question"] as? String else { return nil }
-                var options: [QuestionOption] = []
-                if let optionsArray = q["options"] as? [[String: Any]] {
-                    options = optionsArray.compactMap { opt -> QuestionOption? in
-                        guard let label = opt["label"] as? String else { return nil }
-                        return QuestionOption(
-                            label: label,
-                            description: opt["description"] as? String
-                        )
-                    }
-                }
-                return QuestionItem(
-                    question: question,
-                    header: q["header"] as? String,
-                    options: options
-                )
-            }
-        }
-
-        var answers: [String: String] = [:]
-        if let answersDict = data["answers"] as? [String: String] {
-            answers = answersDict
-        }
-
-        return .askUserQuestion(AskUserQuestionResult(
-            questions: questions,
-            answers: answers
-        ))
-    }
-
-    private static func parseBashOutputResult(_ data: [String: Any]) -> ToolResultData {
-        return .bashOutput(BashOutputResult(
-            shellId: data["shellId"] as? String ?? "",
-            status: data["status"] as? String ?? "",
-            stdout: data["stdout"] as? String ?? "",
-            stderr: data["stderr"] as? String ?? "",
-            stdoutLines: data["stdoutLines"] as? Int ?? 0,
-            stderrLines: data["stderrLines"] as? Int ?? 0,
-            exitCode: data["exitCode"] as? Int,
-            command: data["command"] as? String,
-            timestamp: data["timestamp"] as? String
-        ))
-    }
-
-    private static func parseKillShellResult(_ data: [String: Any]) -> ToolResultData {
-        return .killShell(KillShellResult(
-            shellId: data["shell_id"] as? String ?? data["shellId"] as? String ?? "",
-            message: data["message"] as? String ?? ""
-        ))
-    }
-
-    private static func parseExitPlanModeResult(_ data: [String: Any]) -> ToolResultData {
-        return .exitPlanMode(ExitPlanModeResult(
-            filePath: data["filePath"] as? String,
-            plan: data["plan"] as? String,
-            isAgent: data["isAgent"] as? Bool ?? false
-        ))
-    }
-
-    // MARK: - Subagent Tools Parsing
-
-    /// Parse subagent tools from an agent JSONL file
-    func parseSubagentTools(agentId: String, cwd: String) -> [SubagentToolInfo] {
-        guard !agentId.isEmpty else { return [] }
-
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let agentFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/agent-" + agentId + ".jsonl"
-
-        guard FileManager.default.fileExists(atPath: agentFile),
-              let content = try? String(contentsOfFile: agentFile, encoding: .utf8) else {
-            return []
-        }
-
-        var tools: [SubagentToolInfo] = []
-        var seenToolIds: Set<String> = []
-        var completedToolIds: Set<String> = []
-
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
-            if line.contains("\"tool_result\""),
-               let lineData = line.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-               let messageDict = json["message"] as? [String: Any],
-               let contentArray = messageDict["content"] as? [[String: Any]] {
-                for block in contentArray {
-                    if block["type"] as? String == "tool_result",
-                       let toolUseId = block["tool_use_id"] as? String {
-                        completedToolIds.insert(toolUseId)
-                    }
-                }
-            }
-        }
-
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
-            guard line.contains("\"tool_use\""),
-                  let lineData = line.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let messageDict = json["message"] as? [String: Any],
-                  let contentArray = messageDict["content"] as? [[String: Any]] else {
-                continue
-            }
-
-            for block in contentArray {
-                guard block["type"] as? String == "tool_use",
-                      let toolId = block["id"] as? String,
-                      let toolName = block["name"] as? String,
-                      !seenToolIds.contains(toolId) else {
-                    continue
-                }
-
-                seenToolIds.insert(toolId)
-
-                var input: [String: String] = [:]
-                if let inputDict = block["input"] as? [String: Any] {
-                    for (key, value) in inputDict {
-                        if let strValue = value as? String {
-                            input[key] = strValue
-                        } else if let intValue = value as? Int {
-                            input[key] = String(intValue)
-                        } else if let boolValue = value as? Bool {
-                            input[key] = boolValue ? "true" : "false"
-                        }
-                    }
-                }
-
-                let isCompleted = completedToolIds.contains(toolId)
-                let timestamp = json["timestamp"] as? String
-
-                tools.append(SubagentToolInfo(
-                    id: toolId,
-                    name: toolName,
-                    input: input,
-                    isCompleted: isCompleted,
-                    timestamp: timestamp
-                ))
-            }
-        }
-
-        return tools
-    }
 }
+
+// MARK: - SubagentToolInfo
 
 /// Info about a subagent tool call parsed from JSONL
 struct SubagentToolInfo: Sendable {
@@ -976,20 +1020,21 @@ struct SubagentToolInfo: Sendable {
 
 extension ConversationParser {
     /// Parse subagent tools from an agent JSONL file (static, synchronous version)
-    nonisolated static func parseSubagentToolsSync(agentId: String, cwd: String) -> [SubagentToolInfo] {
-        guard !agentId.isEmpty else { return [] }
+    nonisolated static func parseSubagentToolsSync(agentID: String, cwd: String) -> [SubagentToolInfo] {
+        guard !agentID.isEmpty else { return [] }
 
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let agentFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/agent-" + agentId + ".jsonl"
+        let agentFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/agent-" + agentID + ".jsonl"
 
         guard FileManager.default.fileExists(atPath: agentFile),
-              let content = try? String(contentsOfFile: agentFile, encoding: .utf8) else {
+              let content = try? String(contentsOfFile: agentFile, encoding: .utf8)
+        else {
             return []
         }
 
         var tools: [SubagentToolInfo] = []
-        var seenToolIds: Set<String> = []
-        var completedToolIds: Set<String> = []
+        var seenToolIDs: Set<String> = []
+        var completedToolIDs: Set<String> = []
 
         for line in content.components(separatedBy: "\n") where !line.isEmpty {
             if line.contains("\"tool_result\""),
@@ -999,8 +1044,8 @@ extension ConversationParser {
                let contentArray = messageDict["content"] as? [[String: Any]] {
                 for block in contentArray {
                     if block["type"] as? String == "tool_result",
-                       let toolUseId = block["tool_use_id"] as? String {
-                        completedToolIds.insert(toolUseId)
+                       let toolUseID = block["tool_use_id"] as? String {
+                        completedToolIDs.insert(toolUseID)
                     }
                 }
             }
@@ -1011,19 +1056,21 @@ extension ConversationParser {
                   let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                   let messageDict = json["message"] as? [String: Any],
-                  let contentArray = messageDict["content"] as? [[String: Any]] else {
+                  let contentArray = messageDict["content"] as? [[String: Any]]
+            else {
                 continue
             }
 
             for block in contentArray {
                 guard block["type"] as? String == "tool_use",
-                      let toolId = block["id"] as? String,
+                      let toolID = block["id"] as? String,
                       let toolName = block["name"] as? String,
-                      !seenToolIds.contains(toolId) else {
+                      !seenToolIDs.contains(toolID)
+                else {
                     continue
                 }
 
-                seenToolIds.insert(toolId)
+                seenToolIDs.insert(toolID)
 
                 var input: [String: String] = [:]
                 if let inputDict = block["input"] as? [String: Any] {
@@ -1038,11 +1085,11 @@ extension ConversationParser {
                     }
                 }
 
-                let isCompleted = completedToolIds.contains(toolId)
+                let isCompleted = completedToolIDs.contains(toolID)
                 let timestamp = json["timestamp"] as? String
 
                 tools.append(SubagentToolInfo(
-                    id: toolId,
+                    id: toolID,
                     name: toolName,
                     input: input,
                     isCompleted: isCompleted,
@@ -1054,4 +1101,3 @@ extension ConversationParser {
         return tools
     }
 }
-

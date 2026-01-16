@@ -12,37 +12,33 @@ import os.log
 /// Logger for interrupt watcher
 private let logger = Logger(subsystem: "com.claudeisland", category: "Interrupt")
 
+// MARK: - JSONLInterruptWatcherDelegate
+
 protocol JSONLInterruptWatcherDelegate: AnyObject {
-    func didDetectInterrupt(sessionId: String)
+    func didDetectInterrupt(sessionID: String)
 }
+
+// MARK: - JSONLInterruptWatcher
 
 /// Watches a session's JSONL file for interrupt patterns in real-time
 /// Uses DispatchSource for immediate detection when new lines are written
 class JSONLInterruptWatcher {
-    private var fileHandle: FileHandle?
-    private var source: DispatchSourceFileSystemObject?
-    private var lastOffset: UInt64 = 0
-    private let sessionId: String
-    private let filePath: String
-    private let queue = DispatchQueue(label: "com.claudeisland.interruptwatcher", qos: .userInteractive)
+    // MARK: Lifecycle
+
+    init(sessionID: String, cwd: String) {
+        self.sessionID = sessionID
+        let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ".", with: "-")
+        self.filePath = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
+    }
+
+    deinit {
+        source?.cancel()
+    }
+
+    // MARK: Internal
 
     weak var delegate: JSONLInterruptWatcherDelegate?
-
-    /// Patterns that indicate an interrupt occurred
-    /// We check for is_error:true combined with interrupt content
-    private static let interruptContentPatterns = [
-        "Interrupted by user",
-        "interrupted by user",
-        "user doesn't want to proceed",
-        "[Request interrupted by user"
-    ]
-
-    init(sessionId: String, cwd: String) {
-        self.sessionId = sessionId
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
-                            .replacingOccurrences(of: ".", with: "-")
-        self.filePath = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionId + ".jsonl"
-    }
 
     /// Start watching the JSONL file for interrupts
     func start() {
@@ -51,12 +47,38 @@ class JSONLInterruptWatcher {
         }
     }
 
+    /// Stop watching
+    func stop() {
+        queue.async { [weak self] in
+            self?.stopInternal()
+        }
+    }
+
+    // MARK: Private
+
+    /// Patterns that indicate an interrupt occurred
+    /// We check for is_error:true combined with interrupt content
+    private static let interruptContentPatterns = [
+        "Interrupted by user",
+        "interrupted by user",
+        "user doesn't want to proceed",
+        "[Request interrupted by user",
+    ]
+
+    private var fileHandle: FileHandle?
+    private var source: DispatchSourceFileSystemObject?
+    private var lastOffset: UInt64 = 0
+    private let sessionID: String
+    private let filePath: String
+    private let queue = DispatchQueue(label: "com.claudeisland.interruptwatcher", qos: .userInteractive)
+
     private func startWatching() {
         stopInternal()
 
         guard FileManager.default.fileExists(atPath: filePath),
-              let handle = FileHandle(forReadingAtPath: filePath) else {
-            logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
+              let handle = FileHandle(forReadingAtPath: filePath)
+        else {
+            logger.warning("Failed to open file: \(filePath, privacy: .public)")
             return
         }
 
@@ -88,7 +110,7 @@ class JSONLInterruptWatcher {
         source = newSource
         newSource.resume()
 
-        logger.debug("Started watching: \(self.sessionId.prefix(8), privacy: .public)...")
+        logger.debug("Started watching: \(sessionID.prefix(8), privacy: .public)...")
     }
 
     private func checkForInterrupt() {
@@ -110,7 +132,8 @@ class JSONLInterruptWatcher {
         }
 
         guard let newData = try? handle.readToEnd(),
-              let newContent = String(data: newData, encoding: .utf8) else {
+              let newContent = String(data: newData, encoding: .utf8)
+        else {
             return
         }
 
@@ -119,10 +142,10 @@ class JSONLInterruptWatcher {
         let lines = newContent.components(separatedBy: "\n")
         for line in lines where !line.isEmpty {
             if isInterruptLine(line) {
-                logger.info("Detected interrupt in session: \(self.sessionId.prefix(8), privacy: .public)")
+                logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
                 DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    self.delegate?.didDetectInterrupt(sessionId: self.sessionId)
+                    guard let self else { return }
+                    self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
                 }
                 return
             }
@@ -132,7 +155,7 @@ class JSONLInterruptWatcher {
     private func isInterruptLine(_ line: String) -> Bool {
         if line.contains("\"type\":\"user\"") {
             if line.contains("[Request interrupted by user]") ||
-               line.contains("[Request interrupted by user for tool use]") {
+                line.contains("[Request interrupted by user for tool use]") {
                 return true
             }
         }
@@ -152,52 +175,44 @@ class JSONLInterruptWatcher {
         return false
     }
 
-    /// Stop watching
-    func stop() {
-        queue.async { [weak self] in
-            self?.stopInternal()
-        }
-    }
-
     private func stopInternal() {
         if source != nil {
-            logger.debug("Stopped watching: \(self.sessionId.prefix(8), privacy: .public)...")
+            logger.debug("Stopped watching: \(sessionID.prefix(8), privacy: .public)...")
         }
         source?.cancel()
         source = nil
         // fileHandle closed by cancel handler
     }
-
-    deinit {
-        source?.cancel()
-    }
 }
 
-// MARK: - Interrupt Watcher Manager
+// MARK: - InterruptWatcherManager
 
 /// Manages interrupt watchers for all active sessions
 @MainActor
 class InterruptWatcherManager {
-    static let shared = InterruptWatcherManager()
-
-    private var watchers: [String: JSONLInterruptWatcher] = [:]
-    weak var delegate: JSONLInterruptWatcherDelegate?
+    // MARK: Lifecycle
 
     private init() {}
 
-    func startWatching(sessionId: String, cwd: String) {
-        guard watchers[sessionId] == nil else { return }
+    // MARK: Internal
 
-        let watcher = JSONLInterruptWatcher(sessionId: sessionId, cwd: cwd)
+    static let shared = InterruptWatcherManager()
+
+    weak var delegate: JSONLInterruptWatcherDelegate?
+
+    func startWatching(sessionID: String, cwd: String) {
+        guard watchers[sessionID] == nil else { return }
+
+        let watcher = JSONLInterruptWatcher(sessionID: sessionID, cwd: cwd)
         watcher.delegate = delegate
         watcher.start()
-        watchers[sessionId] = watcher
+        watchers[sessionID] = watcher
     }
 
     /// Stop watching a specific session
-    func stopWatching(sessionId: String) {
-        watchers[sessionId]?.stop()
-        watchers.removeValue(forKey: sessionId)
+    func stopWatching(sessionID: String) {
+        watchers[sessionID]?.stop()
+        watchers.removeValue(forKey: sessionID)
     }
 
     /// Stop all watchers
@@ -209,7 +224,11 @@ class InterruptWatcherManager {
     }
 
     /// Check if we're watching a session
-    func isWatching(sessionId: String) -> Bool {
-        watchers[sessionId] != nil
+    func isWatching(sessionID: String) -> Bool {
+        watchers[sessionID] != nil
     }
+
+    // MARK: Private
+
+    private var watchers: [String: JSONLInterruptWatcher] = [:]
 }

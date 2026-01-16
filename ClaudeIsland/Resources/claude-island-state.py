@@ -4,6 +4,7 @@ Claude Island Hook
 - Sends session state to ClaudeIsland.app via Unix socket
 - For PermissionRequest: waits for user decision from the app
 """
+
 import json
 import os
 import socket
@@ -26,7 +27,7 @@ def get_tty():
             ["ps", "-p", str(ppid), "-o", "tty="],
             capture_output=True,
             text=True,
-            timeout=2
+            timeout=2,
         )
         tty = result.stdout.strip()
         if tty and tty != "??" and tty != "-":

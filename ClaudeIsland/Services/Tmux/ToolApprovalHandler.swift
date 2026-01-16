@@ -10,12 +10,16 @@ import os.log
 
 /// Handles tool approval and rejection for Claude instances
 actor ToolApprovalHandler {
+    // MARK: Lifecycle
+
+    private init() {}
+
+    // MARK: Internal
+
     static let shared = ToolApprovalHandler()
 
     /// Logger for tool approval (nonisolated static for cross-context access)
     nonisolated static let logger = Logger(subsystem: "com.claudeisland", category: "Approval")
-
-    private init() {}
 
     /// Approve a tool once (sends '1' + Enter)
     func approveOnce(target: TmuxTarget) async -> Bool {
@@ -35,7 +39,7 @@ actor ToolApprovalHandler {
         }
 
         // If there's a message, send it after a brief delay
-        if let message = message, !message.isEmpty {
+        if let message, !message.isEmpty {
             try? await Task.sleep(for: .milliseconds(100))
             return await sendKeys(to: target, keys: message, pressEnter: true)
         }
@@ -47,6 +51,8 @@ actor ToolApprovalHandler {
     func sendMessage(_ message: String, to target: TmuxTarget) async -> Bool {
         await sendKeys(to: target, keys: message, pressEnter: true)
     }
+
+    // MARK: Private
 
     // MARK: - Private Methods
 

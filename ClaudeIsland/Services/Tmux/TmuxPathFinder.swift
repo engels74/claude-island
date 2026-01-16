@@ -9,11 +9,13 @@ import Foundation
 
 /// Finds and caches the tmux executable path
 actor TmuxPathFinder {
-    static let shared = TmuxPathFinder()
-
-    private var cachedPath: String?
+    // MARK: Lifecycle
 
     private init() {}
+
+    // MARK: Internal
+
+    static let shared = TmuxPathFinder()
 
     /// Get the path to tmux executable
     func getTmuxPath() -> String? {
@@ -22,10 +24,10 @@ actor TmuxPathFinder {
         }
 
         let possiblePaths = [
-            "/opt/homebrew/bin/tmux",  // Apple Silicon Homebrew
-            "/usr/local/bin/tmux",     // Intel Homebrew
-            "/usr/bin/tmux",           // System
-            "/bin/tmux"
+            "/opt/homebrew/bin/tmux", // Apple Silicon Homebrew
+            "/usr/local/bin/tmux", // Intel Homebrew
+            "/usr/bin/tmux", // System
+            "/bin/tmux",
         ]
 
         for path in possiblePaths {
@@ -42,4 +44,8 @@ actor TmuxPathFinder {
     func isTmuxAvailable() -> Bool {
         getTmuxPath() != nil
     }
+
+    // MARK: Private
+
+    private var cachedPath: String?
 }

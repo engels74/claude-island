@@ -6,15 +6,11 @@
 import Combine
 import Foundation
 
+// MARK: - ChatHistoryManager
+
 @MainActor
 class ChatHistoryManager: ObservableObject {
-    static let shared = ChatHistoryManager()
-
-    @Published private(set) var histories: [String: [ChatHistoryItem]] = [:]
-    @Published private(set) var agentDescriptions: [String: [String: String]] = [:]
-
-    private var loadedSessions: Set<String> = []
-    private var cancellables = Set<AnyCancellable>()
+    // MARK: Lifecycle
 
     private init() {
         SessionStore.shared.sessionsPublisher
@@ -25,37 +21,44 @@ class ChatHistoryManager: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // MARK: Internal
+
+    static let shared = ChatHistoryManager()
+
+    @Published private(set) var histories: [String: [ChatHistoryItem]] = [:]
+    @Published private(set) var agentDescriptions: [String: [String: String]] = [:]
+
     // MARK: - Public API
 
-    func history(for sessionId: String) -> [ChatHistoryItem] {
-        histories[sessionId] ?? []
+    func history(for sessionID: String) -> [ChatHistoryItem] {
+        histories[sessionID] ?? []
     }
 
-    func isLoaded(sessionId: String) -> Bool {
-        loadedSessions.contains(sessionId)
+    func isLoaded(sessionID: String) -> Bool {
+        loadedSessions.contains(sessionID)
     }
 
-    func loadFromFile(sessionId: String, cwd: String) async {
-        guard !loadedSessions.contains(sessionId) else { return }
-        loadedSessions.insert(sessionId)
-        await SessionStore.shared.process(.loadHistory(sessionId: sessionId, cwd: cwd))
+    func loadFromFile(sessionID: String, cwd: String) async {
+        guard !loadedSessions.contains(sessionID) else { return }
+        loadedSessions.insert(sessionID)
+        await SessionStore.shared.process(.loadHistory(sessionID: sessionID, cwd: cwd))
     }
 
-    func syncFromFile(sessionId: String, cwd: String) async {
+    func syncFromFile(sessionID: String, cwd: String) async {
         let messages = await ConversationParser.shared.parseFullConversation(
-            sessionId: sessionId,
+            sessionID: sessionID,
             cwd: cwd
         )
-        let completedTools = await ConversationParser.shared.completedToolIds(for: sessionId)
-        let toolResults = await ConversationParser.shared.toolResults(for: sessionId)
-        let structuredResults = await ConversationParser.shared.structuredResults(for: sessionId)
+        let completedTools = await ConversationParser.shared.completedToolIDs(for: sessionID)
+        let toolResults = await ConversationParser.shared.toolResults(for: sessionID)
+        let structuredResults = await ConversationParser.shared.structuredResults(for: sessionID)
 
         let payload = FileUpdatePayload(
-            sessionId: sessionId,
+            sessionID: sessionID,
             cwd: cwd,
             messages: messages,
-            isIncremental: false,  // Full sync
-            completedToolIds: completedTools,
+            isIncremental: false, // Full sync
+            completedToolIDs: completedTools,
             toolResults: toolResults,
             structuredResults: structuredResults
         )
@@ -63,13 +66,18 @@ class ChatHistoryManager: ObservableObject {
         await SessionStore.shared.process(.fileUpdated(payload))
     }
 
-    func clearHistory(for sessionId: String) {
-        loadedSessions.remove(sessionId)
-        histories.removeValue(forKey: sessionId)
+    func clearHistory(for sessionID: String) {
+        loadedSessions.remove(sessionID)
+        histories.removeValue(forKey: sessionID)
         Task {
-            await SessionStore.shared.process(.sessionEnded(sessionId: sessionId))
+            await SessionStore.shared.process(.sessionEnded(sessionID: sessionID))
         }
     }
+
+    // MARK: Private
+
+    private var loadedSessions: Set<String> = []
+    private var cancellables = Set<AnyCancellable>()
 
     // MARK: - State Updates
 
@@ -78,29 +86,29 @@ class ChatHistoryManager: ObservableObject {
         var newAgentDescriptions: [String: [String: String]] = [:]
         for session in sessions {
             let filteredItems = filterOutSubagentTools(session.chatItems)
-            newHistories[session.sessionId] = filteredItems
-            newAgentDescriptions[session.sessionId] = session.subagentState.agentDescriptions
-            loadedSessions.insert(session.sessionId)
+            newHistories[session.sessionID] = filteredItems
+            newAgentDescriptions[session.sessionID] = session.subagentState.agentDescriptions
+            loadedSessions.insert(session.sessionID)
         }
         histories = newHistories
         agentDescriptions = newAgentDescriptions
     }
 
     private func filterOutSubagentTools(_ items: [ChatHistoryItem]) -> [ChatHistoryItem] {
-        var subagentToolIds = Set<String>()
+        var subagentToolIDs = Set<String>()
         for item in items {
-            if case .toolCall(let tool) = item.type, tool.name == "Task" {
+            if case let .toolCall(tool) = item.type, tool.name == "Task" {
                 for subagentTool in tool.subagentTools {
-                    subagentToolIds.insert(subagentTool.id)
+                    subagentToolIDs.insert(subagentTool.id)
                 }
             }
         }
 
-        return items.filter { !subagentToolIds.contains($0.id) }
+        return items.filter { !subagentToolIDs.contains($0.id) }
     }
 }
 
-// MARK: - Models
+// MARK: - ChatHistoryItem
 
 struct ChatHistoryItem: Identifiable, Equatable, Sendable {
     let id: String
@@ -112,6 +120,8 @@ struct ChatHistoryItem: Identifiable, Equatable, Sendable {
     }
 }
 
+// MARK: - ChatHistoryItemType
+
 enum ChatHistoryItemType: Equatable, Sendable {
     case user(String)
     case assistant(String)
@@ -119,6 +129,8 @@ enum ChatHistoryItemType: Equatable, Sendable {
     case thinking(String)
     case interrupted
 }
+
+// MARK: - ToolCallItem
 
 struct ToolCallItem: Equatable, Sendable {
     let name: String
@@ -148,9 +160,9 @@ struct ToolCallItem: Equatable, Sendable {
         if let url = input["url"] {
             return url
         }
-        if let agentId = input["agentId"] {
+        if let agentID = input["agentId"] {
             let blocking = input["block"] == "true"
-            return blocking ? "Waiting..." : "Checking \(agentId.prefix(8))..."
+            return blocking ? "Waiting..." : "Checking \(agentID.prefix(8))..."
         }
         return input.values.first.map { String($0.prefix(60)) } ?? ""
     }
@@ -169,16 +181,18 @@ struct ToolCallItem: Equatable, Sendable {
         return ToolStatusDisplay.completed(for: name, result: structuredResult)
     }
 
-    // Custom Equatable implementation to handle structuredResult
+    /// Custom Equatable implementation to handle structuredResult
     static func == (lhs: ToolCallItem, rhs: ToolCallItem) -> Bool {
         lhs.name == rhs.name &&
-        lhs.input == rhs.input &&
-        lhs.status == rhs.status &&
-        lhs.result == rhs.result &&
-        lhs.structuredResult == rhs.structuredResult &&
-        lhs.subagentTools == rhs.subagentTools
+            lhs.input == rhs.input &&
+            lhs.status == rhs.status &&
+            lhs.result == rhs.result &&
+            lhs.structuredResult == rhs.structuredResult &&
+            lhs.subagentTools == rhs.subagentTools
     }
 }
+
+// MARK: - ToolStatus
 
 enum ToolStatus: Sendable, CustomStringConvertible {
     case running
@@ -187,32 +201,36 @@ enum ToolStatus: Sendable, CustomStringConvertible {
     case error
     case interrupted
 
+    // MARK: Internal
+
     nonisolated var description: String {
         switch self {
-        case .running: return "running"
-        case .waitingForApproval: return "waitingForApproval"
-        case .success: return "success"
-        case .error: return "error"
-        case .interrupted: return "interrupted"
+        case .running: "running"
+        case .waitingForApproval: "waitingForApproval"
+        case .success: "success"
+        case .error: "error"
+        case .interrupted: "interrupted"
         }
     }
 }
 
-// Explicit nonisolated Equatable conformance to avoid actor isolation issues
+// MARK: Equatable
+
+/// Explicit nonisolated Equatable conformance to avoid actor isolation issues
 extension ToolStatus: Equatable {
     nonisolated static func == (lhs: ToolStatus, rhs: ToolStatus) -> Bool {
         switch (lhs, rhs) {
-        case (.running, .running): return true
-        case (.waitingForApproval, .waitingForApproval): return true
-        case (.success, .success): return true
-        case (.error, .error): return true
-        case (.interrupted, .interrupted): return true
-        default: return false
+        case (.running, .running): true
+        case (.waitingForApproval, .waitingForApproval): true
+        case (.success, .success): true
+        case (.error, .error): true
+        case (.interrupted, .interrupted): true
+        default: false
         }
     }
 }
 
-// MARK: - Subagent Tool Call
+// MARK: - SubagentToolCall
 
 /// Represents a tool call made by a subagent (Task tool)
 struct SubagentToolCall: Equatable, Identifiable, Sendable {

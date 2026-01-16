@@ -24,30 +24,36 @@ xcodebuild -scheme ClaudeIsland -configuration Release build
 ## Architecture
 
 ### Communication Flow
+
 1. **Hook Installation** (`HookInstaller.swift`) - On launch, installs `claude-island-state.py` into `~/.claude/hooks/` and updates `~/.claude/settings.json` to register hooks for all Claude Code events
 2. **Unix Socket Server** (`HookSocketServer.swift`) - Listens on `/tmp/claude-island.sock` for real-time events from the Python hook script. Uses GCD DispatchSource for non-blocking I/O
 3. **Session State** (`SessionStore.swift`) - Swift actor that serves as single source of truth. All state mutations flow through `process(_ event: SessionEvent)`
 4. **JSONL Parsing** (`ConversationParser.swift`) - Parses `~/.claude/projects/<project>/<session>.jsonl` files for chat history and tool results
 
 ### Event Pipeline
+
 ```
 Python Hook → Unix Socket → HookEvent → SessionStore.process() → SessionState → UI via Combine
 ```
 
 ### Key Types
+
 - `SessionPhase` - idle, processing, waitingForApproval, waitingForInput, compacting
 - `SessionState` - Full state for one Claude session including chatItems, toolTracker, subagentState
 - `HookEvent` - Decoded events from the Python hook (PreToolUse, PostToolUse, PermissionRequest, etc.)
 - `ToolResultData` - Structured tool results (bash output, file content, task results, etc.)
 
 ### UI Layer
+
 - **NotchViewModel** - State machine for notch open/close/pop animations
 - **NotchView** - SwiftUI root view with animated transitions
 - **ChatView** - Markdown-rendered conversation with tool result displays
 - **NotchWindow** - NSPanel configured as overlay above all windows
 
 ### Permission Handling
+
 When Claude needs tool approval:
+
 1. `PermissionRequest` hook fires, socket stays open awaiting response
 2. `SessionStore` transitions to `.waitingForApproval` phase
 3. Notch expands showing approve/deny buttons

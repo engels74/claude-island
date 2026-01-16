@@ -9,11 +9,15 @@ import AppKit
 import Combine
 import SwiftUI
 
+// MARK: - NotchStatus
+
 enum NotchStatus: Equatable {
     case closed
     case opened
     case popping
 }
+
+// MARK: - NotchOpenReason
 
 enum NotchOpenReason {
     case click
@@ -23,33 +27,51 @@ enum NotchOpenReason {
     case unknown
 }
 
+// MARK: - NotchContentType
+
 enum NotchContentType: Equatable {
     case instances
     case menu
     case chat(SessionState)
 
+    // MARK: Internal
+
     var id: String {
         switch self {
-        case .instances: return "instances"
-        case .menu: return "menu"
-        case .chat(let session): return "chat-\(session.sessionId)"
+        case .instances: "instances"
+        case .menu: "menu"
+        case let .chat(session): "chat-\(session.sessionID)"
         }
     }
 }
 
+// MARK: - NotchViewModel
+
 @MainActor
 class NotchViewModel: ObservableObject {
+    // MARK: Lifecycle
+
+    // MARK: - Initialization
+
+    init(deviceNotchRect: CGRect, screenRect: CGRect, windowHeight: CGFloat, hasPhysicalNotch: Bool) {
+        self.geometry = NotchGeometry(
+            deviceNotchRect: deviceNotchRect,
+            screenRect: screenRect,
+            windowHeight: windowHeight
+        )
+        self.hasPhysicalNotch = hasPhysicalNotch
+        setupEventHandlers()
+        observeSelectors()
+    }
+
+    // MARK: Internal
+
     // MARK: - Published State
 
     @Published var status: NotchStatus = .closed
     @Published var openReason: NotchOpenReason = .unknown
     @Published var contentType: NotchContentType = .instances
-    @Published var isHovering: Bool = false
-
-    // MARK: - Dependencies
-
-    private let screenSelector = ScreenSelector.shared
-    private let soundSelector = SoundSelector.shared
+    @Published var isHovering = false
 
     // MARK: - Geometry
 
@@ -66,18 +88,18 @@ class NotchViewModel: ObservableObject {
         switch contentType {
         case .chat:
             // Large size for chat view
-            return CGSize(
+            CGSize(
                 width: min(screenRect.width * 0.5, 600),
                 height: 580
             )
         case .menu:
             // Compact size for settings menu
-            return CGSize(
+            CGSize(
                 width: min(screenRect.width * 0.4, 480),
                 height: 420 + screenSelector.expandedPickerHeight + soundSelector.expandedPickerHeight
             )
         case .instances:
-            return CGSize(
+            CGSize(
                 width: min(screenRect.width * 0.4, 480),
                 height: 320
             )
@@ -90,23 +112,90 @@ class NotchViewModel: ObservableObject {
         .easeOut(duration: 0.25)
     }
 
-    // MARK: - Private
+    func notchOpen(reason: NotchOpenReason = .unknown) {
+        openReason = reason
+        status = .opened
+
+        // Don't restore chat on notification - show instances list instead
+        if reason == .notification {
+            currentChatSession = nil
+            return
+        }
+
+        // Restore chat session if we had one open before
+        if let chatSession = currentChatSession {
+            // Avoid unnecessary updates if already showing this chat
+            if case let .chat(current) = contentType, current.sessionID == chatSession.sessionID {
+                return
+            }
+            contentType = .chat(chatSession)
+        }
+    }
+
+    func notchClose() {
+        // Save chat session before closing if in chat mode
+        if case let .chat(session) = contentType {
+            currentChatSession = session
+        }
+        status = .closed
+        contentType = .instances
+    }
+
+    func notchPop() {
+        guard status == .closed else { return }
+        status = .popping
+    }
+
+    func notchUnpop() {
+        guard status == .popping else { return }
+        status = .closed
+    }
+
+    func toggleMenu() {
+        contentType = contentType == .menu ? .instances : .menu
+    }
+
+    func showChat(for session: SessionState) {
+        // Avoid unnecessary updates if already showing this chat
+        if case let .chat(current) = contentType, current.sessionID == session.sessionID {
+            return
+        }
+        contentType = .chat(session)
+    }
+
+    /// Go back to instances list and clear saved chat state
+    func exitChat() {
+        currentChatSession = nil
+        contentType = .instances
+    }
+
+    /// Perform boot animation: expand briefly then collapse
+    func performBootAnimation() {
+        notchOpen(reason: .boot)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self, openReason == .boot else { return }
+            notchClose()
+        }
+    }
+
+    // MARK: Private
+
+    // MARK: - Dependencies
+
+    private let screenSelector = ScreenSelector.shared
+    private let soundSelector = SoundSelector.shared
 
     private var cancellables = Set<AnyCancellable>()
     private let events = EventMonitors.shared
     private var hoverTimer: DispatchWorkItem?
 
-    // MARK: - Initialization
+    /// The chat session we're viewing (persists across close/open)
+    private var currentChatSession: SessionState?
 
-    init(deviceNotchRect: CGRect, screenRect: CGRect, windowHeight: CGFloat, hasPhysicalNotch: Bool) {
-        self.geometry = NotchGeometry(
-            deviceNotchRect: deviceNotchRect,
-            screenRect: screenRect,
-            windowHeight: windowHeight
-        )
-        self.hasPhysicalNotch = hasPhysicalNotch
-        setupEventHandlers()
-        observeSelectors()
+    /// Whether we're in chat mode (sticky behavior)
+    private var isInChatMode: Bool {
+        if case .chat = contentType { return true }
+        return false
     }
 
     private func observeSelectors() {
@@ -137,15 +226,6 @@ class NotchViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Whether we're in chat mode (sticky behavior)
-    private var isInChatMode: Bool {
-        if case .chat = contentType { return true }
-        return false
-    }
-
-    /// The chat session we're viewing (persists across close/open)
-    private var currentChatSession: SessionState?
-
     private func handleMouseMove(_ location: CGPoint) {
         let inNotch = geometry.isPointInNotch(location)
         let inOpened = status == .opened && geometry.isPointInOpenedPanel(location, size: openedSize)
@@ -164,8 +244,8 @@ class NotchViewModel: ObservableObject {
         // Start hover timer to auto-expand after 1 second
         if isHovering && (status == .closed || status == .popping) {
             let workItem = DispatchWorkItem { [weak self] in
-                guard let self = self, self.isHovering else { return }
-                self.notchOpen(reason: .hover)
+                guard let self, isHovering else { return }
+                notchOpen(reason: .hover)
             }
             hoverTimer = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
@@ -187,7 +267,8 @@ class NotchViewModel: ObservableObject {
                     notchClose()
                 }
             }
-        case .closed, .popping:
+        case .closed,
+             .popping:
             if geometry.isPointInNotch(location) {
                 notchOpen(reason: .click)
             }
@@ -222,74 +303,6 @@ class NotchViewModel: ObservableObject {
             ) {
                 mouseUp.post(tap: .cghidEventTap)
             }
-        }
-    }
-
-    // MARK: - Actions
-
-    func notchOpen(reason: NotchOpenReason = .unknown) {
-        openReason = reason
-        status = .opened
-
-        // Don't restore chat on notification - show instances list instead
-        if reason == .notification {
-            currentChatSession = nil
-            return
-        }
-
-        // Restore chat session if we had one open before
-        if let chatSession = currentChatSession {
-            // Avoid unnecessary updates if already showing this chat
-            if case .chat(let current) = contentType, current.sessionId == chatSession.sessionId {
-                return
-            }
-            contentType = .chat(chatSession)
-        }
-    }
-
-    func notchClose() {
-        // Save chat session before closing if in chat mode
-        if case .chat(let session) = contentType {
-            currentChatSession = session
-        }
-        status = .closed
-        contentType = .instances
-    }
-
-    func notchPop() {
-        guard status == .closed else { return }
-        status = .popping
-    }
-
-    func notchUnpop() {
-        guard status == .popping else { return }
-        status = .closed
-    }
-
-    func toggleMenu() {
-        contentType = contentType == .menu ? .instances : .menu
-    }
-
-    func showChat(for session: SessionState) {
-        // Avoid unnecessary updates if already showing this chat
-        if case .chat(let current) = contentType, current.sessionId == session.sessionId {
-            return
-        }
-        contentType = .chat(session)
-    }
-
-    /// Go back to instances list and clear saved chat state
-    func exitChat() {
-        currentChatSession = nil
-        contentType = .instances
-    }
-
-    /// Perform boot animation: expand briefly then collapse
-    func performBootAnimation() {
-        notchOpen(reason: .boot)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self, self.openReason == .boot else { return }
-            self.notchClose()
         }
     }
 }

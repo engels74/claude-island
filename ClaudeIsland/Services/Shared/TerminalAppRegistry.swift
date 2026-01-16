@@ -27,11 +27,11 @@ struct TerminalAppRegistry: Sendable {
         "st",
         "urxvt",
         "xterm",
-        "Code",           // VS Code
+        "Code", // VS Code
         "Code - Insiders",
         "Cursor",
         "Windsurf",
-        "zed"
+        "zed",
     ]
 
     /// Bundle identifiers for terminal apps (for window enumeration)
@@ -47,9 +47,9 @@ struct TerminalAppRegistry: Sendable {
         "com.github.wez.wezterm",
         "com.microsoft.VSCode",
         "com.microsoft.VSCodeInsiders",
-        "com.todesktop.230313mzl4w4u92",  // Cursor
+        "com.todesktop.230313mzl4w4u92", // Cursor
         "com.exafunction.windsurf",
-        "dev.zed.Zed"
+        "dev.zed.Zed",
     ]
 
     /// Check if an app name or command path is a known terminal
@@ -68,7 +68,7 @@ struct TerminalAppRegistry: Sendable {
     }
 
     /// Check if a bundle identifier is a known terminal
-    static func isTerminalBundle(_ bundleId: String) -> Bool {
-        bundleIdentifiers.contains(bundleId)
+    static func isTerminalBundle(_ bundleID: String) -> Bool {
+        bundleIdentifiers.contains(bundleID)
     }
 }

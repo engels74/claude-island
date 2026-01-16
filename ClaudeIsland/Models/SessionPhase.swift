@@ -8,9 +8,11 @@
 
 import Foundation
 
+// MARK: - PermissionContext
+
 /// Permission context for tools waiting for approval
 struct PermissionContext: Sendable {
-    let toolUseId: String
+    let toolUseID: String
     let toolName: String
     let toolInput: [String: AnyCodable]?
     let receivedAt: Date
@@ -20,18 +22,17 @@ struct PermissionContext: Sendable {
         guard let input = toolInput else { return nil }
         var parts: [String] = []
         for (key, value) in input {
-            let valueStr: String
-            switch value.value {
+            let valueStr: String = switch value.value {
             case let str as String:
-                valueStr = str.count > 100 ? String(str.prefix(100)) + "..." : str
+                str.count > 100 ? String(str.prefix(100)) + "..." : str
             case let num as Int:
-                valueStr = String(num)
+                String(num)
             case let num as Double:
-                valueStr = String(num)
+                String(num)
             case let bool as Bool:
-                valueStr = bool ? "true" : "false"
+                bool ? "true" : "false"
             default:
-                valueStr = "..."
+                "..."
             }
             parts.append("\(key): \(valueStr)")
         }
@@ -39,14 +40,18 @@ struct PermissionContext: Sendable {
     }
 }
 
+// MARK: Equatable
+
 extension PermissionContext: Equatable {
     nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
         // Compare by identity fields only (AnyCodable doesn't conform to Equatable)
-        lhs.toolUseId == rhs.toolUseId &&
-        lhs.toolName == rhs.toolName &&
-        lhs.receivedAt == rhs.receivedAt
+        lhs.toolUseID == rhs.toolUseID &&
+            lhs.toolName == rhs.toolName &&
+            lhs.receivedAt == rhs.receivedAt
     }
 }
+
+// MARK: - SessionPhase
 
 /// Explicit session phases - the state machine
 enum SessionPhase: Sendable {
@@ -68,91 +73,27 @@ enum SessionPhase: Sendable {
     /// Session has ended
     case ended
 
-    // MARK: - State Machine Transitions
-
-    /// Check if a transition to the target phase is valid
-    nonisolated func canTransition(to next: SessionPhase) -> Bool {
-        switch (self, next) {
-        // Terminal state - no transitions out
-        case (.ended, _):
-            return false
-
-        // Any state can transition to ended
-        case (_, .ended):
-            return true
-
-        // Idle transitions
-        case (.idle, .processing):
-            return true
-        case (.idle, .waitingForApproval):
-            return true  // Direct permission request on idle session
-        case (.idle, .compacting):
-            return true
-
-        // Processing transitions
-        case (.processing, .waitingForInput):
-            return true
-        case (.processing, .waitingForApproval):
-            return true
-        case (.processing, .compacting):
-            return true
-        case (.processing, .idle):
-            return true  // Interrupt or quick completion
-
-        // WaitingForInput transitions
-        case (.waitingForInput, .processing):
-            return true
-        case (.waitingForInput, .idle):
-            return true  // Can become idle
-        case (.waitingForInput, .compacting):
-            return true
-
-        // WaitingForApproval transitions
-        case (.waitingForApproval, .processing):
-            return true  // Approved - tool will run
-        case (.waitingForApproval, .idle):
-            return true  // Denied or cancelled
-        case (.waitingForApproval, .waitingForInput):
-            return true  // Denied and Claude stopped
-        case (.waitingForApproval, .waitingForApproval):
-            return true  // Another tool needs approval (multiple pending permissions)
-
-        // Compacting transitions
-        case (.compacting, .processing):
-            return true
-        case (.compacting, .idle):
-            return true
-        case (.compacting, .waitingForInput):
-            return true
-
-        // Allow staying in same state (no-op transitions)
-        default:
-            return self == next
-        }
-    }
-
-    /// Attempt to transition to a new phase, returns the new phase if valid
-    nonisolated func transition(to next: SessionPhase) -> SessionPhase? {
-        canTransition(to: next) ? next : nil
-    }
+    // MARK: Internal
 
     /// Whether this phase indicates the session needs user attention
     var needsAttention: Bool {
         switch self {
-        case .waitingForApproval, .waitingForInput:
-            return true
+        case .waitingForApproval,
+             .waitingForInput:
+            true
         default:
-            return false
+            false
         }
     }
 
     /// Whether this phase indicates active processing
     var isActive: Bool {
         switch self {
-        case .processing, .compacting:
-            return true
+        case .processing,
+             .compacting:
+            true
         default:
-            return false
+            false
         }
     }
 
@@ -166,47 +107,108 @@ enum SessionPhase: Sendable {
 
     /// Extract tool name if waiting for approval
     var approvalToolName: String? {
-        if case .waitingForApproval(let ctx) = self {
+        if case let .waitingForApproval(ctx) = self {
             return ctx.toolName
         }
         return nil
     }
+
+    // MARK: - State Machine Transitions
+
+    /// Check if a transition to the target phase is valid
+    nonisolated func canTransition(to next: SessionPhase) -> Bool {
+        switch (self, next) {
+        // Terminal state - no transitions out
+        case (.ended, _):
+            false
+        // Any state can transition to ended
+        case (_, .ended):
+            true
+        // Idle transitions
+        case (.idle, .processing):
+            true
+        case (.idle, .waitingForApproval):
+            true // Direct permission request on idle session
+        case (.idle, .compacting):
+            true
+        // Processing transitions
+        case (.processing, .waitingForInput):
+            true
+        case (.processing, .waitingForApproval):
+            true
+        case (.processing, .compacting):
+            true
+        case (.processing, .idle):
+            true // Interrupt or quick completion
+        // WaitingForInput transitions
+        case (.waitingForInput, .processing):
+            true
+        case (.waitingForInput, .idle):
+            true // Can become idle
+        case (.waitingForInput, .compacting):
+            true
+        // WaitingForApproval transitions
+        case (.waitingForApproval, .processing):
+            true // Approved - tool will run
+        case (.waitingForApproval, .idle):
+            true // Denied or cancelled
+        case (.waitingForApproval, .waitingForInput):
+            true // Denied and Claude stopped
+        case (.waitingForApproval, .waitingForApproval):
+            true // Another tool needs approval (multiple pending permissions)
+        // Compacting transitions
+        case (.compacting, .processing):
+            true
+        case (.compacting, .idle):
+            true
+        case (.compacting, .waitingForInput):
+            true
+        // Allow staying in same state (no-op transitions)
+        default:
+            self == next
+        }
+    }
+
+    /// Attempt to transition to a new phase, returns the new phase if valid
+    nonisolated func transition(to next: SessionPhase) -> SessionPhase? {
+        canTransition(to: next) ? next : nil
+    }
 }
 
-// MARK: - Equatable
+// MARK: Equatable
 
 extension SessionPhase: Equatable {
     nonisolated static func == (lhs: SessionPhase, rhs: SessionPhase) -> Bool {
         switch (lhs, rhs) {
-        case (.idle, .idle): return true
-        case (.processing, .processing): return true
-        case (.waitingForInput, .waitingForInput): return true
-        case (.waitingForApproval(let ctx1), .waitingForApproval(let ctx2)):
-            return ctx1 == ctx2
-        case (.compacting, .compacting): return true
-        case (.ended, .ended): return true
-        default: return false
+        case (.idle, .idle): true
+        case (.processing, .processing): true
+        case (.waitingForInput, .waitingForInput): true
+        case let (.waitingForApproval(ctx1), .waitingForApproval(ctx2)):
+            ctx1 == ctx2
+        case (.compacting, .compacting): true
+        case (.ended, .ended): true
+        default: false
         }
     }
 }
 
-// MARK: - Debug Description
+// MARK: CustomStringConvertible
 
 extension SessionPhase: CustomStringConvertible {
     nonisolated var description: String {
         switch self {
         case .idle:
-            return "idle"
+            "idle"
         case .processing:
-            return "processing"
+            "processing"
         case .waitingForInput:
-            return "waitingForInput"
-        case .waitingForApproval(let ctx):
-            return "waitingForApproval(\(ctx.toolName))"
+            "waitingForInput"
+        case let .waitingForApproval(ctx):
+            "waitingForApproval(\(ctx.toolName))"
         case .compacting:
-            return "compacting"
+            "compacting"
         case .ended:
-            return "ended"
+            "ended"
         }
     }
 }

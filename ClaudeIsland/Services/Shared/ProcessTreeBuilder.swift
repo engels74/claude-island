@@ -7,12 +7,11 @@
 
 import Foundation
 
+// MARK: - ProcessInfo
+
 /// Information about a process in the tree
 struct ProcessInfo: Sendable {
-    let pid: Int
-    let ppid: Int
-    let command: String
-    let tty: String?
+    // MARK: Lifecycle
 
     nonisolated init(pid: Int, ppid: Int, command: String, tty: String?) {
         self.pid = pid
@@ -20,13 +19,26 @@ struct ProcessInfo: Sendable {
         self.command = command
         self.tty = tty
     }
+
+    // MARK: Internal
+
+    let pid: Int
+    let ppid: Int
+    let command: String
+    let tty: String?
 }
+
+// MARK: - ProcessTreeBuilder
 
 /// Builds and queries the system process tree
 struct ProcessTreeBuilder: Sendable {
-    nonisolated static let shared = ProcessTreeBuilder()
+    // MARK: Lifecycle
 
     private nonisolated init() {}
+
+    // MARK: Internal
+
+    nonisolated static let shared = ProcessTreeBuilder()
 
     /// Build a process tree mapping PID -> ProcessInfo
     nonisolated func buildTree() -> [Int: ProcessInfo] {
@@ -43,7 +55,8 @@ struct ProcessTreeBuilder: Sendable {
 
             guard parts.count >= 4,
                   let pid = Int(parts[0]),
-                  let ppid = Int(parts[1]) else { continue }
+                  let ppid = Int(parts[1])
+            else { continue }
 
             let tty = parts[2] == "??" ? nil : parts[2]
             let command = parts[3...].joined(separator: " ")
@@ -72,7 +85,7 @@ struct ProcessTreeBuilder: Sendable {
     }
 
     /// Walk up the process tree to find the terminal app PID
-    nonisolated func findTerminalPid(forProcess pid: Int, tree: [Int: ProcessInfo]) -> Int? {
+    nonisolated func findTerminalPID(forProcess pid: Int, tree: [Int: ProcessInfo]) -> Int? {
         var current = pid
         var depth = 0
 
@@ -90,13 +103,13 @@ struct ProcessTreeBuilder: Sendable {
         return nil
     }
 
-    /// Check if targetPid is a descendant of ancestorPid
-    nonisolated func isDescendant(targetPid: Int, ofAncestor ancestorPid: Int, tree: [Int: ProcessInfo]) -> Bool {
-        var current = targetPid
+    /// Check if targetPID is a descendant of ancestorPID
+    nonisolated func isDescendant(targetPID: Int, ofAncestor ancestorPID: Int, tree: [Int: ProcessInfo]) -> Bool {
+        var current = targetPID
         var depth = 0
 
         while current > 1 && depth < 50 {
-            if current == ancestorPid {
+            if current == ancestorPID {
                 return true
             }
             guard let info = tree[current] else { break }
@@ -114,10 +127,10 @@ struct ProcessTreeBuilder: Sendable {
 
         while !queue.isEmpty {
             let current = queue.removeFirst()
-            for (childPid, info) in tree where info.ppid == current {
-                if !descendants.contains(childPid) {
-                    descendants.insert(childPid)
-                    queue.append(childPid)
+            for (childPID, info) in tree where info.ppid == current {
+                if !descendants.contains(childPID) {
+                    descendants.insert(childPID)
+                    queue.append(childPID)
                 }
             }
         }
@@ -126,7 +139,7 @@ struct ProcessTreeBuilder: Sendable {
     }
 
     /// Get working directory for a process using lsof
-    nonisolated func getWorkingDirectory(forPid pid: Int) -> String? {
+    nonisolated func getWorkingDirectory(forPID pid: Int) -> String? {
         guard let output = ProcessExecutor.shared.runSyncOrNil("/usr/sbin/lsof", arguments: ["-p", String(pid), "-Fn"]) else {
             return nil
         }

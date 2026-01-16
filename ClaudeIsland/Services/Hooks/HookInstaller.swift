@@ -7,7 +7,8 @@
 
 import Foundation
 
-struct HookInstaller {
+enum HookInstaller {
+    // MARK: Internal
 
     /// Install hook script and update settings.json on app launch
     static func installIfNeeded() {
@@ -34,6 +35,89 @@ struct HookInstaller {
         updateSettings(at: settings)
     }
 
+    /// Check if hooks are currently installed
+    static func isInstalled() -> Bool {
+        let claudeDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude")
+        let settings = claudeDir.appendingPathComponent("settings.json")
+
+        guard let data = try? Data(contentsOf: settings),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any]
+        else {
+            return false
+        }
+
+        for (_, value) in hooks {
+            if let entries = value as? [[String: Any]] {
+                for entry in entries {
+                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
+                        for hook in entryHooks {
+                            if let cmd = hook["command"] as? String,
+                               cmd.contains("claude-island-state.py") {
+                                return true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /// Uninstall hooks from settings.json and remove script
+    static func uninstall() {
+        let claudeDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude")
+        let hooksDir = claudeDir.appendingPathComponent("hooks")
+        let pythonScript = hooksDir.appendingPathComponent("claude-island-state.py")
+        let settings = claudeDir.appendingPathComponent("settings.json")
+
+        try? FileManager.default.removeItem(at: pythonScript)
+
+        guard let data = try? Data(contentsOf: settings),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var hooks = json["hooks"] as? [String: Any]
+        else {
+            return
+        }
+
+        for (event, value) in hooks {
+            if var entries = value as? [[String: Any]] {
+                entries.removeAll { entry in
+                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
+                        return entryHooks.contains { hook in
+                            let cmd = hook["command"] as? String ?? ""
+                            return cmd.contains("claude-island-state.py")
+                        }
+                    }
+                    return false
+                }
+
+                if entries.isEmpty {
+                    hooks.removeValue(forKey: event)
+                } else {
+                    hooks[event] = entries
+                }
+            }
+        }
+
+        if hooks.isEmpty {
+            json.removeValue(forKey: "hooks")
+        } else {
+            json["hooks"] = hooks
+        }
+
+        if let data = try? JSONSerialization.data(
+            withJSONObject: json,
+            options: [.prettyPrinted, .sortedKeys]
+        ) {
+            try? data.write(to: settings)
+        }
+    }
+
+    // MARK: Private
+
     private static func updateSettings(at settingsURL: URL) {
         var json: [String: Any] = [:]
         if let data = try? Data(contentsOf: settingsURL),
@@ -50,7 +134,7 @@ struct HookInstaller {
         let withoutMatcher: [[String: Any]] = [["hooks": hookEntry]]
         let preCompactConfig: [[String: Any]] = [
             ["matcher": "auto", "hooks": hookEntry],
-            ["matcher": "manual", "hooks": hookEntry]
+            ["matcher": "manual", "hooks": hookEntry],
         ]
 
         var hooks = json["hooks"] as? [String: Any] ?? [:]
@@ -95,85 +179,6 @@ struct HookInstaller {
             options: [.prettyPrinted, .sortedKeys]
         ) {
             try? data.write(to: settingsURL)
-        }
-    }
-
-    /// Check if hooks are currently installed
-    static func isInstalled() -> Bool {
-        let claudeDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude")
-        let settings = claudeDir.appendingPathComponent("settings.json")
-
-        guard let data = try? Data(contentsOf: settings),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let hooks = json["hooks"] as? [String: Any] else {
-            return false
-        }
-
-        for (_, value) in hooks {
-            if let entries = value as? [[String: Any]] {
-                for entry in entries {
-                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
-                        for hook in entryHooks {
-                            if let cmd = hook["command"] as? String,
-                               cmd.contains("claude-island-state.py") {
-                                return true
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false
-    }
-
-    /// Uninstall hooks from settings.json and remove script
-    static func uninstall() {
-        let claudeDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude")
-        let hooksDir = claudeDir.appendingPathComponent("hooks")
-        let pythonScript = hooksDir.appendingPathComponent("claude-island-state.py")
-        let settings = claudeDir.appendingPathComponent("settings.json")
-
-        try? FileManager.default.removeItem(at: pythonScript)
-
-        guard let data = try? Data(contentsOf: settings),
-              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var hooks = json["hooks"] as? [String: Any] else {
-            return
-        }
-
-        for (event, value) in hooks {
-            if var entries = value as? [[String: Any]] {
-                entries.removeAll { entry in
-                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
-                        return entryHooks.contains { hook in
-                            let cmd = hook["command"] as? String ?? ""
-                            return cmd.contains("claude-island-state.py")
-                        }
-                    }
-                    return false
-                }
-
-                if entries.isEmpty {
-                    hooks.removeValue(forKey: event)
-                } else {
-                    hooks[event] = entries
-                }
-            }
-        }
-
-        if hooks.isEmpty {
-            json.removeValue(forKey: "hooks")
-        } else {
-            json["hooks"] = hooks
-        }
-
-        if let data = try? JSONSerialization.data(
-            withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys]
-        ) {
-            try? data.write(to: settings)
         }
     }
 

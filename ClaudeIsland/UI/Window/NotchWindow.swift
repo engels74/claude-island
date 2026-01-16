@@ -9,8 +9,10 @@
 
 import AppKit
 
-// Use NSPanel subclass for non-activating behavior
+/// Use NSPanel subclass for non-activating behavior
 class NotchPanel: NSPanel {
+    // MARK: Lifecycle
+
     override init(
         contentRect: NSRect,
         styleMask style: NSWindow.StyleMask,
@@ -43,7 +45,7 @@ class NotchPanel: NSPanel {
             .fullScreenAuxiliary,
             .stationary,
             .canJoinAllSpaces,
-            .ignoresCycle
+            .ignoresCycle,
         ]
 
         // Above the menu bar
@@ -61,6 +63,8 @@ class NotchPanel: NSPanel {
         acceptsMouseMovedEvents = false
     }
 
+    // MARK: Internal
+
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
@@ -69,12 +73,12 @@ class NotchPanel: NSPanel {
     override func sendEvent(_ event: NSEvent) {
         // For mouse events, check if we should pass through
         if event.type == .leftMouseDown || event.type == .leftMouseUp ||
-           event.type == .rightMouseDown || event.type == .rightMouseUp {
+            event.type == .rightMouseDown || event.type == .rightMouseUp {
             // Get the location in window coordinates
             let locationInWindow = event.locationInWindow
 
             // Check if any view wants to handle this event
-            if let contentView = self.contentView,
+            if let contentView,
                contentView.hitTest(locationInWindow) == nil {
                 // No view wants this event - pass it through to windows behind
                 // by temporarily ignoring mouse events and re-posting
@@ -91,6 +95,8 @@ class NotchPanel: NSPanel {
 
         super.sendEvent(event)
     }
+
+    // MARK: Private
 
     private func repostMouseEvent(_ event: NSEvent, at screenLocation: NSPoint) {
         // Convert to CGEvent coordinate system (Y from top of screen)

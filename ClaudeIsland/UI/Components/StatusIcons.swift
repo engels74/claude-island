@@ -7,18 +7,23 @@
 
 import SwiftUI
 
-// MARK: - Waiting for Input Icon (speech bubble)
+// MARK: - WaitingForInputIcon
+
 struct WaitingForInputIcon: View {
-    let size: CGFloat
-    let color: Color
+    // MARK: Lifecycle
 
     init(size: CGFloat = 12, color: Color = TerminalColors.green) {
         self.size = size
         self.color = color
     }
 
+    // MARK: Internal
+
+    let size: CGFloat
+    let color: Color
+
     var body: some View {
-        Canvas { context, canvasSize in
+        Canvas { context, _ in
             let scale = size / 30.0
             let dotSize = 4 * scale
 
@@ -47,8 +52,8 @@ struct WaitingForInputIcon: View {
             // Draw solid dots
             for (x, y) in solidDots {
                 let rect = CGRect(
-                    x: x * scale - dotSize/2,
-                    y: y * scale - dotSize/2,
+                    x: x * scale - dotSize / 2,
+                    y: y * scale - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -58,8 +63,8 @@ struct WaitingForInputIcon: View {
             // Draw faded dots
             for (x, y) in fadedDots {
                 let rect = CGRect(
-                    x: x * scale - dotSize/2,
-                    y: y * scale - dotSize/2,
+                    x: x * scale - dotSize / 2,
+                    y: y * scale - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -70,18 +75,23 @@ struct WaitingForInputIcon: View {
     }
 }
 
-// MARK: - Waiting for Approval Icon (hand/stop)
+// MARK: - WaitingForApprovalIcon
+
 struct WaitingForApprovalIcon: View {
-    let size: CGFloat
-    let color: Color
+    // MARK: Lifecycle
 
     init(size: CGFloat = 12, color: Color = TerminalColors.amber) {
         self.size = size
         self.color = color
     }
 
+    // MARK: Internal
+
+    let size: CGFloat
+    let color: Color
+
     var body: some View {
-        Canvas { context, canvasSize in
+        Canvas { context, _ in
             let scale = size / 30.0
             let dotSize = 4 * scale
 
@@ -99,8 +109,8 @@ struct WaitingForApprovalIcon: View {
 
             for (x, y) in solidDots {
                 let rect = CGRect(
-                    x: x * scale - dotSize/2,
-                    y: y * scale - dotSize/2,
+                    x: x * scale - dotSize / 2,
+                    y: y * scale - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -111,19 +121,23 @@ struct WaitingForApprovalIcon: View {
     }
 }
 
-// MARK: - Running/Processing Icon (hourglass) - Animated
+// MARK: - RunningIcon
+
 struct RunningIcon: View {
-    let size: CGFloat
-    let color: Color
-    @State private var rotation: Double = 0
+    // MARK: Lifecycle
 
     init(size: CGFloat = 12, color: Color = TerminalColors.cyan) {
         self.size = size
         self.color = color
     }
 
+    // MARK: Internal
+
+    let size: CGFloat
+    let color: Color
+
     var body: some View {
-        Canvas { context, canvasSize in
+        Canvas { context, _ in
             let scale = size / 30.0
             let dotSize = 4 * scale
 
@@ -149,8 +163,8 @@ struct RunningIcon: View {
             // Draw solid dots
             for (x, y) in solidDots {
                 let rect = CGRect(
-                    x: x * scale - dotSize/2,
-                    y: y * scale - dotSize/2,
+                    x: x * scale - dotSize / 2,
+                    y: y * scale - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -160,8 +174,8 @@ struct RunningIcon: View {
             // Draw faded dots
             for (x, y) in fadedDots {
                 let rect = CGRect(
-                    x: x * scale - dotSize/2,
-                    y: y * scale - dotSize/2,
+                    x: x * scale - dotSize / 2,
+                    y: y * scale - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -173,38 +187,47 @@ struct RunningIcon: View {
         .onAppear {
             withAnimation(
                 .linear(duration: 2.0)
-                .repeatForever(autoreverses: false)
+                    .repeatForever(autoreverses: false)
             ) {
                 rotation = 360
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var rotation: Double = 0
 }
 
-// MARK: - Idle Icon (simple dash/dot)
+// MARK: - IdleIcon
+
 struct IdleIcon: View {
-    let size: CGFloat
-    let color: Color
+    // MARK: Lifecycle
 
     init(size: CGFloat = 12, color: Color = TerminalColors.dim) {
         self.size = size
         self.color = color
     }
 
+    // MARK: Internal
+
+    let size: CGFloat
+    let color: Color
+
     var body: some View {
-        Canvas { context, canvasSize in
+        Canvas { context, _ in
             let scale = size / 30.0
             let dotSize = 4 * scale
 
             // Simple horizontal line
             let dots: [(CGFloat, CGFloat)] = [
-                (11, 15), (15, 15), (19, 15)
+                (11, 15), (15, 15), (19, 15),
             ]
 
             for (x, y) in dots {
                 let rect = CGRect(
-                    x: x * scale - dotSize/2,
-                    y: y * scale - dotSize/2,
+                    x: x * scale - dotSize / 2,
+                    y: y * scale - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -215,15 +238,20 @@ struct IdleIcon: View {
     }
 }
 
-// MARK: - Status Icon View (unified)
+// MARK: - StatusIcon
+
 struct StatusIcon: View {
-    let phase: SessionPhase
-    let size: CGFloat
+    // MARK: Lifecycle
 
     init(phase: SessionPhase, size: CGFloat = 12) {
         self.phase = phase
         self.size = size
     }
+
+    // MARK: Internal
+
+    let phase: SessionPhase
+    let size: CGFloat
 
     var body: some View {
         switch phase {
@@ -231,9 +259,11 @@ struct StatusIcon: View {
             WaitingForInputIcon(size: size)
         case .waitingForApproval:
             WaitingForApprovalIcon(size: size)
-        case .processing, .compacting:
+        case .processing,
+             .compacting:
             RunningIcon(size: size)
-        case .idle, .ended:
+        case .idle,
+             .ended:
             IdleIcon(size: size)
         }
     }

@@ -9,48 +9,51 @@ import Combine
 import Foundation
 import Sparkle
 
+// MARK: - UpdateState
+
 /// Update state published to UI
 enum UpdateState: Equatable {
     case idle
     case checking
     case upToDate
     case found(version: String, releaseNotes: String?)
-    case downloading(progress: Double)  // 0.0 to 1.0
+    case downloading(progress: Double) // 0.0 to 1.0
     case extracting(progress: Double)
     case readyToInstall(version: String)
     case installing
     case error(message: String)
 
+    // MARK: Internal
+
     var isActive: Bool {
         switch self {
-        case .idle, .upToDate, .error:
-            return false
+        case .idle,
+             .upToDate,
+             .error:
+            false
         default:
-            return true
+            true
         }
     }
 }
 
+// MARK: - UpdateManager
+
 /// Observable update manager that bridges Sparkle to SwiftUI
 @MainActor
 class UpdateManager: NSObject, ObservableObject {
-    static let shared = UpdateManager()
-
-    @Published var state: UpdateState = .idle
-    @Published var hasUnseenUpdate: Bool = false
-    private var hasSeenUpdateThisSession: Bool = false
-
-    private var downloadedBytes: Int64 = 0
-    private var expectedBytes: Int64 = 0
-    private var currentVersion: String = ""
-
-    // Callbacks from Sparkle
-    private var installHandler: ((SPUUserUpdateChoice) -> Void)?
-    private var cancellationHandler: (() -> Void)?
+    // MARK: Lifecycle
 
     override init() {
         super.init()
     }
+
+    // MARK: Internal
+
+    static let shared = UpdateManager()
+
+    @Published var state: UpdateState = .idle
+    @Published var hasUnseenUpdate = false
 
     // MARK: - Public API
 
@@ -89,60 +92,60 @@ class UpdateManager: NSObject, ObservableObject {
     // MARK: - Internal state updates (called by NotchUserDriver)
 
     func updateFound(version: String, releaseNotes: String?, installHandler: @escaping (SPUUserUpdateChoice) -> Void) {
-        self.currentVersion = version
+        currentVersion = version
         self.installHandler = installHandler
-        self.state = .found(version: version, releaseNotes: releaseNotes)
+        state = .found(version: version, releaseNotes: releaseNotes)
         // Only show the dot if user hasn't seen it this session
         if !hasSeenUpdateThisSession {
-            self.hasUnseenUpdate = true
+            hasUnseenUpdate = true
         }
     }
 
     func markUpdateSeen() {
-        self.hasUnseenUpdate = false
-        self.hasSeenUpdateThisSession = true
+        hasUnseenUpdate = false
+        hasSeenUpdateThisSession = true
     }
 
     func downloadStarted(cancellation: @escaping () -> Void) {
-        self.cancellationHandler = cancellation
-        self.downloadedBytes = 0
-        self.expectedBytes = 0
-        self.state = .downloading(progress: 0)
+        cancellationHandler = cancellation
+        downloadedBytes = 0
+        expectedBytes = 0
+        state = .downloading(progress: 0)
     }
 
     func downloadExpectedLength(_ length: UInt64) {
-        self.expectedBytes = Int64(length)
+        expectedBytes = Int64(length)
     }
 
     func downloadReceivedData(_ length: UInt64) {
-        self.downloadedBytes += Int64(length)
+        downloadedBytes += Int64(length)
         let progress = expectedBytes > 0 ? Double(downloadedBytes) / Double(expectedBytes) : 0
-        self.state = .downloading(progress: min(progress, 1.0))
+        state = .downloading(progress: min(progress, 1.0))
     }
 
     func extractionStarted() {
-        self.state = .extracting(progress: 0)
+        state = .extracting(progress: 0)
     }
 
     func extractionProgress(_ progress: Double) {
-        self.state = .extracting(progress: progress)
+        state = .extracting(progress: progress)
     }
 
     func readyToInstall(installHandler: @escaping (SPUUserUpdateChoice) -> Void) {
         self.installHandler = installHandler
-        self.state = .readyToInstall(version: currentVersion)
+        state = .readyToInstall(version: currentVersion)
     }
 
     func installing() {
-        self.state = .installing
+        state = .installing
     }
 
     func installed(relaunched: Bool) {
-        self.state = .idle
+        state = .idle
     }
 
     func noUpdateFound() {
-        self.state = .upToDate
+        state = .upToDate
         // Reset to idle after a few seconds
         Task {
             try? await Task.sleep(for: .seconds(5))
@@ -153,7 +156,7 @@ class UpdateManager: NSObject, ObservableObject {
     }
 
     func updateError(_ message: String) {
-        self.state = .error(message: message)
+        state = .error(message: message)
     }
 
     func dismiss() {
@@ -161,15 +164,28 @@ class UpdateManager: NSObject, ObservableObject {
         if case .upToDate = state {
             return
         }
-        self.state = .idle
-        self.installHandler = nil
-        self.cancellationHandler = nil
+        state = .idle
+        installHandler = nil
+        cancellationHandler = nil
     }
+
+    // MARK: Private
+
+    private var hasSeenUpdateThisSession = false
+
+    private var downloadedBytes: Int64 = 0
+    private var expectedBytes: Int64 = 0
+    private var currentVersion = ""
+
+    // Callbacks from Sparkle
+    private var installHandler: ((SPUUserUpdateChoice) -> Void)?
+    private var cancellationHandler: (() -> Void)?
 }
+
+// MARK: - NotchUserDriver
 
 /// Custom Sparkle user driver that routes all UI to NotchUpdateManager
 class NotchUserDriver: NSObject, SPUUserDriver {
-
     var canCheckForUpdates: Bool { true }
 
     // MARK: - Update Found

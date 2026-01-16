@@ -8,8 +8,7 @@
 import SwiftUI
 
 struct NotchShape: Shape {
-    var topCornerRadius: CGFloat
-    var bottomCornerRadius: CGFloat
+    // MARK: Lifecycle
 
     init(
         topCornerRadius: CGFloat = 6,
@@ -18,6 +17,11 @@ struct NotchShape: Shape {
         self.topCornerRadius = topCornerRadius
         self.bottomCornerRadius = bottomCornerRadius
     }
+
+    // MARK: Internal
+
+    var topCornerRadius: CGFloat
+    var bottomCornerRadius: CGFloat
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get {

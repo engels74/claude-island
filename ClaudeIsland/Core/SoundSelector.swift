@@ -10,21 +10,17 @@ import Foundation
 
 @MainActor
 class SoundSelector: ObservableObject {
+    // MARK: Lifecycle
+
+    private init() {}
+
+    // MARK: Internal
+
     static let shared = SoundSelector()
 
     // MARK: - Published State
 
-    @Published var isPickerExpanded: Bool = false
-
-    // MARK: - Constants
-
-    /// Maximum number of sound options to show before scrolling
-    private let maxVisibleOptions = 6
-
-    /// Height per sound option row
-    private let rowHeight: CGFloat = 32
-
-    private init() {}
+    @Published var isPickerExpanded = false
 
     // MARK: - Public API
 
@@ -35,4 +31,14 @@ class SoundSelector: ObservableObject {
         let visibleOptions = min(totalOptions, maxVisibleOptions)
         return CGFloat(visibleOptions) * rowHeight + 8 // +8 for padding
     }
+
+    // MARK: Private
+
+    // MARK: - Constants
+
+    /// Maximum number of sound options to show before scrolling
+    private let maxVisibleOptions = 6
+
+    /// Height per sound option row
+    private let rowHeight: CGFloat = 32
 }

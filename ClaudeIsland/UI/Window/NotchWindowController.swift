@@ -10,9 +10,7 @@ import Combine
 import SwiftUI
 
 class NotchWindowController: NSWindowController {
-    let viewModel: NotchViewModel
-    private let screen: NSScreen
-    private var cancellables = Set<AnyCancellable>()
+    // MARK: Lifecycle
 
     init(screen: NSScreen) {
         self.screen = screen
@@ -76,7 +74,8 @@ class NotchWindowController: NSWindowController {
                         NSApp.activate(ignoringOtherApps: false)
                         notchWindow?.makeKey()
                     }
-                case .closed, .popping:
+                case .closed,
+                     .popping:
                     // Ignore mouse events when closed so clicks pass through
                     notchWindow?.ignoresMouseEvents = true
                 }
@@ -92,7 +91,17 @@ class NotchWindowController: NSWindowController {
         }
     }
 
+    @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    // MARK: Internal
+
+    let viewModel: NotchViewModel
+
+    // MARK: Private
+
+    private let screen: NSScreen
+    private var cancellables = Set<AnyCancellable>()
 }

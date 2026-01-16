@@ -7,18 +7,16 @@
 
 import Foundation
 
+// MARK: - YabaiWindow
+
 /// Information about a yabai window
 struct YabaiWindow: Sendable {
-    let id: Int
-    let pid: Int
-    let title: String
-    let space: Int
-    let isVisible: Bool
-    let hasFocus: Bool
+    // MARK: Lifecycle
 
     nonisolated init?(from dict: [String: Any]) {
         guard let id = dict["id"] as? Int,
-              let pid = dict["pid"] as? Int else { return nil }
+              let pid = dict["pid"] as? Int
+        else { return nil }
 
         self.id = id
         self.pid = pid
@@ -27,16 +25,28 @@ struct YabaiWindow: Sendable {
         self.isVisible = dict["is-visible"] as? Bool ?? false
         self.hasFocus = dict["has-focus"] as? Bool ?? false
     }
+
+    // MARK: Internal
+
+    let id: Int
+    let pid: Int
+    let title: String
+    let space: Int
+    let isVisible: Bool
+    let hasFocus: Bool
 }
+
+// MARK: - WindowFinder
 
 /// Finds windows using yabai
 actor WindowFinder {
-    static let shared = WindowFinder()
-
-    private var yabaiPath: String?
-    private var isAvailableCache: Bool?
+    // MARK: Lifecycle
 
     private init() {}
+
+    // MARK: Internal
+
+    static let shared = WindowFinder()
 
     /// Check if yabai is available (caches result)
     func isYabaiAvailable() -> Bool {
@@ -67,7 +77,8 @@ actor WindowFinder {
         do {
             let output = try await ProcessExecutor.shared.run(path, arguments: ["-m", "query", "--windows"])
             guard let data = output.data(using: .utf8),
-                  let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                  let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            else {
                 return []
             }
             return jsonArray.compactMap { YabaiWindow(from: $0) }
@@ -82,17 +93,22 @@ actor WindowFinder {
     }
 
     /// Find windows for a terminal PID
-    nonisolated func findWindows(forTerminalPid pid: Int, windows: [YabaiWindow]) -> [YabaiWindow] {
+    nonisolated func findWindows(forTerminalPID pid: Int, windows: [YabaiWindow]) -> [YabaiWindow] {
         windows.filter { $0.pid == pid }
     }
 
     /// Find tmux window (title contains "tmux")
-    nonisolated func findTmuxWindow(forTerminalPid pid: Int, windows: [YabaiWindow]) -> YabaiWindow? {
+    nonisolated func findTmuxWindow(forTerminalPID pid: Int, windows: [YabaiWindow]) -> YabaiWindow? {
         windows.first { $0.pid == pid && $0.title.lowercased().contains("tmux") }
     }
 
     /// Find any non-Claude window for a terminal
-    nonisolated func findNonClaudeWindow(forTerminalPid pid: Int, windows: [YabaiWindow]) -> YabaiWindow? {
+    nonisolated func findNonClaudeWindow(forTerminalPID pid: Int, windows: [YabaiWindow]) -> YabaiWindow? {
         windows.first { $0.pid == pid && !$0.title.contains("✳") }
     }
+
+    // MARK: Private
+
+    private var yabaiPath: String?
+    private var isAvailableCache: Bool?
 }

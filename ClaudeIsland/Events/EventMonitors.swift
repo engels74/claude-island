@@ -9,18 +9,30 @@ import AppKit
 import Combine
 
 class EventMonitors {
+    // MARK: Lifecycle
+
+    private init() {
+        setupMonitors()
+    }
+
+    deinit {
+        mouseMoveMonitor?.stop()
+        mouseDownMonitor?.stop()
+        mouseDraggedMonitor?.stop()
+    }
+
+    // MARK: Internal
+
     static let shared = EventMonitors()
 
     let mouseLocation = CurrentValueSubject<CGPoint, Never>(.zero)
     let mouseDown = PassthroughSubject<NSEvent, Never>()
 
+    // MARK: Private
+
     private var mouseMoveMonitor: EventMonitor?
     private var mouseDownMonitor: EventMonitor?
     private var mouseDraggedMonitor: EventMonitor?
-
-    private init() {
-        setupMonitors()
-    }
 
     private func setupMonitors() {
         mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
@@ -37,11 +49,5 @@ class EventMonitors {
             self?.mouseLocation.send(NSEvent.mouseLocation)
         }
         mouseDraggedMonitor?.start()
-    }
-
-    deinit {
-        mouseMoveMonitor?.stop()
-        mouseDownMonitor?.stop()
-        mouseDraggedMonitor?.stop()
     }
 }

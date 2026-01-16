@@ -8,7 +8,11 @@
 import Combine
 import SwiftUI
 
+// MARK: - ClaudeInstancesView
+
 struct ClaudeInstancesView: View {
+    // MARK: Internal
+
     @ObservedObject var sessionMonitor: ClaudeSessionMonitor
     @ObservedObject var viewModel: NotchViewModel
 
@@ -20,20 +24,7 @@ struct ClaudeInstancesView: View {
         }
     }
 
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Text("No sessions")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
-
-            Text("Run claude in terminal")
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.25))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    // MARK: Private
 
     // MARK: - Instances List
 
@@ -55,14 +46,19 @@ struct ClaudeInstancesView: View {
         }
     }
 
-    /// Lower number = higher priority
-    /// Approval requests share priority with processing to maintain stable ordering
-    private func phasePriority(_ phase: SessionPhase) -> Int {
-        switch phase {
-        case .waitingForApproval, .processing, .compacting: return 0
-        case .waitingForInput: return 1
-        case .idle, .ended: return 2
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Text("No sessions")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.4))
+
+            Text("Run claude in terminal")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.25))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var instancesList: some View {
@@ -77,7 +73,7 @@ struct ClaudeInstancesView: View {
                         onApprove: { approveSession(session) },
                         onReject: { rejectSession(session) }
                     )
-                    .id(session.stableId)
+                    .id(session.stableID)
                 }
             }
             .padding(.vertical, 4)
@@ -85,14 +81,25 @@ struct ClaudeInstancesView: View {
         .scrollBounceBehavior(.basedOnSize)
     }
 
-    // MARK: - Actions
+    /// Lower number = higher priority
+    /// Approval requests share priority with processing to maintain stable ordering
+    private func phasePriority(_ phase: SessionPhase) -> Int {
+        switch phase {
+        case .waitingForApproval,
+             .processing,
+             .compacting: 0
+        case .waitingForInput: 1
+        case .idle,
+             .ended: 2
+        }
+    }
 
     private func focusSession(_ session: SessionState) {
         guard session.isInTmux else { return }
 
         Task {
             if let pid = session.pid {
-                _ = await YabaiController.shared.focusWindow(forClaudePid: pid)
+                _ = await YabaiController.shared.focusWindow(forClaudePID: pid)
             } else {
                 _ = await YabaiController.shared.focusWindow(forWorkingDirectory: session.cwd)
             }
@@ -104,46 +111,29 @@ struct ClaudeInstancesView: View {
     }
 
     private func approveSession(_ session: SessionState) {
-        sessionMonitor.approvePermission(sessionId: session.sessionId)
+        sessionMonitor.approvePermission(sessionID: session.sessionID)
     }
 
     private func rejectSession(_ session: SessionState) {
-        sessionMonitor.denyPermission(sessionId: session.sessionId, reason: nil)
+        sessionMonitor.denyPermission(sessionID: session.sessionID, reason: nil)
     }
 
     private func archiveSession(_ session: SessionState) {
-        sessionMonitor.archiveSession(sessionId: session.sessionId)
+        sessionMonitor.archiveSession(sessionID: session.sessionID)
     }
 }
 
-// MARK: - Instance Row
+// MARK: - InstanceRow
 
 struct InstanceRow: View {
+    // MARK: Internal
+
     let session: SessionState
     let onFocus: () -> Void
     let onChat: () -> Void
     let onArchive: () -> Void
     let onApprove: () -> Void
     let onReject: () -> Void
-
-    @State private var isHovered = false
-    @State private var spinnerPhase = 0
-    @State private var isYabaiAvailable = false
-
-    private let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
-    private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
-    private let spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
-
-    /// Whether we're showing the approval UI
-    private var isWaitingForApproval: Bool {
-        session.phase.isWaitingForApproval
-    }
-
-    /// Whether the pending tool requires interactive input (not just approve/deny)
-    private var isInteractiveTool: Bool {
-        guard let toolName = session.pendingToolName else { return false }
-        return toolName == "AskUserQuestion"
-    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -292,10 +282,31 @@ struct InstanceRow: View {
         }
     }
 
-    @ViewBuilder
-    private var stateIndicator: some View {
+    // MARK: Private
+
+    @State private var isHovered = false
+    @State private var spinnerPhase = 0
+    @State private var isYabaiAvailable = false
+
+    private let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
+    private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
+    private let spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+
+    /// Whether we're showing the approval UI
+    private var isWaitingForApproval: Bool {
+        session.phase.isWaitingForApproval
+    }
+
+    /// Whether the pending tool requires interactive input (not just approve/deny)
+    private var isInteractiveTool: Bool {
+        guard let toolName = session.pendingToolName else { return false }
+        return toolName == "AskUserQuestion"
+    }
+
+    @ViewBuilder private var stateIndicator: some View {
         switch session.phase {
-        case .processing, .compacting:
+        case .processing,
+             .compacting:
             Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(claudeOrange)
@@ -313,26 +324,24 @@ struct InstanceRow: View {
             Circle()
                 .fill(TerminalColors.green)
                 .frame(width: 6, height: 6)
-        case .idle, .ended:
+        case .idle,
+             .ended:
             Circle()
                 .fill(Color.white.opacity(0.2))
                 .frame(width: 6, height: 6)
         }
     }
-
 }
 
-// MARK: - Inline Approval Buttons
+// MARK: - InlineApprovalButtons
 
 /// Compact inline approval buttons with staggered animation
 struct InlineApprovalButtons: View {
+    // MARK: Internal
+
     let onChat: () -> Void
     let onApprove: () -> Void
     let onReject: () -> Void
-
-    @State private var showChatButton = false
-    @State private var showDenyButton = false
-    @State private var showAllowButton = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -385,15 +394,21 @@ struct InlineApprovalButtons: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var showChatButton = false
+    @State private var showDenyButton = false
+    @State private var showAllowButton = false
 }
 
-// MARK: - Icon Button
+// MARK: - IconButton
 
 struct IconButton: View {
+    // MARK: Internal
+
     let icon: String
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button {
@@ -411,9 +426,13 @@ struct IconButton: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }
 
-// MARK: - Compact Terminal Button (inline in description)
+// MARK: - CompactTerminalButton
 
 struct CompactTerminalButton: View {
     let isEnabled: Bool
@@ -441,7 +460,7 @@ struct CompactTerminalButton: View {
     }
 }
 
-// MARK: - Terminal Button
+// MARK: - TerminalButton
 
 struct TerminalButton: View {
     let isEnabled: Bool

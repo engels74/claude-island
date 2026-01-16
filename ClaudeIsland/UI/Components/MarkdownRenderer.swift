@@ -8,14 +8,13 @@
 import Markdown
 import SwiftUI
 
-// MARK: - Document Cache
+// MARK: - DocumentCache
 
 /// Caches parsed markdown documents to avoid re-parsing
 private final class DocumentCache: @unchecked Sendable {
+    // MARK: Internal
+
     static let shared = DocumentCache()
-    private var cache: [String: Document] = [:]
-    private let lock = NSLock()
-    private let maxSize = 100
 
     func document(for text: String) -> Document {
         lock.lock()
@@ -32,17 +31,19 @@ private final class DocumentCache: @unchecked Sendable {
         cache[text] = doc
         return doc
     }
+
+    // MARK: Private
+
+    private var cache: [String: Document] = [:]
+    private let lock = NSLock()
+    private let maxSize = 100
 }
 
-// MARK: - Markdown Text View
+// MARK: - MarkdownText
 
 /// Renders markdown text with inline formatting using swift-markdown
 struct MarkdownText: View {
-    let text: String
-    let baseColor: Color
-    let fontSize: CGFloat
-
-    private let document: Document
+    // MARK: Lifecycle
 
     init(_ text: String, color: Color = .white.opacity(0.9), fontSize: CGFloat = 13) {
         self.text = text
@@ -50,6 +51,12 @@ struct MarkdownText: View {
         self.fontSize = fontSize
         self.document = DocumentCache.shared.document(for: text)
     }
+
+    // MARK: Internal
+
+    let text: String
+    let baseColor: Color
+    let fontSize: CGFloat
 
     var body: some View {
         let children = Array(document.children)
@@ -66,11 +73,17 @@ struct MarkdownText: View {
             }
         }
     }
+
+    // MARK: Private
+
+    private let document: Document
 }
 
-// MARK: - Block Renderer
+// MARK: - BlockRenderer
 
 private struct BlockRenderer: View {
+    // MARK: Internal
+
     let markup: Markup
     let baseColor: Color
     let fontSize: CGFloat
@@ -79,8 +92,9 @@ private struct BlockRenderer: View {
         content
     }
 
-    @ViewBuilder
-    private var content: some View {
+    // MARK: Private
+
+    @ViewBuilder private var content: some View {
         if let paragraph = markup as? Paragraph {
             InlineRenderer(children: Array(paragraph.inlineChildren), baseColor: baseColor, fontSize: fontSize)
                 .lineSpacing(4)
@@ -183,9 +197,11 @@ private struct BlockRenderer: View {
     }
 }
 
-// MARK: - Inline Renderer
+// MARK: - InlineRenderer
 
 private struct InlineRenderer: View {
+    // MARK: Internal
+
     let children: [InlineMarkup]
     let baseColor: Color
     let fontSize: CGFloat
@@ -201,6 +217,8 @@ private struct InlineRenderer: View {
         }
         return result
     }
+
+    // MARK: Private
 
     private func renderInline(_ inline: InlineMarkup) -> SwiftUI.Text {
         if let text = inline as? Markdown.Text {
@@ -247,7 +265,7 @@ private struct InlineRenderer: View {
     }
 }
 
-// MARK: - Code Block View
+// MARK: - CodeBlockView
 
 private struct CodeBlockView: View {
     let code: String

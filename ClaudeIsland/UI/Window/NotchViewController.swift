@@ -8,6 +8,8 @@
 import AppKit
 import SwiftUI
 
+// MARK: - PassThroughHostingView
+
 /// Custom NSHostingView that only accepts mouse events within the panel bounds.
 /// Clicks outside the panel pass through to windows behind.
 class PassThroughHostingView<Content: View>: NSHostingView<Content> {
@@ -16,32 +18,36 @@ class PassThroughHostingView<Content: View>: NSHostingView<Content> {
     override func hitTest(_ point: NSPoint) -> NSView? {
         // Only accept hits within the panel rect
         guard hitTestRect().contains(point) else {
-            return nil  // Pass through to windows behind
+            return nil // Pass through to windows behind
         }
         return super.hitTest(point)
     }
 }
 
+// MARK: - NotchViewController
+
 class NotchViewController: NSViewController {
-    private let viewModel: NotchViewModel
-    private var hostingView: PassThroughHostingView<NotchView>!
+    // MARK: Lifecycle
 
     init(viewModel: NotchViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
 
+    @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    // MARK: Internal
 
     override func loadView() {
         hostingView = PassThroughHostingView(rootView: NotchView(viewModel: viewModel))
 
         // Calculate the hit-test rect based on panel state
         hostingView.hitTestRect = { [weak self] in
-            guard let self = self else { return .zero }
-            let vm = self.viewModel
+            guard let self else { return .zero }
+            let vm = viewModel
             let geometry = vm.geometry
 
             // Window coordinates: origin at bottom-left, Y increases upward
@@ -52,7 +58,7 @@ class NotchViewController: NSViewController {
             case .opened:
                 let panelSize = vm.openedSize
                 // Panel is centered horizontally, anchored to top
-                let panelWidth = panelSize.width + 52  // Account for corner radius padding
+                let panelWidth = panelSize.width + 52 // Account for corner radius padding
                 let panelHeight = panelSize.height
                 let screenWidth = geometry.screenRect.width
                 return CGRect(
@@ -61,7 +67,8 @@ class NotchViewController: NSViewController {
                     width: panelWidth,
                     height: panelHeight
                 )
-            case .closed, .popping:
+            case .closed,
+                 .popping:
                 // When closed, use the notch rect
                 let notchRect = geometry.deviceNotchRect
                 let screenWidth = geometry.screenRect.width
@@ -75,6 +82,11 @@ class NotchViewController: NSViewController {
             }
         }
 
-        self.view = hostingView
+        view = hostingView
     }
+
+    // MARK: Private
+
+    private let viewModel: NotchViewModel
+    private var hostingView: PassThroughHostingView<NotchView>!
 }

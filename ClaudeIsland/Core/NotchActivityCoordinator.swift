@@ -8,31 +8,40 @@
 import Combine
 import SwiftUI
 
-// MARK: - Activity Types
+// MARK: - NotchActivityType
 
 /// Types of activities that can be shown in the notch
 enum NotchActivityType: Equatable {
-    case claude      // Claude is processing
+    case claude // Claude is processing
     case none
 }
 
-// MARK: - Expanding Activity
+// MARK: - ExpandingActivity
 
 /// An activity that expands the notch to the sides
 struct ExpandingActivity: Equatable {
-    var show: Bool = false
+    static let empty = ExpandingActivity()
+
+    var show = false
     var type: NotchActivityType = .none
     var value: CGFloat = 0
-
-    static let empty = ExpandingActivity()
 }
 
-// MARK: - Coordinator
+// MARK: - NotchActivityCoordinator
 
 /// Coordinates notch activities and state
 @MainActor
 class NotchActivityCoordinator: ObservableObject {
+    // MARK: Lifecycle
+
+    private init() {}
+
+    // MARK: Internal
+
     static let shared = NotchActivityCoordinator()
+
+    /// Duration before auto-hiding the activity
+    var activityDuration: TimeInterval = 0 // 0 = manual control (won't auto-hide)
 
     // MARK: - Published State
 
@@ -46,15 +55,6 @@ class NotchActivityCoordinator: ObservableObject {
             }
         }
     }
-
-    /// Duration before auto-hiding the activity
-    var activityDuration: TimeInterval = 0 // 0 = manual control (won't auto-hide)
-
-    // MARK: - Private
-
-    private var activityTask: Task<Void, Never>?
-
-    private init() {}
 
     // MARK: - Public API
 
@@ -91,7 +91,9 @@ class NotchActivityCoordinator: ObservableObject {
         }
     }
 
-    // MARK: - Private
+    // MARK: Private
+
+    private var activityTask: Task<Void, Never>?
 
     private func scheduleActivityHide() {
         activityTask?.cancel()
@@ -102,11 +104,11 @@ class NotchActivityCoordinator: ObservableObject {
         let currentType = expandingActivity.type
         activityTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(self?.activityDuration ?? 3))
-            guard let self = self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled else { return }
 
             // Only hide if still showing the same type
-            if self.expandingActivity.type == currentType {
-                self.hideActivity()
+            if expandingActivity.type == currentType {
+                hideActivity()
             }
         }
     }

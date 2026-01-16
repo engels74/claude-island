@@ -8,10 +8,7 @@
 import AppKit
 
 class EventMonitor {
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
-    private let mask: NSEvent.EventTypeMask
-    private let handler: (NSEvent) -> Void
+    // MARK: Lifecycle
 
     init(mask: NSEvent.EventTypeMask, handler: @escaping (NSEvent) -> Void) {
         self.mask = mask
@@ -21,6 +18,8 @@ class EventMonitor {
     deinit {
         stop()
     }
+
+    // MARK: Internal
 
     func start() {
         // Global monitor for events outside our app
@@ -45,4 +44,11 @@ class EventMonitor {
             localMonitor = nil
         }
     }
+
+    // MARK: Private
+
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private let mask: NSEvent.EventTypeMask
+    private let handler: (NSEvent) -> Void
 }

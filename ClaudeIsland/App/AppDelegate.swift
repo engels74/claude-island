@@ -5,20 +5,10 @@ import Sparkle
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var windowManager: WindowManager?
-    private var screenObserver: ScreenObserver?
-    private var updateCheckTimer: Timer?
-
-    static var shared: AppDelegate?
-    let updater: SPUUpdater
-    private let userDriver: NotchUserDriver
-
-    var windowController: NotchWindowController? {
-        windowManager?.windowController
-    }
+    // MARK: Lifecycle
 
     override init() {
-        userDriver = NotchUserDriver()
+        self.userDriver = NotchUserDriver()
         updater = SPUUpdater(
             hostBundle: Bundle.main,
             applicationBundle: Bundle.main,
@@ -35,6 +25,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: Internal
+
+    static var shared: AppDelegate?
+
+    let updater: SPUUpdater
+
+    var windowController: NotchWindowController? {
+        windowManager?.windowController
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !ensureSingleInstance() {
             NSApplication.shared.terminate(nil)
@@ -43,8 +43,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         Mixpanel.initialize(token: "49814c1436104ed108f3fc4735228496")
 
-        let distinctId = getOrCreateDistinctId()
-        Mixpanel.mainInstance().identify(distinctId: distinctId)
+        let distinctID = getOrCreateDistinctID()
+        Mixpanel.mainInstance().identify(distinctID: distinctID)
 
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
@@ -53,7 +53,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Mixpanel.mainInstance().registerSuperProperties([
             "app_version": version,
             "build_number": build,
-            "macos_version": osVersion
+            "macos_version": osVersion,
         ])
 
         fetchAndRegisterClaudeVersion()
@@ -61,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Mixpanel.mainInstance().people.set(properties: [
             "app_version": version,
             "build_number": build,
-            "macos_version": osVersion
+            "macos_version": osVersion,
         ])
 
         Mixpanel.mainInstance().track(event: "App Launched")
@@ -87,21 +87,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func handleScreenChange() {
-        _ = windowManager?.setupNotchWindow()
-    }
-
     func applicationWillTerminate(_ notification: Notification) {
         Mixpanel.mainInstance().flush()
         updateCheckTimer?.invalidate()
         screenObserver = nil
     }
 
-    private func getOrCreateDistinctId() -> String {
+    // MARK: Private
+
+    private var windowManager: WindowManager?
+    private var screenObserver: ScreenObserver?
+    private var updateCheckTimer: Timer?
+
+    private let userDriver: NotchUserDriver
+
+    private func handleScreenChange() {
+        _ = windowManager?.setupNotchWindow()
+    }
+
+    private func getOrCreateDistinctID() -> String {
         let key = "mixpanel_distinct_id"
 
-        if let existingId = UserDefaults.standard.string(forKey: key) {
-            return existingId
+        if let existingID = UserDefaults.standard.string(forKey: key) {
+            return existingID
         }
 
         let platformExpert = IOServiceGetMatchingService(
@@ -120,9 +128,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return uuid
         }
 
-        let newId = UUID().uuidString
-        UserDefaults.standard.set(newId, forKey: key)
-        return newId
+        let newID = UUID().uuidString
+        UserDefaults.standard.set(newID, forKey: key)
+        return newID
     }
 
     private func fetchAndRegisterClaudeVersion() {
@@ -133,7 +141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             at: claudeProjectsDir,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: .skipsHiddenFiles
-        ) else { return }
+        )
+        else { return }
 
         var latestFile: URL?
         var latestDate: Date?
@@ -143,7 +152,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 at: projectDir,
                 includingPropertiesForKeys: [.contentModificationDateKey],
                 options: .skipsHiddenFiles
-            ) else { continue }
+            )
+            else { continue }
 
             for file in files where file.pathExtension == "jsonl" && !file.lastPathComponent.hasPrefix("agent-") {
                 if let attrs = try? file.resourceValues(forKeys: [.contentModificationDateKey]),
@@ -157,7 +167,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         guard let jsonlFile = latestFile,
-              let handle = FileHandle(forReadingAtPath: jsonlFile.path) else { return }
+              let handle = FileHandle(forReadingAtPath: jsonlFile.path)
+        else { return }
         defer { try? handle.close() }
 
         let data = handle.readData(ofLength: 8192)
@@ -166,7 +177,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for line in content.components(separatedBy: .newlines) where !line.isEmpty {
             guard let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let version = json["version"] as? String else { continue }
+                  let version = json["version"] as? String
+            else { continue }
 
             Mixpanel.mainInstance().registerSuperProperties(["claude_code_version": version])
             Mixpanel.mainInstance().people.set(properties: ["claude_code_version": version])

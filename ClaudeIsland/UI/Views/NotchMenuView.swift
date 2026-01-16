@@ -7,19 +7,16 @@
 
 import ApplicationServices
 import Combine
-import SwiftUI
 import ServiceManagement
 import Sparkle
+import SwiftUI
 
 // MARK: - NotchMenuView
 
 struct NotchMenuView: View {
+    // MARK: Internal
+
     @ObservedObject var viewModel: NotchViewModel
-    @ObservedObject private var updateManager = UpdateManager.shared
-    @ObservedObject private var screenSelector = ScreenSelector.shared
-    @ObservedObject private var soundSelector = SoundSelector.shared
-    @State private var hooksInstalled: Bool = false
-    @State private var launchAtLogin: Bool = false
 
     var body: some View {
         VStack(spacing: 4) {
@@ -119,6 +116,14 @@ struct NotchMenuView: View {
         }
     }
 
+    // MARK: Private
+
+    @ObservedObject private var updateManager = UpdateManager.shared
+    @ObservedObject private var screenSelector = ScreenSelector.shared
+    @ObservedObject private var soundSelector = SoundSelector.shared
+    @State private var hooksInstalled = false
+    @State private var launchAtLogin = false
+
     private func refreshStates() {
         hooksInstalled = HookInstaller.isInstalled()
         launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -126,18 +131,12 @@ struct NotchMenuView: View {
     }
 }
 
-// MARK: - Update Row
+// MARK: - UpdateRow
 
 struct UpdateRow: View {
-    @ObservedObject var updateManager: UpdateManager
-    @State private var isHovered = false
-    @State private var isSpinning = false
+    // MARK: Internal
 
-    private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "v\(version) (\(build))"
-    }
+    @ObservedObject var updateManager: UpdateManager
 
     var body: some View {
         Button {
@@ -184,10 +183,122 @@ struct UpdateRow: View {
         .animation(.easeInOut(duration: 0.2), value: updateManager.state)
     }
 
+    // MARK: Private
+
+    @State private var isHovered = false
+    @State private var isSpinning = false
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "v\(version) (\(build))"
+    }
+
+    private var icon: String {
+        switch updateManager.state {
+        case .idle:
+            "arrow.down.circle"
+        case .checking:
+            "arrow.down.circle"
+        case .upToDate:
+            "checkmark.circle.fill"
+        case .found:
+            "arrow.down.circle.fill"
+        case .downloading:
+            "arrow.down.circle"
+        case .extracting:
+            "doc.zipper"
+        case .readyToInstall:
+            "checkmark.circle.fill"
+        case .installing:
+            "gear"
+        case .error:
+            "exclamationmark.circle"
+        }
+    }
+
+    private var iconColor: Color {
+        switch updateManager.state {
+        case .idle:
+            .white.opacity(isHovered ? 1.0 : 0.7)
+        case .checking:
+            .white.opacity(0.7)
+        case .upToDate:
+            TerminalColors.green
+        case .found,
+             .readyToInstall:
+            TerminalColors.green
+        case .downloading:
+            TerminalColors.blue
+        case .extracting:
+            TerminalColors.amber
+        case .installing:
+            TerminalColors.blue
+        case .error:
+            Color(red: 1.0, green: 0.4, blue: 0.4)
+        }
+    }
+
+    private var label: String {
+        switch updateManager.state {
+        case .idle:
+            "Check for Updates"
+        case .checking:
+            "Checking..."
+        case .upToDate:
+            "Check for Updates"
+        case .found:
+            "Download Update"
+        case .downloading:
+            "Downloading..."
+        case .extracting:
+            "Extracting..."
+        case .readyToInstall:
+            "Install & Relaunch"
+        case .installing:
+            "Installing..."
+        case .error:
+            "Update failed"
+        }
+    }
+
+    private var labelColor: Color {
+        switch updateManager.state {
+        case .idle,
+             .upToDate:
+            .white.opacity(isHovered ? 1.0 : 0.7)
+        case .checking,
+             .downloading,
+             .extracting,
+             .installing:
+            .white.opacity(0.9)
+        case .found,
+             .readyToInstall:
+            TerminalColors.green
+        case .error:
+            Color(red: 1.0, green: 0.4, blue: 0.4)
+        }
+    }
+
+    private var isInteractive: Bool {
+        switch updateManager.state {
+        case .idle,
+             .upToDate,
+             .found,
+             .readyToInstall,
+             .error:
+            true
+        case .checking,
+             .downloading,
+             .extracting,
+             .installing:
+            false
+        }
+    }
+
     // MARK: - Right Content
 
-    @ViewBuilder
-    private var rightContent: some View {
+    @ViewBuilder private var rightContent: some View {
         switch updateManager.state {
         case .idle:
             Text(appVersion)
@@ -204,12 +315,13 @@ struct UpdateRow: View {
                     .foregroundColor(TerminalColors.green)
             }
 
-        case .checking, .installing:
+        case .checking,
+             .installing:
             ProgressView()
                 .scaleEffect(0.5)
                 .frame(width: 12, height: 12)
 
-        case .found(let version, _):
+        case let .found(version, _):
             HStack(spacing: 6) {
                 Circle()
                     .fill(TerminalColors.green)
@@ -219,7 +331,7 @@ struct UpdateRow: View {
                     .foregroundColor(TerminalColors.green)
             }
 
-        case .downloading(let progress):
+        case let .downloading(progress):
             HStack(spacing: 8) {
                 ProgressView(value: progress)
                     .frame(width: 60)
@@ -230,7 +342,7 @@ struct UpdateRow: View {
                     .frame(width: 32, alignment: .trailing)
             }
 
-        case .extracting(let progress):
+        case let .extracting(progress):
             HStack(spacing: 8) {
                 ProgressView(value: progress)
                     .frame(width: 60)
@@ -241,7 +353,7 @@ struct UpdateRow: View {
                     .frame(width: 32, alignment: .trailing)
             }
 
-        case .readyToInstall(let version):
+        case let .readyToInstall(version):
             HStack(spacing: 6) {
                 Circle()
                     .fill(TerminalColors.green)
@@ -258,102 +370,11 @@ struct UpdateRow: View {
         }
     }
 
-    // MARK: - Computed Properties
-
-    private var icon: String {
-        switch updateManager.state {
-        case .idle:
-            return "arrow.down.circle"
-        case .checking:
-            return "arrow.down.circle"
-        case .upToDate:
-            return "checkmark.circle.fill"
-        case .found:
-            return "arrow.down.circle.fill"
-        case .downloading:
-            return "arrow.down.circle"
-        case .extracting:
-            return "doc.zipper"
-        case .readyToInstall:
-            return "checkmark.circle.fill"
-        case .installing:
-            return "gear"
-        case .error:
-            return "exclamationmark.circle"
-        }
-    }
-
-    private var iconColor: Color {
-        switch updateManager.state {
-        case .idle:
-            return .white.opacity(isHovered ? 1.0 : 0.7)
-        case .checking:
-            return .white.opacity(0.7)
-        case .upToDate:
-            return TerminalColors.green
-        case .found, .readyToInstall:
-            return TerminalColors.green
-        case .downloading:
-            return TerminalColors.blue
-        case .extracting:
-            return TerminalColors.amber
-        case .installing:
-            return TerminalColors.blue
-        case .error:
-            return Color(red: 1.0, green: 0.4, blue: 0.4)
-        }
-    }
-
-    private var label: String {
-        switch updateManager.state {
-        case .idle:
-            return "Check for Updates"
-        case .checking:
-            return "Checking..."
-        case .upToDate:
-            return "Check for Updates"
-        case .found:
-            return "Download Update"
-        case .downloading:
-            return "Downloading..."
-        case .extracting:
-            return "Extracting..."
-        case .readyToInstall:
-            return "Install & Relaunch"
-        case .installing:
-            return "Installing..."
-        case .error:
-            return "Update failed"
-        }
-    }
-
-    private var labelColor: Color {
-        switch updateManager.state {
-        case .idle, .upToDate:
-            return .white.opacity(isHovered ? 1.0 : 0.7)
-        case .checking, .downloading, .extracting, .installing:
-            return .white.opacity(0.9)
-        case .found, .readyToInstall:
-            return TerminalColors.green
-        case .error:
-            return Color(red: 1.0, green: 0.4, blue: 0.4)
-        }
-    }
-
-    private var isInteractive: Bool {
-        switch updateManager.state {
-        case .idle, .upToDate, .found, .readyToInstall, .error:
-            return true
-        case .checking, .downloading, .extracting, .installing:
-            return false
-        }
-    }
-
-    // MARK: - Actions
-
     private func handleTap() {
         switch updateManager.state {
-        case .idle, .upToDate, .error:
+        case .idle,
+             .upToDate,
+             .error:
             updateManager.checkForUpdates()
         case .found:
             updateManager.downloadAndInstall()
@@ -365,19 +386,12 @@ struct UpdateRow: View {
     }
 }
 
-// MARK: - Accessibility Permission Row
+// MARK: - AccessibilityRow
 
 struct AccessibilityRow: View {
+    // MARK: Internal
+
     let isEnabled: Bool
-
-    @State private var isHovered = false
-    @State private var refreshTrigger = false
-
-    private var currentlyEnabled: Bool {
-        // Re-check on each render when refreshTrigger changes
-        _ = refreshTrigger
-        return isEnabled
-    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -427,6 +441,17 @@ struct AccessibilityRow: View {
         }
     }
 
+    // MARK: Private
+
+    @State private var isHovered = false
+    @State private var refreshTrigger = false
+
+    private var currentlyEnabled: Bool {
+        // Re-check on each render when refreshTrigger changes
+        _ = refreshTrigger
+        return isEnabled
+    }
+
     private var textColor: Color {
         .white.opacity(isHovered ? 1.0 : 0.7)
     }
@@ -438,13 +463,15 @@ struct AccessibilityRow: View {
     }
 }
 
+// MARK: - MenuRow
+
 struct MenuRow: View {
+    // MARK: Internal
+
     let icon: String
     let label: String
-    var isDestructive: Bool = false
+    var isDestructive = false
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -471,6 +498,10 @@ struct MenuRow: View {
         .onHover { isHovered = $0 }
     }
 
+    // MARK: Private
+
+    @State private var isHovered = false
+
     private var textColor: Color {
         if isDestructive {
             return Color(red: 1.0, green: 0.4, blue: 0.4)
@@ -479,13 +510,15 @@ struct MenuRow: View {
     }
 }
 
+// MARK: - MenuToggleRow
+
 struct MenuToggleRow: View {
+    // MARK: Internal
+
     let icon: String
     let label: String
     let isOn: Bool
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -519,6 +552,10 @@ struct MenuToggleRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 
     private var textColor: Color {
         .white.opacity(isHovered ? 1.0 : 0.7)

@@ -7,26 +7,30 @@
 
 import Foundation
 
+// MARK: - ChatMessage
+
 struct ChatMessage: Identifiable, Equatable {
     let id: String
     let role: ChatRole
     let timestamp: Date
     let content: [MessageBlock]
 
-    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
-        lhs.id == rhs.id
-    }
-
     /// Plain text content combined
     var textContent: String {
         content.compactMap { block in
-            if case .text(let text) = block {
+            if case let .text(text) = block {
                 return text
             }
             return nil
         }.joined(separator: "\n")
     }
+
+    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
+        lhs.id == rhs.id
+    }
 }
+
+// MARK: - ChatRole
 
 enum ChatRole: String, Equatable {
     case user
@@ -34,35 +38,41 @@ enum ChatRole: String, Equatable {
     case system
 }
 
+// MARK: - MessageBlock
+
 enum MessageBlock: Equatable, Identifiable {
     case text(String)
     case toolUse(ToolUseBlock)
     case thinking(String)
     case interrupted
 
+    // MARK: Internal
+
     var id: String {
         switch self {
-        case .text(let text):
-            return "text-\(text.prefix(20).hashValue)"
-        case .toolUse(let block):
-            return "tool-\(block.id)"
-        case .thinking(let text):
-            return "thinking-\(text.prefix(20).hashValue)"
+        case let .text(text):
+            "text-\(text.prefix(20).hashValue)"
+        case let .toolUse(block):
+            "tool-\(block.id)"
+        case let .thinking(text):
+            "thinking-\(text.prefix(20).hashValue)"
         case .interrupted:
-            return "interrupted"
+            "interrupted"
         }
     }
 
     /// Type prefix for generating stable IDs
     nonisolated var typePrefix: String {
         switch self {
-        case .text: return "text"
-        case .toolUse: return "tool"
-        case .thinking: return "thinking"
-        case .interrupted: return "interrupted"
+        case .text: "text"
+        case .toolUse: "tool"
+        case .thinking: "thinking"
+        case .interrupted: "interrupted"
         }
     }
 }
+
+// MARK: - ToolUseBlock
 
 struct ToolUseBlock: Equatable {
     let id: String

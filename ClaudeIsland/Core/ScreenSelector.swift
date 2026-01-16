@@ -9,16 +9,19 @@ import AppKit
 import Combine
 import Foundation
 
+// MARK: - ScreenSelectionMode
+
 /// Strategy for selecting which screen to use
 enum ScreenSelectionMode: String, Codable {
-    case automatic       // Prefer built-in display, fall back to main
-    case specificScreen  // User selected a specific screen
+    case automatic // Prefer built-in display, fall back to main
+    case specificScreen // User selected a specific screen
 }
+
+// MARK: - ScreenIdentifier
 
 /// Persistent identifier for a screen
 struct ScreenIdentifier: Codable, Equatable, Hashable {
-    let displayID: CGDirectDisplayID?
-    let localizedName: String
+    // MARK: Lifecycle
 
     /// Create identifier from NSScreen
     init(screen: NSScreen) {
@@ -29,6 +32,11 @@ struct ScreenIdentifier: Codable, Equatable, Hashable {
         }
         self.localizedName = screen.localizedName
     }
+
+    // MARK: Internal
+
+    let displayID: CGDirectDisplayID?
+    let localizedName: String
 
     /// Check if this identifier matches a given screen
     func matches(_ screen: NSScreen) -> Bool {
@@ -44,26 +52,33 @@ struct ScreenIdentifier: Codable, Equatable, Hashable {
     }
 }
 
+// MARK: - ScreenSelector
+
 @MainActor
 class ScreenSelector: ObservableObject {
-    static let shared = ScreenSelector()
-
-    // MARK: - Published State
-    @Published private(set) var availableScreens: [NSScreen] = []
-    @Published private(set) var selectedScreen: NSScreen?
-    @Published var selectionMode: ScreenSelectionMode = .automatic
-    @Published var isPickerExpanded: Bool = false
-
-    // MARK: - UserDefaults Keys
-    private let modeKey = "screenSelectionMode"
-    private let screenIdentifierKey = "selectedScreenIdentifier"
-
-    // MARK: - Private State
-    private var savedIdentifier: ScreenIdentifier?
+    // MARK: Lifecycle
 
     private init() {
         loadPreferences()
         refreshScreens()
+    }
+
+    // MARK: Internal
+
+    static let shared = ScreenSelector()
+
+    // MARK: - Published State
+
+    @Published private(set) var availableScreens: [NSScreen] = []
+    @Published private(set) var selectedScreen: NSScreen?
+    @Published var selectionMode: ScreenSelectionMode = .automatic
+    @Published var isPickerExpanded = false
+
+    /// Extra height needed when picker is expanded
+    var expandedPickerHeight: CGFloat {
+        guard isPickerExpanded else { return 0 }
+        // +1 for "Automatic" option
+        return CGFloat(availableScreens.count + 1) * 40
     }
 
     // MARK: - Public API
@@ -96,12 +111,16 @@ class ScreenSelector: ObservableObject {
         return screenID(of: screen) == screenID(of: selected)
     }
 
-    /// Extra height needed when picker is expanded
-    var expandedPickerHeight: CGFloat {
-        guard isPickerExpanded else { return 0 }
-        // +1 for "Automatic" option
-        return CGFloat(availableScreens.count + 1) * 40
-    }
+    // MARK: Private
+
+    // MARK: - UserDefaults Keys
+
+    private let modeKey = "screenSelectionMode"
+    private let screenIdentifierKey = "selectedScreenIdentifier"
+
+    // MARK: - Private State
+
+    private var savedIdentifier: ScreenIdentifier?
 
     // MARK: - Private Methods
 

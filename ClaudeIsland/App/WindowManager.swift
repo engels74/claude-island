@@ -11,6 +11,8 @@ import os.log
 /// Logger for window management
 private let logger = Logger(subsystem: "com.claudeisland", category: "Window")
 
+// MARK: - WindowManager
+
 class WindowManager {
     private(set) var windowController: NotchWindowController?
 

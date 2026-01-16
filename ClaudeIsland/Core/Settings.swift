@@ -7,6 +7,8 @@
 
 import Foundation
 
+// MARK: - NotificationSound
+
 /// Available notification sounds
 enum NotificationSound: String, CaseIterable {
     case none = "None"
@@ -25,20 +27,18 @@ enum NotificationSound: String, CaseIterable {
     case submarine = "Submarine"
     case basso = "Basso"
 
+    // MARK: Internal
+
     /// The system sound name to use with NSSound, or nil for no sound
     var soundName: String? {
         self == .none ? nil : rawValue
     }
 }
 
+// MARK: - AppSettings
+
 enum AppSettings {
-    private static let defaults = UserDefaults.standard
-
-    // MARK: - Keys
-
-    private enum Keys {
-        static let notificationSound = "notificationSound"
-    }
+    // MARK: Internal
 
     // MARK: - Notification Sound
 
@@ -46,7 +46,8 @@ enum AppSettings {
     static var notificationSound: NotificationSound {
         get {
             guard let rawValue = defaults.string(forKey: Keys.notificationSound),
-                  let sound = NotificationSound(rawValue: rawValue) else {
+                  let sound = NotificationSound(rawValue: rawValue)
+            else {
                 return .pop // Default to Pop
             }
             return sound
@@ -55,4 +56,14 @@ enum AppSettings {
             defaults.set(newValue.rawValue, forKey: Keys.notificationSound)
         }
     }
+
+    // MARK: Private
+
+    // MARK: - Keys
+
+    private enum Keys {
+        static let notificationSound = "notificationSound"
+    }
+
+    private static let defaults = UserDefaults.standard
 }

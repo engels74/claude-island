@@ -8,50 +8,34 @@
 import Combine
 import SwiftUI
 
+// MARK: - ChatView
+
 struct ChatView: View {
-    let sessionId: String
-    let initialSession: SessionState
-    let sessionMonitor: ClaudeSessionMonitor
-    @ObservedObject var viewModel: NotchViewModel
+    // MARK: Lifecycle
 
-    @State private var inputText: String = ""
-    @State private var history: [ChatHistoryItem] = []
-    @State private var session: SessionState
-    @State private var isLoading: Bool = true
-    @State private var hasLoadedOnce: Bool = false
-    @State private var shouldScrollToBottom: Bool = false
-    @State private var isAutoscrollPaused: Bool = false
-    @State private var newMessageCount: Int = 0
-    @State private var previousHistoryCount: Int = 0
-    @State private var isBottomVisible: Bool = true
-    @FocusState private var isInputFocused: Bool
-
-    init(sessionId: String, initialSession: SessionState, sessionMonitor: ClaudeSessionMonitor, viewModel: NotchViewModel) {
-        self.sessionId = sessionId
+    init(sessionID: String, initialSession: SessionState, sessionMonitor: ClaudeSessionMonitor, viewModel: NotchViewModel) {
+        self.sessionID = sessionID
         self.initialSession = initialSession
         self.sessionMonitor = sessionMonitor
         self._viewModel = ObservedObject(wrappedValue: viewModel)
         self._session = State(initialValue: initialSession)
 
         // Initialize from cache if available (prevents loading flicker on view recreation)
-        let cachedHistory = ChatHistoryManager.shared.history(for: sessionId)
+        let cachedHistory = ChatHistoryManager.shared.history(for: sessionID)
         let alreadyLoaded = !cachedHistory.isEmpty
         self._history = State(initialValue: cachedHistory)
         self._isLoading = State(initialValue: !alreadyLoaded)
         self._hasLoadedOnce = State(initialValue: alreadyLoaded)
     }
 
-    /// Whether we're waiting for approval
-    private var isWaitingForApproval: Bool {
-        session.phase.isWaitingForApproval
-    }
+    // MARK: Internal
 
-    /// Extract the tool name if waiting for approval
-    private var approvalTool: String? {
-        session.phase.approvalToolName
-    }
+    @ObservedObject var viewModel: NotchViewModel
 
-    
+    let sessionID: String
+    let initialSession: SessionState
+    let sessionMonitor: ClaudeSessionMonitor
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -97,15 +81,15 @@ struct ChatView: View {
             hasLoadedOnce = true
 
             // Check if already loaded (from previous visit)
-            if ChatHistoryManager.shared.isLoaded(sessionId: sessionId) {
-                history = ChatHistoryManager.shared.history(for: sessionId)
+            if ChatHistoryManager.shared.isLoaded(sessionID: sessionID) {
+                history = ChatHistoryManager.shared.history(for: sessionID)
                 isLoading = false
                 return
             }
 
             // Load in background, show loading state
-            await ChatHistoryManager.shared.loadFromFile(sessionId: sessionId, cwd: session.cwd)
-            history = ChatHistoryManager.shared.history(for: sessionId)
+            await ChatHistoryManager.shared.loadFromFile(sessionID: sessionID, cwd: session.cwd)
+            history = ChatHistoryManager.shared.history(for: sessionID)
 
             withAnimation(.easeOut(duration: 0.2)) {
                 isLoading = false
@@ -113,7 +97,7 @@ struct ChatView: View {
         }
         .onReceive(ChatHistoryManager.shared.$histories) { histories in
             // Update when count changes, last item differs, or content changes (e.g., tool status)
-            if let newHistory = histories[sessionId] {
+            if let newHistory = histories[sessionID] {
                 let countChanged = newHistory.count != history.count
                 let lastItemChanged = newHistory.last?.id != history.last?.id
                 // Always update - the @Published ensures we only get notified on real changes
@@ -144,7 +128,7 @@ struct ChatView: View {
             }
         }
         .onReceive(sessionMonitor.$instances) { sessions in
-            if let updated = sessions.first(where: { $0.sessionId == sessionId }),
+            if let updated = sessions.first(where: { $0.sessionID == sessionID }),
                updated != session {
                 // Check if permission was just accepted (transition from waitingForApproval to processing)
                 let wasWaiting = isWaitingForApproval
@@ -177,9 +161,60 @@ struct ChatView: View {
         }
     }
 
+    // MARK: Private
+
+    @State private var inputText = ""
+    @State private var history: [ChatHistoryItem] = []
+    @State private var session: SessionState
+    @State private var isLoading = true
+    @State private var hasLoadedOnce = false
+    @State private var shouldScrollToBottom = false
+    @State private var isAutoscrollPaused = false
+    @State private var newMessageCount = 0
+    @State private var previousHistoryCount = 0
+    @State private var isBottomVisible = true
+    @FocusState private var isInputFocused: Bool
+
     // MARK: - Header
 
     @State private var isHeaderHovered = false
+
+    // MARK: - Message List
+
+    /// Background color for fade gradients
+    private let fadeColor = Color(red: 0.00, green: 0.00, blue: 0.00)
+
+    /// Whether we're waiting for approval
+    private var isWaitingForApproval: Bool {
+        session.phase.isWaitingForApproval
+    }
+
+    /// Extract the tool name if waiting for approval
+    private var approvalTool: String? {
+        session.phase.approvalToolName
+    }
+
+    /// Whether the session is currently processing
+    private var isProcessing: Bool {
+        session.phase == .processing || session.phase == .compacting
+    }
+
+    /// Get the last user message ID for stable text selection per turn
+    private var lastUserMessageID: String {
+        for item in history.reversed() {
+            if case .user = item.type {
+                return item.id
+            }
+        }
+        return ""
+    }
+
+    // MARK: - Input Bar
+
+    /// Can send messages only if session is in tmux
+    private var canSendMessages: Bool {
+        session.isInTmux && session.tty != nil
+    }
 
     private var chatHeader: some View {
         Button {
@@ -223,21 +258,6 @@ struct ChatView: View {
         .zIndex(1) // Render above message list
     }
 
-    /// Whether the session is currently processing
-    private var isProcessing: Bool {
-        session.phase == .processing || session.phase == .compacting
-    }
-
-    /// Get the last user message ID for stable text selection per turn
-    private var lastUserMessageId: String {
-        for item in history.reversed() {
-            if case .user = item.type {
-                return item.id
-            }
-        }
-        return ""
-    }
-
     // MARK: - Loading State
 
     private var loadingState: some View {
@@ -266,11 +286,6 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Message List
-
-    /// Background color for fade gradients
-    private let fadeColor = Color(red: 0.00, green: 0.00, blue: 0.00)
-
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
@@ -282,7 +297,7 @@ struct ChatView: View {
 
                     // Processing indicator at bottom (first due to flip)
                     if isProcessing {
-                        ProcessingIndicatorView(turnId: lastUserMessageId)
+                        ProcessingIndicatorView(turnID: lastUserMessageID)
                             .padding(.horizontal, 16)
                             .scaleEffect(x: 1, y: -1)
                             .transition(.asymmetric(
@@ -292,7 +307,7 @@ struct ChatView: View {
                     }
 
                     ForEach(history.reversed()) { item in
-                        MessageItemView(item: item, sessionId: sessionId)
+                        MessageItemView(item: item, sessionID: sessionID)
                             .padding(.horizontal, 16)
                             .scaleEffect(x: 1, y: -1)
                             .transition(.asymmetric(
@@ -351,13 +366,6 @@ struct ChatView: View {
         }
     }
 
-    // MARK: - Input Bar
-
-    /// Can send messages only if session is in tmux
-    private var canSendMessages: Bool {
-        session.isInTmux && session.tty != nil
-    }
-
     private var inputBar: some View {
         HStack(spacing: 10) {
             TextField(canSendMessages ? "Message Claude..." : "Open Claude Code in tmux to enable messaging", text: $inputText)
@@ -406,6 +414,16 @@ struct ChatView: View {
         .zIndex(1) // Render above message list
     }
 
+    // MARK: - Interactive Prompt Bar
+
+    /// Bar for interactive tools like AskUserQuestion that need terminal input
+    private var interactivePromptBar: some View {
+        ChatInteractivePromptBar(
+            isInTmux: session.isInTmux,
+            onGoToTerminal: { focusTerminal() }
+        )
+    }
+
     // MARK: - Approval Bar
 
     private func approvalBar(tool: String) -> some View {
@@ -414,16 +432,6 @@ struct ChatView: View {
             toolInput: session.pendingToolInput,
             onApprove: { approvePermission() },
             onDeny: { denyPermission() }
-        )
-    }
-
-    // MARK: - Interactive Prompt Bar
-
-    /// Bar for interactive tools like AskUserQuestion that need terminal input
-    private var interactivePromptBar: some View {
-        ChatInteractivePromptBar(
-            isInTmux: session.isInTmux,
-            onGoToTerminal: { focusTerminal() }
         )
     }
 
@@ -442,12 +450,10 @@ struct ChatView: View {
         previousHistoryCount = history.count
     }
 
-    // MARK: - Actions
-
     private func focusTerminal() {
         Task {
             if let pid = session.pid {
-                _ = await YabaiController.shared.focusWindow(forClaudePid: pid)
+                _ = await YabaiController.shared.focusWindow(forClaudePID: pid)
             } else {
                 _ = await YabaiController.shared.focusWindow(forWorkingDirectory: session.cwd)
             }
@@ -455,11 +461,11 @@ struct ChatView: View {
     }
 
     private func approvePermission() {
-        sessionMonitor.approvePermission(sessionId: sessionId)
+        sessionMonitor.approvePermission(sessionID: sessionID)
     }
 
     private func denyPermission() {
-        sessionMonitor.denyPermission(sessionId: sessionId, reason: nil)
+        sessionMonitor.denyPermission(sessionID: sessionID, reason: nil)
     }
 
     private func sendMessage() {
@@ -518,21 +524,21 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Message Item View
+// MARK: - MessageItemView
 
 struct MessageItemView: View {
     let item: ChatHistoryItem
-    let sessionId: String
+    let sessionID: String
 
     var body: some View {
         switch item.type {
-        case .user(let text):
+        case let .user(text):
             UserMessageView(text: text)
-        case .assistant(let text):
+        case let .assistant(text):
             AssistantMessageView(text: text)
-        case .toolCall(let tool):
-            ToolCallView(tool: tool, sessionId: sessionId)
-        case .thinking(let text):
+        case let .toolCall(tool):
+            ToolCallView(tool: tool, sessionID: sessionID)
+        case let .thinking(text):
             ThinkingView(text: text)
         case .interrupted:
             InterruptedMessageView()
@@ -540,7 +546,7 @@ struct MessageItemView: View {
     }
 }
 
-// MARK: - User Message
+// MARK: - UserMessageView
 
 struct UserMessageView: View {
     let text: String
@@ -560,7 +566,7 @@ struct UserMessageView: View {
     }
 }
 
-// MARK: - Assistant Message
+// MARK: - AssistantMessageView
 
 struct AssistantMessageView: View {
     let text: String
@@ -580,26 +586,19 @@ struct AssistantMessageView: View {
     }
 }
 
-// MARK: - Processing Indicator
+// MARK: - ProcessingIndicatorView
 
 struct ProcessingIndicatorView: View {
-    private let baseTexts = ["Processing", "Working"]
-    private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
-    private let baseText: String
+    // MARK: Lifecycle
 
-    @State private var dotCount: Int = 1
-    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-
-    /// Use a turnId to select text consistently per user turn
-    init(turnId: String = "") {
-        // Use hash of turnId to pick base text consistently for this turn
-        let index = abs(turnId.hashValue) % baseTexts.count
-        baseText = baseTexts[index]
+    /// Use a turnID to select text consistently per user turn
+    init(turnID: String = "") {
+        // Use hash of turnID to pick base text consistently for this turn
+        let index = abs(turnID.hashValue) % baseTexts.count
+        self.baseText = baseTexts[index]
     }
 
-    private var dots: String {
-        String(repeating: ".", count: dotCount)
-    }
+    // MARK: Internal
 
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
@@ -616,65 +615,29 @@ struct ProcessingIndicatorView: View {
             dotCount = (dotCount % 3) + 1
         }
     }
+
+    // MARK: Private
+
+    @State private var dotCount = 1
+
+    private let baseTexts = ["Processing", "Working"]
+    private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
+    private let baseText: String
+
+    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    private var dots: String {
+        String(repeating: ".", count: dotCount)
+    }
 }
 
-// MARK: - Tool Call View
+// MARK: - ToolCallView
 
 struct ToolCallView: View {
+    // MARK: Internal
+
     let tool: ToolCallItem
-    let sessionId: String
-
-    @State private var pulseOpacity: Double = 0.6
-    @State private var isExpanded: Bool = false
-    @State private var isHovering: Bool = false
-
-    private var statusColor: Color {
-        switch tool.status {
-        case .running:
-            return Color.white
-        case .waitingForApproval:
-            return Color.orange
-        case .success:
-            return Color.green
-        case .error, .interrupted:
-            return Color.red
-        }
-    }
-
-    private var textColor: Color {
-        switch tool.status {
-        case .running:
-            return .white.opacity(0.6)
-        case .waitingForApproval:
-            return Color.orange.opacity(0.9)
-        case .success:
-            return .white.opacity(0.7)
-        case .error, .interrupted:
-            return Color.red.opacity(0.8)
-        }
-    }
-
-    private var hasResult: Bool {
-        tool.result != nil || tool.structuredResult != nil
-    }
-
-    /// Whether the tool can be expanded (has result, NOT Task tools, NOT Edit tools)
-    private var canExpand: Bool {
-        tool.name != "Task" && tool.name != "Edit" && hasResult
-    }
-
-    private var showContent: Bool {
-        tool.name == "Edit" || isExpanded
-    }
-
-    private var agentDescription: String? {
-        guard tool.name == "AgentOutputTool",
-              let agentId = tool.input["agentId"],
-              let sessionDescriptions = ChatHistoryManager.shared.agentDescriptions[sessionId] else {
-            return nil
-        }
-        return sessionDescriptions[agentId]
-    }
+    let sessionID: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -682,7 +645,7 @@ struct ToolCallView: View {
                 Circle()
                     .fill(statusColor.opacity(tool.status == .running || tool.status == .waitingForApproval ? pulseOpacity : 0.6))
                     .frame(width: 6, height: 6)
-                    .id(tool.status)  // Forces view recreation, cancelling repeatForever animation
+                    .id(tool.status) // Forces view recreation, cancelling repeatForever animation
                     .onAppear {
                         if tool.status == .running || tool.status == .waitingForApproval {
                             startPulsing()
@@ -778,31 +741,80 @@ struct ToolCallView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isExpanded)
     }
 
+    // MARK: Private
+
+    @State private var pulseOpacity = 0.6
+    @State private var isExpanded = false
+    @State private var isHovering = false
+
+    private var statusColor: Color {
+        switch tool.status {
+        case .running:
+            Color.white
+        case .waitingForApproval:
+            Color.orange
+        case .success:
+            Color.green
+        case .error,
+             .interrupted:
+            Color.red
+        }
+    }
+
+    private var textColor: Color {
+        switch tool.status {
+        case .running:
+            .white.opacity(0.6)
+        case .waitingForApproval:
+            Color.orange.opacity(0.9)
+        case .success:
+            .white.opacity(0.7)
+        case .error,
+             .interrupted:
+            Color.red.opacity(0.8)
+        }
+    }
+
+    private var hasResult: Bool {
+        tool.result != nil || tool.structuredResult != nil
+    }
+
+    /// Whether the tool can be expanded (has result, NOT Task tools, NOT Edit tools)
+    private var canExpand: Bool {
+        tool.name != "Task" && tool.name != "Edit" && hasResult
+    }
+
+    private var showContent: Bool {
+        tool.name == "Edit" || isExpanded
+    }
+
+    private var agentDescription: String? {
+        guard tool.name == "AgentOutputTool",
+              let agentID = tool.input["agentId"],
+              let sessionDescriptions = ChatHistoryManager.shared.agentDescriptions[sessionID]
+        else {
+            return nil
+        }
+        return sessionDescriptions[agentID]
+    }
+
     private func startPulsing() {
         withAnimation(
             .easeInOut(duration: 0.6)
-            .repeatForever(autoreverses: true)
+                .repeatForever(autoreverses: true)
         ) {
             pulseOpacity = 0.15
         }
     }
 }
 
-// MARK: - Subagent Views
+// MARK: - SubagentToolsList
 
 /// List of subagent tools (shown during Task execution)
 struct SubagentToolsList: View {
+    // MARK: Internal
+
     let tools: [SubagentToolCall]
-
-    /// Number of hidden tools (all except last 2)
-    private var hiddenCount: Int {
-        max(0, tools.count - 2)
-    }
-
-    /// Recent tools to show (last 2, regardless of status)
-    private var recentTools: [SubagentToolCall] {
-        Array(tools.suffix(2))
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -819,34 +831,27 @@ struct SubagentToolsList: View {
             }
         }
     }
+
+    // MARK: Private
+
+    /// Number of hidden tools (all except last 2)
+    private var hiddenCount: Int {
+        max(0, tools.count - 2)
+    }
+
+    /// Recent tools to show (last 2, regardless of status)
+    private var recentTools: [SubagentToolCall] {
+        Array(tools.suffix(2))
+    }
 }
+
+// MARK: - SubagentToolRow
 
 /// Single subagent tool row
 struct SubagentToolRow: View {
+    // MARK: Internal
+
     let tool: SubagentToolCall
-
-    @State private var dotOpacity: Double = 0.5
-
-    private var statusColor: Color {
-        switch tool.status {
-        case .running, .waitingForApproval: return .orange
-        case .success: return .green
-        case .error, .interrupted: return .red
-        }
-    }
-
-    /// Get status text using the same logic as regular tools
-    private var statusText: String {
-        if tool.status == .interrupted {
-            return "Interrupted"
-        } else if tool.status == .running {
-            return ToolStatusDisplay.running(for: tool.name, input: tool.input).text
-        } else {
-            // For completed subagent tools, we don't have the result data
-            // so use a simple display based on tool name and input
-            return ToolStatusDisplay.running(for: tool.name, input: tool.input).text
-        }
-    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -854,7 +859,7 @@ struct SubagentToolRow: View {
             Circle()
                 .fill(statusColor.opacity(tool.status == .running ? dotOpacity : 0.6))
                 .frame(width: 4, height: 4)
-                .id(tool.status)  // Forces view recreation, cancelling repeatForever animation
+                .id(tool.status) // Forces view recreation, cancelling repeatForever animation
                 .onAppear {
                     if tool.status == .running {
                         withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
@@ -876,19 +881,42 @@ struct SubagentToolRow: View {
                 .truncationMode(.middle)
         }
     }
+
+    // MARK: Private
+
+    @State private var dotOpacity = 0.5
+
+    private var statusColor: Color {
+        switch tool.status {
+        case .running,
+             .waitingForApproval: .orange
+        case .success: .green
+        case .error,
+             .interrupted: .red
+        }
+    }
+
+    /// Get status text using the same logic as regular tools
+    private var statusText: String {
+        if tool.status == .interrupted {
+            "Interrupted"
+        } else if tool.status == .running {
+            ToolStatusDisplay.running(for: tool.name, input: tool.input).text
+        } else {
+            // For completed subagent tools, we don't have the result data
+            // so use a simple display based on tool name and input
+            ToolStatusDisplay.running(for: tool.name, input: tool.input).text
+        }
+    }
 }
+
+// MARK: - SubagentToolsSummary
 
 /// Summary of subagent tools (shown when Task is expanded after completion)
 struct SubagentToolsSummary: View {
-    let tools: [SubagentToolCall]
+    // MARK: Internal
 
-    private var toolCounts: [(String, Int)] {
-        var counts: [String: Int] = [:]
-        for tool in tools {
-            counts[tool.name, default: 0] += 1
-        }
-        return counts.sorted { $0.value > $1.value }
-    }
+    let tools: [SubagentToolCall]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -916,18 +944,24 @@ struct SubagentToolsSummary: View {
                 .fill(Color.white.opacity(0.03))
         )
     }
+
+    // MARK: Private
+
+    private var toolCounts: [(String, Int)] {
+        var counts: [String: Int] = [:]
+        for tool in tools {
+            counts[tool.name, default: 0] += 1
+        }
+        return counts.sorted { $0.value > $1.value }
+    }
 }
 
-// MARK: - Thinking View
+// MARK: - ThinkingView
 
 struct ThinkingView: View {
+    // MARK: Internal
+
     let text: String
-
-    @State private var isExpanded = false
-
-    private var canExpand: Bool {
-        text.count > 80
-    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
@@ -964,9 +998,17 @@ struct ThinkingView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
     }
+
+    // MARK: Private
+
+    @State private var isExpanded = false
+
+    private var canExpand: Bool {
+        text.count > 80
+    }
 }
 
-// MARK: - Interrupted Message
+// MARK: - InterruptedMessageView
 
 struct InterruptedMessageView: View {
     var body: some View {
@@ -979,15 +1021,14 @@ struct InterruptedMessageView: View {
     }
 }
 
-// MARK: - Chat Interactive Prompt Bar
+// MARK: - ChatInteractivePromptBar
 
 /// Bar for interactive tools like AskUserQuestion that need terminal input
 struct ChatInteractivePromptBar: View {
+    // MARK: Internal
+
     let isInTmux: Bool
     let onGoToTerminal: () -> Void
-
-    @State private var showContent = false
-    @State private var showButton = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1028,7 +1069,7 @@ struct ChatInteractivePromptBar: View {
             .opacity(showButton ? 1 : 0)
             .scaleEffect(showButton ? 1 : 0.8)
         }
-        .frame(minHeight: 44)  // Consistent height with other bars
+        .frame(minHeight: 44) // Consistent height with other bars
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.2))
@@ -1041,20 +1082,23 @@ struct ChatInteractivePromptBar: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var showContent = false
+    @State private var showButton = false
 }
 
-// MARK: - Chat Approval Bar
+// MARK: - ChatApprovalBar
 
 /// Approval bar for the chat view with animated buttons
 struct ChatApprovalBar: View {
+    // MARK: Internal
+
     let tool: String
     let toolInput: String?
     let onApprove: () -> Void
     let onDeny: () -> Void
-
-    @State private var showContent = false
-    @State private var showAllowButton = false
-    @State private var showDenyButton = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1107,7 +1151,7 @@ struct ChatApprovalBar: View {
             .opacity(showAllowButton ? 1 : 0)
             .scaleEffect(showAllowButton ? 1 : 0.8)
         }
-        .frame(minHeight: 44)  // Consistent height with other bars
+        .frame(minHeight: 44) // Consistent height with other bars
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.2))
@@ -1123,16 +1167,22 @@ struct ChatApprovalBar: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var showContent = false
+    @State private var showAllowButton = false
+    @State private var showDenyButton = false
 }
 
-// MARK: - New Messages Indicator
+// MARK: - NewMessagesIndicator
 
 /// Floating indicator showing count of new messages when user has scrolled up
 struct NewMessagesIndicator: View {
+    // MARK: Internal
+
     let count: Int
     let onTap: () -> Void
-
-    @State private var isHovering: Bool = false
 
     var body: some View {
         Button(action: onTap) {
@@ -1160,4 +1210,8 @@ struct NewMessagesIndicator: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var isHovering = false
 }

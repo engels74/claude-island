@@ -8,12 +8,12 @@
 import SwiftUI
 
 struct ActionButton: View {
+    // MARK: Internal
+
     let title: String
     let icon: String
     let color: Color
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -38,4 +38,8 @@ struct ActionButton: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }

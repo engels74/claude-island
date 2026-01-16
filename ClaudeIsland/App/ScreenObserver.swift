@@ -8,8 +8,7 @@
 import AppKit
 
 class ScreenObserver {
-    private var observer: Any?
-    private let onScreenChange: () -> Void
+    // MARK: Lifecycle
 
     init(onScreenChange: @escaping () -> Void) {
         self.onScreenChange = onScreenChange
@@ -19,6 +18,11 @@ class ScreenObserver {
     deinit {
         stopObserving()
     }
+
+    // MARK: Private
+
+    private var observer: Any?
+    private let onScreenChange: () -> Void
 
     private func startObserving() {
         observer = NotificationCenter.default.addObserver(
@@ -31,7 +35,7 @@ class ScreenObserver {
     }
 
     private func stopObserving() {
-        if let observer = observer {
+        if let observer {
             NotificationCenter.default.removeObserver(observer)
         }
     }

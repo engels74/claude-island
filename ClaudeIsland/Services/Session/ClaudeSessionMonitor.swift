@@ -10,12 +10,11 @@ import AppKit
 import Combine
 import Foundation
 
+// MARK: - ClaudeSessionMonitor
+
 @MainActor
 class ClaudeSessionMonitor: ObservableObject {
-    @Published var instances: [SessionState] = []
-    @Published var pendingInstances: [SessionState] = []
-
-    private var cancellables = Set<AnyCancellable>()
+    // MARK: Lifecycle
 
     init() {
         SessionStore.shared.sessionsPublisher
@@ -27,6 +26,11 @@ class ClaudeSessionMonitor: ObservableObject {
 
         InterruptWatcherManager.shared.delegate = self
     }
+
+    // MARK: Internal
+
+    @Published var instances: [SessionState] = []
+    @Published var pendingInstances: [SessionState] = []
 
     // MARK: - Monitoring Lifecycle
 
@@ -40,7 +44,7 @@ class ClaudeSessionMonitor: ObservableObject {
                 if event.sessionPhase == .processing {
                     Task { @MainActor in
                         InterruptWatcherManager.shared.startWatching(
-                            sessionId: event.sessionId,
+                            sessionID: event.sessionID,
                             cwd: event.cwd
                         )
                     }
@@ -48,22 +52,22 @@ class ClaudeSessionMonitor: ObservableObject {
 
                 if event.status == "ended" {
                     Task { @MainActor in
-                        InterruptWatcherManager.shared.stopWatching(sessionId: event.sessionId)
+                        InterruptWatcherManager.shared.stopWatching(sessionID: event.sessionID)
                     }
                 }
 
                 if event.event == "Stop" {
-                    HookSocketServer.shared.cancelPendingPermissions(sessionId: event.sessionId)
+                    HookSocketServer.shared.cancelPendingPermissions(sessionID: event.sessionID)
                 }
 
-                if event.event == "PostToolUse", let toolUseId = event.toolUseId {
-                    HookSocketServer.shared.cancelPendingPermission(toolUseId: toolUseId)
+                if event.event == "PostToolUse", let toolUseID = event.toolUseID {
+                    HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
                 }
             },
-            onPermissionFailure: { sessionId, toolUseId in
+            onPermissionFailure: { sessionID, toolUseID in
                 Task {
                     await SessionStore.shared.process(
-                        .permissionSocketFailed(sessionId: sessionId, toolUseId: toolUseId)
+                        .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
                     )
                 }
             }
@@ -76,77 +80,83 @@ class ClaudeSessionMonitor: ObservableObject {
 
     // MARK: - Permission Handling
 
-    func approvePermission(sessionId: String) {
+    func approvePermission(sessionID: String) {
         Task {
-            guard let session = await SessionStore.shared.session(for: sessionId),
-                  let permission = session.activePermission else {
+            guard let session = await SessionStore.shared.session(for: sessionID),
+                  let permission = session.activePermission
+            else {
                 return
             }
 
             HookSocketServer.shared.respondToPermission(
-                toolUseId: permission.toolUseId,
+                toolUseID: permission.toolUseID,
                 decision: "allow"
             )
 
             await SessionStore.shared.process(
-                .permissionApproved(sessionId: sessionId, toolUseId: permission.toolUseId)
+                .permissionApproved(sessionID: sessionID, toolUseID: permission.toolUseID)
             )
         }
     }
 
-    func denyPermission(sessionId: String, reason: String?) {
+    func denyPermission(sessionID: String, reason: String?) {
         Task {
-            guard let session = await SessionStore.shared.session(for: sessionId),
-                  let permission = session.activePermission else {
+            guard let session = await SessionStore.shared.session(for: sessionID),
+                  let permission = session.activePermission
+            else {
                 return
             }
 
             HookSocketServer.shared.respondToPermission(
-                toolUseId: permission.toolUseId,
+                toolUseID: permission.toolUseID,
                 decision: "deny",
                 reason: reason
             )
 
             await SessionStore.shared.process(
-                .permissionDenied(sessionId: sessionId, toolUseId: permission.toolUseId, reason: reason)
+                .permissionDenied(sessionID: sessionID, toolUseID: permission.toolUseID, reason: reason)
             )
         }
     }
 
     /// Archive (remove) a session from the instances list
-    func archiveSession(sessionId: String) {
+    func archiveSession(sessionID: String) {
         Task {
-            await SessionStore.shared.process(.sessionEnded(sessionId: sessionId))
+            await SessionStore.shared.process(.sessionEnded(sessionID: sessionID))
         }
-    }
-
-    // MARK: - State Update
-
-    private func updateFromSessions(_ sessions: [SessionState]) {
-        instances = sessions
-        pendingInstances = sessions.filter { $0.needsAttention }
     }
 
     // MARK: - History Loading (for UI)
 
     /// Request history load for a session
-    func loadHistory(sessionId: String, cwd: String) {
+    func loadHistory(sessionID: String, cwd: String) {
         Task {
-            await SessionStore.shared.process(.loadHistory(sessionId: sessionId, cwd: cwd))
+            await SessionStore.shared.process(.loadHistory(sessionID: sessionID, cwd: cwd))
         }
+    }
+
+    // MARK: Private
+
+    private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - State Update
+
+    private func updateFromSessions(_ sessions: [SessionState]) {
+        instances = sessions
+        pendingInstances = sessions.filter(\.needsAttention)
     }
 }
 
-// MARK: - Interrupt Watcher Delegate
+// MARK: JSONLInterruptWatcherDelegate
 
 extension ClaudeSessionMonitor: JSONLInterruptWatcherDelegate {
-    nonisolated func didDetectInterrupt(sessionId: String) {
+    nonisolated func didDetectInterrupt(sessionID: String) {
         Task {
-            await SessionStore.shared.process(.interruptDetected(sessionId: sessionId))
+            await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
         }
 
         Task { @MainActor in
-            InterruptWatcherManager.shared.stopWatching(sessionId: sessionId)
+            InterruptWatcherManager.shared.stopWatching(sessionID: sessionID)
         }
     }
 }

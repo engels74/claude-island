@@ -7,17 +7,12 @@
 
 import SwiftUI
 
+// MARK: - ScreenPickerRow
+
 struct ScreenPickerRow: View {
+    // MARK: Internal
+
     @ObservedObject var screenSelector: ScreenSelector
-    @State private var isHovered = false
-
-    private var isExpanded: Bool {
-        get { screenSelector.isPickerExpanded }
-    }
-
-    private func setExpanded(_ value: Bool) {
-        screenSelector.isPickerExpanded = value
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -78,7 +73,7 @@ struct ScreenPickerRow: View {
                             label: screen.localizedName,
                             sublabel: screenSublabel(for: screen),
                             isSelected: screenSelector.selectionMode == .specificScreen &&
-                                       screenSelector.isSelected(screen)
+                                screenSelector.isSelected(screen)
                         ) {
                             screenSelector.selectScreen(screen)
                             triggerWindowRecreation()
@@ -91,6 +86,12 @@ struct ScreenPickerRow: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
+
+    private var isExpanded: Bool { screenSelector.isPickerExpanded }
 
     private var currentSelectionLabel: String {
         switch screenSelector.selectionMode {
@@ -106,6 +107,10 @@ struct ScreenPickerRow: View {
 
     private var textColor: Color {
         .white.opacity(isHovered ? 1.0 : 0.7)
+    }
+
+    private func setExpanded(_ value: Bool) {
+        screenSelector.isPickerExpanded = value
     }
 
     private func screenSublabel(for screen: NSScreen) -> String? {
@@ -136,15 +141,15 @@ struct ScreenPickerRow: View {
     }
 }
 
-// MARK: - Screen Option Row
+// MARK: - ScreenOptionRow
 
 private struct ScreenOptionRow: View {
+    // MARK: Internal
+
     let label: String
     let sublabel: String?
     let isSelected: Bool
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -158,7 +163,7 @@ private struct ScreenOptionRow: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.7))
 
-                    if let sublabel = sublabel {
+                    if let sublabel {
                         Text(sublabel)
                             .font(.system(size: 10))
                             .foregroundColor(.white.opacity(0.4))
@@ -183,4 +188,8 @@ private struct ScreenOptionRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }
