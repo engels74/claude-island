@@ -86,6 +86,8 @@ jobs:
             echo ""
             echo "### Analysis Reports"
             echo ""
+            echo "| File | Report |"
+            echo "|------|--------|"
             # Output format is comma-separated "filename=url" pairs
             IFS=',' read -ra PAIRS <<< "${{ steps.virustotal.outputs.analysis }}"
             for pair in "${PAIRS[@]}"; do
