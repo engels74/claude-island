@@ -2,74 +2,119 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Coding Guidelines
+
+See `.augment/rules/` for detailed best practices:
+
+- `swift-dev-pro.md` - Modern Swift 5.9–6.x patterns (actors, @Observable, structured concurrency)
+- `python-314-pro.md` - Python 3.14+ patterns (for the hook script in `ClaudeIsland/Resources/`)
+
 ## Project Overview
 
-Claude Island is a macOS menu bar app (macOS 15.6+) that provides Dynamic Island-style notifications for Claude Code CLI sessions. It displays a notch overlay that expands from the MacBook notch, showing live session status and allowing permission approvals directly from the UI.
+Claude Island is a macOS menu bar application (Swift/SwiftUI) that displays Dynamic Island-style notifications for Claude Code CLI sessions. It monitors Claude Code activities via Unix socket IPC and displays status updates, permission requests, and chat history in an animated notch overlay.
+
+**Requirements:** macOS 15.6+, Xcode 16.x, Swift 5.9+
 
 ## Build Commands
 
 ```bash
-# Build for development
-xcodebuild -scheme ClaudeIsland -configuration Debug build
-
-# Build release with ad-hoc signing
+# Build release
 ./scripts/build.sh
+# Output: build/export/Claude Island.app
 
-# Build release (no scripts)
+# Build with xcodebuild directly
 xcodebuild -scheme ClaudeIsland -configuration Release build
-```
 
-## Linting and Formatting
+# Create release DMG (requires Sparkle keys)
+./scripts/create-release.sh --skip-notarization
 
-```bash
-# Run all pre-commit checks
+# Run pre-commit hooks (linting/formatting)
 prek run --all-files
 
-# Format Swift files
-swiftformat ClaudeIsland
-
-# Lint Swift files
-swiftlint lint --strict ClaudeIsland
-
-# Lint shell scripts
-shellcheck scripts/*.sh
+# Install pre-commit hooks
+prek install --hook-type pre-commit --hook-type pre-push
 ```
+
+## Code Quality
+
+The project uses strict linting enforced by pre-commit hooks:
+
+- **SwiftFormat** (v0.55.3): Auto-formats Swift code
+- **SwiftLint** (v0.57.1): Lints with `--strict` mode, 70+ opt-in rules enabled
+- **Ruff** (v0.14.11+): Python linting/formatting for hook script
+- **ShellCheck**: Shell script validation
+
+Key linting rules:
+
+- Line length: warning 150, error 200
+- Use `os.Logger` instead of `print()` for logging
+- Function body: warning 60, error 100 lines
+- Force unwrapping/cast/try are warnings, not errors
 
 ## Architecture
 
-### Core Components
+### Core Pattern: MVVM + Actors + Event-Driven
 
-- **SessionStore** (`Services/State/SessionStore.swift`) - Actor-based central state manager for all Claude sessions. All state mutations flow through `process(_ event:)`. Uses event-driven architecture with `SessionEvent` enum.
+The app uses Swift actors for thread-safe state management and `@Observable` for SwiftUI reactivity.
 
-- **HookSocketServer** (`Services/Hooks/HookSocketServer.swift`) - Unix socket server that receives events from Claude Code CLI hooks. Hooks are installed in `~/.claude/hooks/` and communicate session state via socket.
+**Key Components:**
 
-- **NotchViewModel** (`Core/NotchViewModel.swift`) - `@Observable` view model managing notch UI state (opened/closed/popping), content type switching, and geometry calculations.
+- **`SessionStore`** (actor): Thread-safe container for all session state, emits changes via `AsyncStream`
+- **`NotchViewModel`** (`@Observable`): Aggregates state for UI, handles user interactions
+- **`HookSocketServer`**: Listens on `/tmp/claude-island.sock` for JSON messages from Python hook
+- **`ClaudeSessionMonitor`**: Watches Claude JSONL history files, parses conversations incrementally
+- **`ConversationParser`**: Streams JSONL files line-by-line into `SessionEvent` objects
 
-- **ClaudeSessionMonitor** (`Services/Session/ClaudeSessionMonitor.swift`) - Coordinates between HookSocketServer and SessionStore, handles interrupt detection and permission callbacks.
+### Directory Structure
 
-### Data Flow
+```
+ClaudeIsland/
+├── App/           # App entry point, AppDelegate, WindowManager
+├── Core/          # ViewModels, Settings, geometry calculations
+├── Models/        # Data models (ChatMessage, SessionEvent, SessionState)
+├── Services/      # Business logic split by domain:
+│   ├── Hooks/     # Socket server, hook installer
+│   ├── Session/   # Session monitoring, JSONL parsing
+│   ├── State/     # SessionStore actor, event processing
+│   ├── Tmux/      # Tmux integration
+│   └── Window/    # Window focusing, Yabai integration
+├── UI/            # SwiftUI views and components
+│   ├── Views/     # Main views (NotchView, ChatView, etc.)
+│   ├── Window/    # NSPanel/NSHostingView wrappers
+│   └── Components/# Reusable UI components
+└── Resources/     # Python hook script (claude-island-state.py)
+```
 
-1. Claude Code CLI triggers hooks that send JSON events to HookSocketServer
-2. HookSocketServer parses events and forwards to SessionStore via `process(.hookReceived(event))`
-3. SessionStore updates session state and publishes changes via Combine
-4. NotchViewModel and views react to state changes
+### IPC Flow
 
-### UI Layer
+1. Claude Code runs with hooks installed at `~/.claude/hooks/`
+2. Python hook (`claude-island-state.py`) sends JSON events to Unix socket
+3. `HookSocketServer` receives events and updates `SessionStore`
+4. `NotchViewModel` observes `SessionStore` changes via `AsyncStream`
+5. SwiftUI views reactively update based on `NotchViewModel` state
 
-- **NotchWindow/NotchWindowController** - Custom NSPanel-based floating window positioned at screen notch
-- **NotchView** - Main SwiftUI view composing the notch UI
-- **ChatView/ClaudeInstancesView** - Content views for chat history and session list
+## Python Hook
 
-### Key Patterns
+The hook script at `ClaudeIsland/Resources/claude-island-state.py` uses **Python 3.14+** with modern syntax:
 
-- Uses `@Observable` macro (macOS 14+) for view models instead of `ObservableObject`
-- Actor isolation for thread-safe state management
-- Combine publishers for cross-component communication
-- GCD DispatchSource for non-blocking socket I/O
+- PEP 758 bracketless `except` clauses
+- PEP 649 deferred annotations (no forward reference quotes needed)
+- TypedDicts for basedpyright compliance
+- Pattern matching (`match`/`case`)
 
-## Code Style
+## CI/CD
 
-- Use `os.Logger` for logging, not `print()` (enforced by SwiftLint custom rule)
-- Line length: 150 warning, 200 error
-- SwiftFormat handles organization with `organizeDeclarations` and `sortDeclarations` enabled
-- `HookSocketServer.swift` is excluded from SwiftFormat's `organizeDeclarations` due to complexity
+GitHub Actions workflows:
+
+- **`code-quality.yml`**: Runs on push to main and PRs, executes `prek run --all-files`
+- **`release.yml`**: Manual trigger or tag push (`v*`), builds DMG with Sparkle signing
+
+## Signing
+
+The app uses ad-hoc signing (`CODE_SIGN_IDENTITY=-`) for development. Users must bypass Gatekeeper on first launch:
+
+```bash
+xattr -d com.apple.quarantine "/Applications/Claude Island.app"
+```
+
+Auto-updates via Sparkle work normally after first launch.
