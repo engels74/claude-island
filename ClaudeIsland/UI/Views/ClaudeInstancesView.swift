@@ -98,11 +98,13 @@ struct ClaudeInstancesView: View {
     }
 
     private func focusSession(_ session: SessionState) {
-        if let pid = session.pid {
-            let success = TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
-            if success { return }
+        Task {
+            if let pid = session.pid {
+                let success = await TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
+                if success { return }
+            }
+            _ = await TerminalFocuser.shared.focusTerminal(forWorkingDirectory: session.cwd)
         }
-        _ = TerminalFocuser.shared.focusTerminal(forWorkingDirectory: session.cwd)
     }
 
     private func openChat(_ session: SessionState) {

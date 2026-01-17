@@ -639,11 +639,13 @@ struct ChatView: View {
     }
 
     private func focusTerminal() {
-        if let pid = session.pid {
-            let success = TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
-            if success { return }
+        Task {
+            if let pid = session.pid {
+                let success = await TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
+                if success { return }
+            }
+            _ = await TerminalFocuser.shared.focusTerminal(forWorkingDirectory: self.session.cwd)
         }
-        _ = TerminalFocuser.shared.focusTerminal(forWorkingDirectory: self.session.cwd)
     }
 
     private func approvePermission() {

@@ -15,6 +15,10 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "T
 
 /// Focuses terminal applications using NSRunningApplication.activate()
 /// This provides a universal terminal focus feature that works without yabai.
+///
+/// - Important: All focus methods are async to avoid blocking the main thread.
+///   The underlying `ProcessTreeBuilder.buildTree()` calls `ProcessExecutor.runSync`
+///   which has a precondition that it must not run on the main thread.
 struct TerminalFocuser: Sendable {
     // MARK: Lifecycle
 
@@ -27,46 +31,68 @@ struct TerminalFocuser: Sendable {
     /// Focus the terminal app for a given Claude PID
     /// - Parameter claudePID: The process ID of the Claude instance
     /// - Returns: true if the terminal was successfully focused
-    nonisolated func focusTerminal(forClaudePID claudePID: Int) -> Bool {
-        let tree = ProcessTreeBuilder.shared.buildTree()
+    func focusTerminal(forClaudePID claudePID: Int) async -> Bool {
+        // Run blocking process tree operations on background thread
+        let result: (terminalPID: Int, command: String)? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let tree = ProcessTreeBuilder.shared.buildTree()
 
-        // Walk up process tree to find terminal app
-        guard let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: claudePID, tree: tree) else {
+                guard let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: claudePID, tree: tree),
+                      let terminalInfo = tree[terminalPID]
+                else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                continuation.resume(returning: (terminalPID, terminalInfo.command))
+            }
+        }
+
+        guard let result else {
             logger.debug("No terminal found for Claude PID \(claudePID)")
             return false
         }
 
-        guard let terminalInfo = tree[terminalPID] else {
-            logger.debug("Terminal PID \(terminalPID) not in process tree")
-            return false
+        return await MainActor.run {
+            self.activateTerminal(terminalPID: result.terminalPID, command: result.command)
         }
-
-        return self.activateTerminal(terminalPID: terminalPID, command: terminalInfo.command)
     }
 
     /// Focus the terminal app for a given working directory (fallback when no PID)
     /// - Parameter workingDirectory: The current working directory to match
     /// - Returns: true if a terminal was successfully focused
-    nonisolated func focusTerminal(forWorkingDirectory workingDirectory: String) -> Bool {
-        let tree = ProcessTreeBuilder.shared.buildTree()
+    func focusTerminal(forWorkingDirectory workingDirectory: String) async -> Bool {
+        // Run blocking process tree operations on background thread
+        let result: (terminalPID: Int, command: String)? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let tree = ProcessTreeBuilder.shared.buildTree()
 
-        // Find Claude processes with matching cwd
-        for (pid, info) in tree {
-            guard info.command.lowercased().contains("claude") else { continue }
-            guard let cwd = ProcessTreeBuilder.shared.getWorkingDirectory(forPID: pid) else { continue }
-            guard cwd == workingDirectory else { continue }
+                // Find Claude processes with matching cwd
+                for (pid, info) in tree {
+                    guard info.command.lowercased().contains("claude") else { continue }
+                    guard let cwd = ProcessTreeBuilder.shared.getWorkingDirectory(forPID: pid) else { continue }
+                    guard cwd == workingDirectory else { continue }
 
-            // Found a Claude with matching cwd, find its terminal
-            if let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: pid, tree: tree),
-               let terminalInfo = tree[terminalPID] {
-                if self.activateTerminal(terminalPID: terminalPID, command: terminalInfo.command) {
-                    return true
+                    // Found a Claude with matching cwd, find its terminal
+                    if let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: pid, tree: tree),
+                       let terminalInfo = tree[terminalPID] {
+                        continuation.resume(returning: (terminalPID, terminalInfo.command))
+                        return
+                    }
                 }
+
+                continuation.resume(returning: nil)
             }
         }
 
-        logger.debug("No terminal found for working directory \(workingDirectory)")
-        return false
+        guard let result else {
+            logger.debug("No terminal found for working directory \(workingDirectory)")
+            return false
+        }
+
+        return await MainActor.run {
+            self.activateTerminal(terminalPID: result.terminalPID, command: result.command)
+        }
     }
 
     // MARK: Private
@@ -113,8 +139,9 @@ struct TerminalFocuser: Sendable {
             (["hyper"], "co.zeit.hyper"),
             (["warp"], "dev.warp.Warp-Stable"),
             (["wezterm"], "com.github.wez.wezterm"),
+            // VS Code Insiders must come before generic "code" to avoid false matches
+            (["code - insiders", "code-insiders"], "com.microsoft.VSCodeInsiders"),
             (["vscode", "code"], "com.microsoft.VSCode"),
-            (["code - insiders"], "com.microsoft.VSCodeInsiders"),
             (["cursor"], "com.todesktop.230313mzl4w4u92"),
             (["windsurf"], "com.exafunction.windsurf"),
             (["zed"], "dev.zed.Zed"),
