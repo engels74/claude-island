@@ -32,7 +32,10 @@ extension SessionStore {
 
     /// Check all sessions for process termination
     func recheckAllSessions() async {
-        for (sessionID, session) in sessions {
+        // Take snapshot before iteration to avoid mutating dictionary during async loop
+        let sessionsSnapshot = sessions
+
+        for (sessionID, session) in sessionsSnapshot {
             // Skip ended sessions
             guard session.phase != .ended else { continue }
 
@@ -50,7 +53,13 @@ extension SessionStore {
     }
 
     /// Check if a process is running using kill(pid, 0)
+    /// Returns true if process exists (even if we lack permission to signal it)
     nonisolated func isProcessRunning(pid: Int) -> Bool {
-        kill(Int32(pid), 0) == 0
+        if kill(Int32(pid), 0) == 0 {
+            return true
+        }
+        // EPERM means process exists but we lack permission - treat as running
+        // ESRCH means no such process - treat as not running
+        return errno == EPERM
     }
 }
