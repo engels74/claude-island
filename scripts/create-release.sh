@@ -313,7 +313,11 @@ echo ""
 if [ "$SKIP_WEBSITE" = false ]; then
     echo "=== Step 6: Updating Website ==="
 
-    if [ -d "$WEBSITE_PUBLIC" ] && [ -f "$RELEASE_DIR/appcast/appcast.xml" ]; then
+    # Don't use appcast if Sparkle signing was skipped (avoids publishing stale appcast)
+    if [ "$SKIP_SPARKLE" = true ]; then
+        echo "Sparkle signing was skipped - not updating website appcast."
+        echo "Website update skipped to avoid publishing stale appcast data."
+    elif [ -d "$WEBSITE_PUBLIC" ] && [ -f "$RELEASE_DIR/appcast/appcast.xml" ]; then
         # Copy appcast to website
         cp "$RELEASE_DIR/appcast/appcast.xml" "$WEBSITE_PUBLIC/appcast.xml"
 
