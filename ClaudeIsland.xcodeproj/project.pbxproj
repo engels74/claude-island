@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		FD0F42E72EE7ABA400980302 /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = FD0F42E62EE7ABA400980302 /* Mixpanel */; };
 		FD0F42E82EE7ACA500980302 /* OcclusionKit in Frameworks */ = {isa = PBXBuildFile; productRef = FD0F42E92EE7ACA500980302 /* OcclusionKit */; };
 		FDA49F7D2EE11E3C00F9612E /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = FD33FD722EDF32D7002A6548 /* Markdown */; };
 		FDA49F7E2EE11E3C00F9612E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FDA49F7F2EE11E3C00F9612E /* Sparkle */; };
@@ -43,7 +42,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FD0F42E72EE7ABA400980302 /* Mixpanel in Frameworks */,
 				FD0F42E82EE7ACA500980302 /* OcclusionKit in Frameworks */,
 				FDA49F7D2EE11E3C00F9612E /* Markdown in Frameworks */,
 				FDA49F7E2EE11E3C00F9612E /* Sparkle in Frameworks */,
@@ -91,7 +89,6 @@
 			packageProductDependencies = (
 				FD33FD722EDF32D7002A6548 /* Markdown */,
 				FDA49F7F2EE11E3C00F9612E /* Sparkle */,
-				FD0F42E62EE7ABA400980302 /* Mixpanel */,
 				FD0F42E92EE7ACA500980302 /* OcclusionKit */,
 			);
 			productName = ClaudeIsland;
@@ -125,7 +122,6 @@
 			packageReferences = (
 				FD33FD712EDF32D7002A6548 /* XCRemoteSwiftPackageReference "swift-markdown" */,
 				FDA49F802EE11E3C00F9612E /* XCRemoteSwiftPackageReference "Sparkle" */,
-				FD0F42E52EE7ABA400980302 /* XCRemoteSwiftPackageReference "mixpanel-swift" */,
 				FD0F42EA2EE7ACA500980302 /* XCRemoteSwiftPackageReference "OcclusionKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -373,14 +369,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		FD0F42E52EE7ABA400980302 /* XCRemoteSwiftPackageReference "mixpanel-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/mixpanel/mixpanel-swift";
-			requirement = {
-				branch = master;
-				kind = branch;
-			};
-		};
 		FD0F42EA2EE7ACA500980302 /* XCRemoteSwiftPackageReference "OcclusionKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/akdoan1/OcclusionKit";
@@ -408,11 +396,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		FD0F42E62EE7ABA400980302 /* Mixpanel */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FD0F42E52EE7ABA400980302 /* XCRemoteSwiftPackageReference "mixpanel-swift" */;
-			productName = Mixpanel;
-		};
 		FD0F42E92EE7ACA500980302 /* OcclusionKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = FD0F42EA2EE7ACA500980302 /* XCRemoteSwiftPackageReference "OcclusionKit" */;

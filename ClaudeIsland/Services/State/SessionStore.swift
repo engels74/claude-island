@@ -10,7 +10,6 @@
 
 import Combine
 import Foundation
-import Mixpanel
 import os.log
 
 // Central state manager for all Claude sessions
@@ -247,13 +246,7 @@ actor SessionStore {
 
     private func processHookEvent(_ event: HookEvent) async {
         let sessionID = event.sessionID
-        let isNewSession = self.sessions[sessionID] == nil
         var session = self.sessions[sessionID] ?? self.createSession(from: event)
-
-        // Track new session in Mixpanel
-        if isNewSession {
-            Mixpanel.mainInstance().track(event: "Session Started")
-        }
 
         session.pid = event.pid
         if let pid = event.pid {
