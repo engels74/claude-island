@@ -24,6 +24,7 @@ KEYCHAIN_PROFILE="ClaudeIsland"
 SKIP_NOTARIZATION=false
 SKIP_GITHUB=false
 SKIP_WEBSITE=false
+SKIP_SPARKLE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-website)
             SKIP_WEBSITE=true
+            shift
+            ;;
+        --skip-sparkle)
+            SKIP_SPARKLE=true
             shift
             ;;
         *)
@@ -177,67 +182,72 @@ fi
 # ============================================
 # Step 4: Sign for Sparkle and generate appcast
 # ============================================
-echo "=== Step 4: Signing for Sparkle ==="
-
-# Find Sparkle tools
-SPARKLE_SIGN=""
-GENERATE_APPCAST=""
-
-POSSIBLE_PATHS=(
-    "$BUILD_DIR/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
-    "$HOME/Library/Developer/Xcode/DerivedData/ClaudeIsland-*/SourcePackages/artifacts/sparkle/Sparkle/bin"
-)
-
-for path_pattern in "${POSSIBLE_PATHS[@]}"; do
-    for path in $path_pattern; do
-        if [ -x "$path/sign_update" ]; then
-            SPARKLE_SIGN="$path/sign_update"
-            GENERATE_APPCAST="$path/generate_appcast"
-            break 2
-        fi
-    done
-done
-
-if [ -z "$SPARKLE_SIGN" ]; then
-    echo "WARNING: Could not find Sparkle tools."
-    echo "Build the project in Xcode first to download Sparkle package."
+if [ "$SKIP_SPARKLE" = true ]; then
+    echo "=== Step 4: Skipping Sparkle Signing (--skip-sparkle) ==="
     echo ""
-    echo "Skipping Sparkle signing. You'll need to manually:"
-    echo "1. Sign the DMG with sign_update"
-    echo "2. Generate appcast with generate_appcast"
 else
-    # Check for private key
-    if [ ! -f "$KEYS_DIR/eddsa_private_key" ]; then
-        echo "WARNING: No private key found at $KEYS_DIR/eddsa_private_key"
-        echo "Run ./scripts/generate-keys.sh first"
+    echo "=== Step 4: Signing for Sparkle ==="
+
+    # Find Sparkle tools
+    SPARKLE_SIGN=""
+    GENERATE_APPCAST=""
+
+    POSSIBLE_PATHS=(
+        "$BUILD_DIR/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
+        "$HOME/Library/Developer/Xcode/DerivedData/ClaudeIsland-*/SourcePackages/artifacts/sparkle/Sparkle/bin"
+    )
+
+    for path_pattern in "${POSSIBLE_PATHS[@]}"; do
+        for path in $path_pattern; do
+            if [ -x "$path/sign_update" ]; then
+                SPARKLE_SIGN="$path/sign_update"
+                GENERATE_APPCAST="$path/generate_appcast"
+                break 2
+            fi
+        done
+    done
+
+    if [ -z "$SPARKLE_SIGN" ]; then
+        echo "WARNING: Could not find Sparkle tools."
+        echo "Build the project in Xcode first to download Sparkle package."
         echo ""
-        echo "Skipping Sparkle signing."
+        echo "Skipping Sparkle signing. You'll need to manually:"
+        echo "1. Sign the DMG with sign_update"
+        echo "2. Generate appcast with generate_appcast"
     else
-        # Generate signature
-        echo "Signing DMG for Sparkle..."
-        SIGNATURE=$("$SPARKLE_SIGN" --ed-key-file "$KEYS_DIR/eddsa_private_key" "$DMG_PATH")
+        # Check for private key
+        if [ ! -f "$KEYS_DIR/eddsa_private_key" ]; then
+            echo "WARNING: No private key found at $KEYS_DIR/eddsa_private_key"
+            echo "Run ./scripts/generate-keys.sh first"
+            echo ""
+            echo "Skipping Sparkle signing."
+        else
+            # Generate signature
+            echo "Signing DMG for Sparkle..."
+            SIGNATURE=$("$SPARKLE_SIGN" --ed-key-file "$KEYS_DIR/eddsa_private_key" "$DMG_PATH")
 
-        echo ""
-        echo "Sparkle signature:"
-        echo "$SIGNATURE"
-        echo ""
+            echo ""
+            echo "Sparkle signature:"
+            echo "$SIGNATURE"
+            echo ""
 
-        # Generate/update appcast
-        echo "Generating appcast..."
-        APPCAST_DIR="$RELEASE_DIR/appcast"
-        mkdir -p "$APPCAST_DIR"
+            # Generate/update appcast
+            echo "Generating appcast..."
+            APPCAST_DIR="$RELEASE_DIR/appcast"
+            mkdir -p "$APPCAST_DIR"
 
-        # Copy DMG to appcast directory
-        cp "$DMG_PATH" "$APPCAST_DIR/"
+            # Copy DMG to appcast directory
+            cp "$DMG_PATH" "$APPCAST_DIR/"
 
-        # Generate appcast.xml
-        "$GENERATE_APPCAST" --ed-key-file "$KEYS_DIR/eddsa_private_key" "$APPCAST_DIR"
+            # Generate appcast.xml
+            "$GENERATE_APPCAST" --ed-key-file "$KEYS_DIR/eddsa_private_key" "$APPCAST_DIR"
 
-        echo "Appcast generated at: $APPCAST_DIR/appcast.xml"
+            echo "Appcast generated at: $APPCAST_DIR/appcast.xml"
+        fi
     fi
-fi
 
-echo ""
+    echo ""
+fi
 
 # ============================================
 # Step 5: Create GitHub Release
