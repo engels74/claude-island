@@ -78,18 +78,26 @@ jobs:
 
       - name: Create scan results summary
         run: |
-          echo "## VirusTotal Scan Results" > virustotal-results.md
-          echo "" >> virustotal-results.md
-          echo "Scan completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> virustotal-results.md
-          echo "" >> virustotal-results.md
-          echo "### Analysis URLs" >> virustotal-results.md
-          # Output format is comma-separated "filename=url" pairs
-          IFS=',' read -ra PAIRS <<< "${{ steps.virustotal.outputs.analysis }}"
-          for pair in "${PAIRS[@]}"; do
-            filename="${pair%%=*}"
-            url="${pair#*=}"
-            echo "- [${filename}](${url})" >> virustotal-results.md
-          done
+          # Build the markdown content
+          {
+            echo "## 🛡️ VirusTotal Scan Results"
+            echo ""
+            echo "**Scan completed:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo ""
+            echo "### Analysis Reports"
+            echo ""
+            # Output format is comma-separated "filename=url" pairs
+            IFS=',' read -ra PAIRS <<< "${{ steps.virustotal.outputs.analysis }}"
+            for pair in "${PAIRS[@]}"; do
+              filename="${pair%%=*}"
+              url="${pair#*=}"
+              echo "| 📦 \`${filename}\` | [View VirusTotal Report](${url}) |"
+            done
+            echo ""
+            echo "---"
+            echo ""
+            echo "_Click the links above to view full analysis on VirusTotal._"
+          } | tee virustotal-results.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload scan results
         uses: actions/upload-artifact@v6
