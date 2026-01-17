@@ -115,7 +115,13 @@ jobs:
           echo "Scan completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> virustotal-results.md
           echo "" >> virustotal-results.md
           echo "### Analysis URLs" >> virustotal-results.md
-          echo '${{ steps.virustotal.outputs.analysis }}' | jq -r 'to_entries[] | "- [\(.key)](\(.value))"' >> virustotal-results.md
+          # Output format is comma-separated "filename=url" pairs
+          IFS=',' read -ra PAIRS <<< "${{ steps.virustotal.outputs.analysis }}"
+          for pair in "${PAIRS[@]}"; do
+            filename="${pair%%=*}"
+            url="${pair#*=}"
+            echo "- [${filename}](${url})" >> virustotal-results.md
+          done
 
       - name: Upload scan results
         uses: actions/upload-artifact@v6
