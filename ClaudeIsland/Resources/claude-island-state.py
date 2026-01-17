@@ -119,12 +119,11 @@ class SessionState:
             "tty_valid": self.tty_valid,
             "session_active": self.session_active,
             "status": self.status,
+            "tool_input": self.tool_input,  # Required field - include in literal
         }
 
         if self.tool is not None:
             result["tool"] = self.tool
-        # Always include tool_input for backwards compatibility (even if empty)
-        result["tool_input"] = self.tool_input
         if self.tool_use_id is not None:
             result["tool_use_id"] = self.tool_use_id
         if self.notification_type is not None:
