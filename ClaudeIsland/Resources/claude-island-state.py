@@ -8,14 +8,21 @@ Requires: Python 3.14+
 """
 
 __all__ = [
+    "HookEventData",
+    "PermissionResponse",
     "SessionState",
-    "validate_tty",
-    "is_session_active",
-    "get_tty",
-    "send_event",
+    "SessionStateDict",
+    "ToolExtras",
+    "ToolInputType",
     "determine_status",
+    "get_tty",
     "handle_permission_response",
+    "is_hook_event_data",
+    "is_permission_response",
+    "is_session_active",
     "main",
+    "send_event",
+    "validate_tty",
 ]
 
 import json
@@ -25,7 +32,59 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict, TypeIs, cast
+
+
+# TypedDict definitions for JSON structures
+class HookEventData(TypedDict, total=False):
+    """Input data from Claude Code hook via stdin."""
+
+    session_id: str
+    hook_event_name: str
+    cwd: str
+    tool_name: str
+    tool_input: dict[str, str | int | bool | list[str] | None]
+    tool_use_id: str
+    notification_type: str
+    message: str
+
+
+class ToolExtras(TypedDict, total=False):
+    """Extra fields returned by determine_status()."""
+
+    tool: str
+    tool_input: dict[str, str | int | bool | list[str] | None]
+    tool_use_id: str
+    notification_type: str
+    message: str
+
+
+class PermissionResponse(TypedDict, total=False):
+    """Response from ClaudeIsland.app for permission requests."""
+
+    decision: str
+    reason: str
+
+
+class SessionStateDict(TypedDict):
+    """Dictionary representation of SessionState for JSON serialization."""
+
+    session_id: str
+    cwd: str
+    event: str
+    pid: int
+    tty: str | None
+    tty_valid: bool
+    session_active: bool
+    status: str
+    tool: NotRequired[str]
+    tool_input: NotRequired[dict[str, str | int | bool | list[str] | None]]
+    tool_use_id: NotRequired[str]
+    notification_type: NotRequired[str]
+    message: NotRequired[str]
+
+
+ToolInputType = dict[str, str | int | bool | list[str] | None]
 
 SOCKET_PATH = Path("/tmp/claude-island.sock")
 TIMEOUT_SECONDS = 300  # 5 minutes for permission decisions
@@ -44,14 +103,14 @@ class SessionState:
     session_active: bool = True
     status: str = "unknown"
     tool: str | None = None
-    tool_input: dict[str, Any] = field(default_factory=dict)
+    tool_input: ToolInputType = field(default_factory=dict)
     tool_use_id: str | None = None
     notification_type: str | None = None
     message: str | None = None
 
-    def to_dict(self, /) -> dict[str, Any]:
+    def to_dict(self, /) -> SessionStateDict:
         """Convert to dictionary for JSON serialization."""
-        result: dict[str, Any] = {
+        result: SessionStateDict = {
             "session_id": self.session_id,
             "cwd": self.cwd,
             "event": self.event,
@@ -160,7 +219,46 @@ def get_tty(ppid: int, /) -> str | None:
     return None
 
 
-def send_event(state: SessionState, /) -> dict[str, Any] | None:
+def _all_keys_are_strings(d: dict[object, object], /) -> bool:
+    """Check if all keys in a dictionary are strings."""
+    for key in d:
+        if not isinstance(key, str):
+            return False
+    return True
+
+
+def is_hook_event_data(obj: object, /) -> TypeIs[HookEventData]:
+    """Validate that obj is a valid HookEventData dictionary.
+
+    Args:
+        obj: Object to validate (typically from json.load)
+
+    Returns:
+        True if obj is a valid HookEventData, False otherwise
+    """
+    if not isinstance(obj, dict):
+        return False
+    # HookEventData is total=False, so all keys are optional
+    # Just verify it's a dict with string keys
+    return _all_keys_are_strings(cast(dict[object, object], obj))
+
+
+def is_permission_response(obj: object, /) -> TypeIs[PermissionResponse]:
+    """Validate that obj is a valid PermissionResponse dictionary.
+
+    Args:
+        obj: Object to validate (typically from json.loads)
+
+    Returns:
+        True if obj is a valid PermissionResponse, False otherwise
+    """
+    if not isinstance(obj, dict):
+        return False
+    # PermissionResponse has optional decision and reason, both strings
+    return _all_keys_are_strings(cast(dict[object, object], obj))
+
+
+def send_event(state: SessionState, /) -> PermissionResponse | None:
     """Send event to app, return response if any.
 
     Args:
@@ -176,7 +274,9 @@ def send_event(state: SessionState, /) -> dict[str, Any] | None:
             sock.sendall(json.dumps(state.to_dict()).encode())
             if state.status == "waiting_for_approval":
                 if response := sock.recv(4096):
-                    return json.loads(response.decode())
+                    parsed = cast(object, json.loads(response.decode()))
+                    if is_permission_response(parsed):
+                        return parsed
             return None
     except OSError, json.JSONDecodeError:
         return None
@@ -184,9 +284,9 @@ def send_event(state: SessionState, /) -> dict[str, Any] | None:
 
 def determine_status(
     event: str,
-    data: dict[str, Any],
+    data: HookEventData,
     /,
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[str, ToolExtras]:
     """Determine session status and extra fields from hook event.
 
     Uses pattern matching to dispatch on event type.
@@ -204,28 +304,28 @@ def determine_status(
             return "processing", {}
 
         case "PreToolUse":
-            extras: dict[str, Any] = {
-                "tool": data.get("tool_name"),
-                "tool_input": data.get("tool_input", {}),
-            }
+            extras: ToolExtras = {}
+            if tool := data.get("tool_name"):
+                extras["tool"] = tool
+            extras["tool_input"] = data.get("tool_input", {})
             if tool_use_id := data.get("tool_use_id"):
                 extras["tool_use_id"] = tool_use_id
             return "running_tool", extras
 
         case "PostToolUse":
-            extras = {
-                "tool": data.get("tool_name"),
-                "tool_input": data.get("tool_input", {}),
-            }
+            extras_post: ToolExtras = {}
+            if tool := data.get("tool_name"):
+                extras_post["tool"] = tool
+            extras_post["tool_input"] = data.get("tool_input", {})
             if tool_use_id := data.get("tool_use_id"):
-                extras["tool_use_id"] = tool_use_id
-            return "processing", extras
+                extras_post["tool_use_id"] = tool_use_id
+            return "processing", extras_post
 
         case "PermissionRequest":
-            return "waiting_for_approval", {
-                "tool": data.get("tool_name"),
-                "tool_input": data.get("tool_input", {}),
-            }
+            extras_perm: ToolExtras = {"tool_input": data.get("tool_input", {})}
+            if tool := data.get("tool_name"):
+                extras_perm["tool"] = tool
+            return "waiting_for_approval", extras_perm
 
         case "Notification":
             notification_type = data.get("notification_type")
@@ -234,12 +334,17 @@ def determine_status(
                     # Handled by PermissionRequest hook with better info
                     return "skip", {}
                 case "idle_prompt":
-                    return "waiting_for_input", {"notification_type": notification_type}
+                    extras_notif: ToolExtras = {}
+                    if notification_type:
+                        extras_notif["notification_type"] = notification_type
+                    return "waiting_for_input", extras_notif
                 case _:
-                    return "notification", {
-                        "notification_type": notification_type,
-                        "message": data.get("message"),
-                    }
+                    extras_other: ToolExtras = {}
+                    if notification_type:
+                        extras_other["notification_type"] = notification_type
+                    if msg := data.get("message"):
+                        extras_other["message"] = msg
+                    return "notification", extras_other
 
         case "Stop":
             return "waiting_for_input", {}
@@ -263,7 +368,7 @@ def determine_status(
             return "unknown", {}
 
 
-def handle_permission_response(response: dict[str, Any] | None, /) -> None:
+def handle_permission_response(response: PermissionResponse | None, /) -> None:
     """Handle the permission response from ClaudeIsland.app.
 
     Args:
@@ -300,7 +405,7 @@ def handle_permission_response(response: dict[str, Any] | None, /) -> None:
             print(json.dumps(output))
             sys.exit(0)
 
-        case _:
+        case _decision:
             # "ask" or unknown - let Claude Code show its normal UI
             pass
 
@@ -308,9 +413,13 @@ def handle_permission_response(response: dict[str, Any] | None, /) -> None:
 def main() -> None:
     """Main entry point for the hook."""
     try:
-        data: dict[str, Any] = json.load(sys.stdin)
+        raw_data = cast(object, json.load(sys.stdin))
     except json.JSONDecodeError:
         sys.exit(1)
+
+    if not is_hook_event_data(raw_data):
+        sys.exit(1)
+    data: HookEventData = raw_data
 
     session_id = data.get("session_id", "unknown")
     event = data.get("hook_event_name", "")
@@ -355,7 +464,7 @@ def main() -> None:
         sys.exit(0)
 
     # Send to socket (fire and forget for non-permission events)
-    send_event(state)
+    _ = send_event(state)
 
 
 if __name__ == "__main__":
