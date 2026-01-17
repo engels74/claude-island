@@ -31,14 +31,27 @@ jobs:
         run: brew install create-dmg || true
 
       - name: Setup Sparkle key
+        id: sparkle-key
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          mkdir -p .sparkle-keys
-          echo "$SPARKLE_PRIVATE_KEY" > .sparkle-keys/eddsa_private_key
+          if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            mkdir -p .sparkle-keys
+            echo "$SPARKLE_PRIVATE_KEY" > .sparkle-keys/eddsa_private_key
+            echo "has_key=true" >> $GITHUB_OUTPUT
+            echo "✅ Sparkle private key configured"
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "⚠️ SPARKLE_PRIVATE_KEY secret not set - Sparkle signing will be skipped"
+          fi
 
       - name: Create DMG and sign with Sparkle
-        run: ./scripts/create-release.sh --skip-notarization --skip-github --skip-website
+        run: |
+          SPARKLE_FLAG=""
+          if [ "${{ steps.sparkle-key.outputs.has_key }}" != "true" ]; then
+            SPARKLE_FLAG="--skip-sparkle"
+          fi
+          ./scripts/create-release.sh --skip-notarization --skip-github --skip-website $SPARKLE_FLAG
 
       - name: Get version
         id: version
@@ -83,6 +96,7 @@ jobs:
             After first launch, auto-updates via Sparkle work normally.
 
       - name: Upload appcast artifact
+        if: steps.sparkle-key.outputs.has_key == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: appcast
