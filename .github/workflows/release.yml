@@ -198,7 +198,7 @@ jobs:
 
     steps:
       - name: Trigger website appcast update
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ secrets.WEBSITE_PAT }}
           repository: engels74/claude-island-web
