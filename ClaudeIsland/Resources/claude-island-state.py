@@ -227,6 +227,25 @@ def _all_keys_are_strings(d: dict[object, object], /) -> bool:
     return True
 
 
+def _normalize_tool_input(value: object, /) -> ToolInputType:
+    """Normalize tool_input to an empty dict unless it's actually a dict.
+
+    Handles cases where hook payload contains "tool_input": null or other
+    malformed content, ensuring the Swift decoder always receives a valid dict.
+
+    Args:
+        value: The raw tool_input value from the hook payload
+
+    Returns:
+        The value if it's a dict with string keys, otherwise an empty dict
+    """
+    if isinstance(value, dict) and _all_keys_are_strings(
+        cast(dict[object, object], value)
+    ):
+        return cast(ToolInputType, value)
+    return {}
+
+
 def is_hook_event_data(obj: object, /) -> TypeIs[HookEventData]:
     """Validate that obj is a valid HookEventData dictionary.
 
@@ -246,6 +265,9 @@ def is_hook_event_data(obj: object, /) -> TypeIs[HookEventData]:
 def is_permission_response(obj: object, /) -> TypeIs[PermissionResponse]:
     """Validate that obj is a valid PermissionResponse dictionary.
 
+    Validates that the object is a dict with string keys, and that if
+    decision/reason fields are present, they are strings.
+
     Args:
         obj: Object to validate (typically from json.loads)
 
@@ -254,8 +276,14 @@ def is_permission_response(obj: object, /) -> TypeIs[PermissionResponse]:
     """
     if not isinstance(obj, dict):
         return False
-    # PermissionResponse has optional decision and reason, both strings
-    return _all_keys_are_strings(cast(dict[object, object], obj))
+    if not _all_keys_are_strings(cast(dict[object, object], obj)):
+        return False
+    # Validate decision and reason are strings if present
+    if "decision" in obj and not isinstance(obj["decision"], str):
+        return False
+    if "reason" in obj and not isinstance(obj["reason"], str):
+        return False
+    return True
 
 
 def send_event(state: SessionState, /) -> PermissionResponse | None:
@@ -307,7 +335,7 @@ def determine_status(
             extras: ToolExtras = {}
             if tool := data.get("tool_name"):
                 extras["tool"] = tool
-            extras["tool_input"] = data.get("tool_input", {})
+            extras["tool_input"] = _normalize_tool_input(data.get("tool_input"))
             if tool_use_id := data.get("tool_use_id"):
                 extras["tool_use_id"] = tool_use_id
             return "running_tool", extras
@@ -316,13 +344,15 @@ def determine_status(
             extras_post: ToolExtras = {}
             if tool := data.get("tool_name"):
                 extras_post["tool"] = tool
-            extras_post["tool_input"] = data.get("tool_input", {})
+            extras_post["tool_input"] = _normalize_tool_input(data.get("tool_input"))
             if tool_use_id := data.get("tool_use_id"):
                 extras_post["tool_use_id"] = tool_use_id
             return "processing", extras_post
 
         case "PermissionRequest":
-            extras_perm: ToolExtras = {"tool_input": data.get("tool_input", {})}
+            extras_perm: ToolExtras = {
+                "tool_input": _normalize_tool_input(data.get("tool_input"))
+            }
             if tool := data.get("tool_name"):
                 extras_perm["tool"] = tool
             return "waiting_for_approval", extras_perm
@@ -453,7 +483,7 @@ def main() -> None:
         session_active=session_active,
         status=status,
         tool=extras.get("tool"),
-        tool_input=extras.get("tool_input", {}),
+        tool_input=_normalize_tool_input(extras.get("tool_input")),
         tool_use_id=extras.get("tool_use_id"),
         notification_type=extras.get("notification_type"),
         message=extras.get("message"),
