@@ -98,15 +98,11 @@ struct ClaudeInstancesView: View {
     }
 
     private func focusSession(_ session: SessionState) {
-        guard session.isInTmux else { return }
-
-        Task {
-            if let pid = session.pid {
-                _ = await YabaiController.shared.focusWindow(forClaudePID: pid)
-            } else {
-                _ = await YabaiController.shared.focusWindow(forWorkingDirectory: session.cwd)
-            }
+        if let pid = session.pid {
+            let success = TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
+            if success { return }
         }
+        _ = TerminalFocuser.shared.focusTerminal(forWorkingDirectory: session.cwd)
     }
 
     private func openChat(_ session: SessionState) {
@@ -245,10 +241,10 @@ struct InstanceRow: View {
                         self.onChat()
                     }
 
-                    // Go to Terminal button (only if yabai available)
-                    if self.isYabaiAvailable {
+                    // Go to Terminal button (show when session has PID)
+                    if self.session.pid != nil {
                         TerminalButton(
-                            isEnabled: self.session.isInTmux
+                            isEnabled: true
                         ) { self.onFocus() }
                     }
                 }
@@ -267,9 +263,9 @@ struct InstanceRow: View {
                         self.onChat()
                     }
 
-                    // Focus icon (only for tmux instances with yabai)
-                    if self.session.isInTmux && self.isYabaiAvailable {
-                        IconButton(icon: "eye") {
+                    // Terminal icon (show when session has PID)
+                    if self.session.pid != nil {
+                        IconButton(icon: "terminal") {
                             self.onFocus()
                         }
                     }
@@ -297,16 +293,12 @@ struct InstanceRow: View {
                 .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
         )
         .onHover { self.isHovered = $0 }
-        .task {
-            self.isYabaiAvailable = await WindowFinder.shared.isYabaiAvailable()
-        }
     }
 
     // MARK: Private
 
     @State private var isHovered = false
     @State private var spinnerPhase = 0
-    @State private var isYabaiAvailable = false
 
     private let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
     private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
