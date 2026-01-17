@@ -91,11 +91,21 @@ final class ClaudeSessionMonitor {
                 }
             }
         )
+
+        // Start periodic session status check
+        Task {
+            await SessionStore.shared.startPeriodicStatusCheck()
+        }
     }
 
     func stopMonitoring() {
         self.cancelAllTasks()
         HookSocketServer.shared.stop()
+
+        // Stop periodic session status check
+        Task {
+            await SessionStore.shared.stopPeriodicStatusCheck()
+        }
     }
 
     // MARK: - Permission Handling

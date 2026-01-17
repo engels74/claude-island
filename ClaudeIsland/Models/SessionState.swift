@@ -34,7 +34,8 @@ struct SessionState: Equatable, Identifiable, Sendable {
             lastMessageRole: nil,
             lastToolName: nil,
             firstUserMessage: nil,
-            lastUserMessageDate: nil
+            lastUserMessageDate: nil,
+            usage: nil
         ),
         needsClearReconciliation: Bool = false,
         lastActivity: Date = Date(),
@@ -187,6 +188,11 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Last user message date
     var lastUserMessageDate: Date? {
         self.conversationInfo.lastUserMessageDate
+    }
+
+    /// Token usage for this session
+    var usage: UsageInfo? {
+        self.conversationInfo.usage
     }
 
     /// Whether the session can be interacted with

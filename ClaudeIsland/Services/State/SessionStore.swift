@@ -6,6 +6,8 @@
 //  Single source of truth - all state mutations flow through process().
 //
 
+// swiftlint:disable file_length
+
 import Combine
 import Foundation
 import Mixpanel
@@ -38,6 +40,11 @@ actor SessionStore {
     /// SessionStore extensions (e.g., SessionStore+Subagents.swift).
     /// Use `session(for:)` or `allSessions()` for read-only access.
     var sessions: [String: SessionState] = [:]
+
+    // MARK: - Periodic Status Check (see SessionStore+PeriodicCheck.swift)
+
+    var statusCheckTask: Task<Void, Never>?
+    let statusCheckIntervalNs: UInt64 = 3_000_000_000
 
     /// Public publisher for UI subscription
     nonisolated var sessionsPublisher: AnyPublisher<[SessionState], Never> {
@@ -134,6 +141,57 @@ actor SessionStore {
     func recentEvents(limit: Int = 20) -> [(timestamp: Date, event: String, sessionID: String?)] {
         self.eventAuditTrail.suffix(limit).reversed().map {
             (timestamp: $0.timestamp, event: $0.event, sessionID: $0.sessionID)
+        }
+    }
+
+    // MARK: - File Sync Scheduling
+
+    func scheduleFileSync(sessionID: String, cwd: String) {
+        // Cancel existing sync
+        self.cancelPendingSync(sessionID: sessionID)
+
+        // Schedule new debounced sync
+        // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
+        self.pendingSyncs[sessionID] = Task {
+            try? await Task.sleep(nanoseconds: self.syncDebounceNs)
+            guard !Task.isCancelled else { return }
+
+            // Revalidate session still exists after sleep (actor reentrancy protection)
+            guard self.sessions[sessionID] != nil else { return }
+
+            // Parse incrementally - only get NEW messages since last call
+            let result = await ConversationParser.shared.parseIncremental(
+                sessionID: sessionID,
+                cwd: cwd
+            )
+
+            // Recheck cancellation after await
+            guard !Task.isCancelled else { return }
+
+            if result.clearDetected {
+                await self.process(.clearDetected(sessionID: sessionID))
+                // Recheck cancellation after clear processing
+                guard !Task.isCancelled else { return }
+            }
+
+            guard !result.newMessages.isEmpty || result.clearDetected else {
+                return
+            }
+
+            // Revalidate session still exists before processing file update
+            guard self.sessions[sessionID] != nil else { return }
+
+            let payload = FileUpdatePayload(
+                sessionID: sessionID,
+                cwd: cwd,
+                messages: result.newMessages,
+                isIncremental: !result.clearDetected,
+                completedToolIDs: result.completedToolIDs,
+                toolResults: result.toolResults,
+                structuredResults: result.structuredResults
+            )
+
+            await self.process(.fileUpdated(payload))
         }
     }
 
@@ -845,57 +903,6 @@ actor SessionStore {
         session.chatItems.sort { $0.timestamp < $1.timestamp }
 
         self.sessions[payload.sessionID] = session
-    }
-
-    // MARK: - File Sync Scheduling
-
-    private func scheduleFileSync(sessionID: String, cwd: String) {
-        // Cancel existing sync
-        self.cancelPendingSync(sessionID: sessionID)
-
-        // Schedule new debounced sync
-        // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
-        self.pendingSyncs[sessionID] = Task {
-            try? await Task.sleep(nanoseconds: self.syncDebounceNs)
-            guard !Task.isCancelled else { return }
-
-            // Revalidate session still exists after sleep (actor reentrancy protection)
-            guard self.sessions[sessionID] != nil else { return }
-
-            // Parse incrementally - only get NEW messages since last call
-            let result = await ConversationParser.shared.parseIncremental(
-                sessionID: sessionID,
-                cwd: cwd
-            )
-
-            // Recheck cancellation after await
-            guard !Task.isCancelled else { return }
-
-            if result.clearDetected {
-                await self.process(.clearDetected(sessionID: sessionID))
-                // Recheck cancellation after clear processing
-                guard !Task.isCancelled else { return }
-            }
-
-            guard !result.newMessages.isEmpty || result.clearDetected else {
-                return
-            }
-
-            // Revalidate session still exists before processing file update
-            guard self.sessions[sessionID] != nil else { return }
-
-            let payload = FileUpdatePayload(
-                sessionID: sessionID,
-                cwd: cwd,
-                messages: result.newMessages,
-                isIncremental: !result.clearDetected,
-                completedToolIDs: result.completedToolIDs,
-                toolResults: result.toolResults,
-                structuredResults: result.structuredResults
-            )
-
-            await self.process(.fileUpdated(payload))
-        }
     }
 
     private func cancelPendingSync(sessionID: String) {

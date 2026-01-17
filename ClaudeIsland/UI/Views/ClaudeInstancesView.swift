@@ -146,10 +146,23 @@ struct InstanceRow: View {
 
             // Text content
             VStack(alignment: .leading, spacing: 2) {
-                Text(self.session.displayTitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(self.session.displayTitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    // Token usage badge
+                    if let usage = session.usage {
+                        Text(usage.formattedTotal)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.4))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Capsule())
+                    }
+                }
 
                 // Show tool call when waiting for approval, otherwise last activity
                 if self.isWaitingForApproval, let toolName = session.pendingToolName {
@@ -214,6 +227,11 @@ struct InstanceRow: View {
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.4))
                         .lineLimit(1)
+                } else {
+                    // Fallback: show phase-based status
+                    Text(self.phaseStatusText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
                 }
             }
 
@@ -304,6 +322,18 @@ struct InstanceRow: View {
     private var isInteractiveTool: Bool {
         guard let toolName = session.pendingToolName else { return false }
         return toolName == "AskUserQuestion"
+    }
+
+    /// Status text based on session phase (fallback when no message content)
+    private var phaseStatusText: String {
+        switch self.session.phase {
+        case .processing: "Processing..."
+        case .compacting: "Compacting..."
+        case .waitingForInput: "Ready"
+        case .waitingForApproval: "Waiting for approval"
+        case .idle: "Idle"
+        case .ended: "Ended"
+        }
     }
 
     @ViewBuilder private var stateIndicator: some View {

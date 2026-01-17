@@ -9,6 +9,31 @@
 import Foundation
 import os.log
 
+// MARK: - UsageInfo
+
+/// Token usage information aggregated from assistant messages
+struct UsageInfo: Equatable, Sendable {
+    let inputTokens: Int
+    let outputTokens: Int
+    let cacheReadTokens: Int
+    let cacheCreationTokens: Int
+
+    var totalTokens: Int {
+        self.inputTokens + self.outputTokens
+    }
+
+    /// Formatted total for display (e.g., "12.5K", "1.2M")
+    var formattedTotal: String {
+        let total = self.totalTokens
+        if total >= 1_000_000 {
+            return String(format: "%.1fM", Double(total) / 1_000_000)
+        } else if total >= 1000 {
+            return String(format: "%.1fK", Double(total) / 1000)
+        }
+        return "\(total)"
+    }
+}
+
 // MARK: - ConversationInfo
 
 struct ConversationInfo: Equatable, Sendable {
@@ -18,6 +43,7 @@ struct ConversationInfo: Equatable, Sendable {
     let lastToolName: String? // Tool name if lastMessageRole is "tool"
     let firstUserMessage: String? // Fallback title when no summary
     let lastUserMessageDate: Date? // Timestamp of last user message (for stable sorting)
+    let usage: UsageInfo? // Token usage information
 }
 
 // MARK: - ConversationParser
@@ -96,7 +122,8 @@ actor ConversationParser {
                 lastMessageRole: nil,
                 lastToolName: nil,
                 firstUserMessage: nil,
-                lastUserMessageDate: nil
+                lastUserMessageDate: nil,
+                usage: nil
             )
         }
 
@@ -122,7 +149,8 @@ actor ConversationParser {
                 lastMessageRole: nil,
                 lastToolName: nil,
                 firstUserMessage: nil,
-                lastUserMessageDate: nil
+                lastUserMessageDate: nil,
+                usage: nil
             )
         }
 
@@ -290,7 +318,8 @@ actor ConversationParser {
                 lastMessageRole: nil,
                 lastToolName: nil,
                 firstUserMessage: nil,
-                lastUserMessageDate: nil
+                lastUserMessageDate: nil,
+                usage: nil
             )
         }
         defer { try? fileHandle.close() }
@@ -311,7 +340,8 @@ actor ConversationParser {
                     lastMessageRole: nil,
                     lastToolName: nil,
                     firstUserMessage: nil,
-                    lastUserMessageDate: nil
+                    lastUserMessageDate: nil,
+                    usage: nil
                 )
             }
 
@@ -329,7 +359,8 @@ actor ConversationParser {
                 lastMessageRole: nil,
                 lastToolName: nil,
                 firstUserMessage: nil,
-                lastUserMessageDate: nil
+                lastUserMessageDate: nil,
+                usage: nil
             )
         }
     }
@@ -345,9 +376,43 @@ actor ConversationParser {
         var firstUserMessage: String?
         var lastUserMessageDate: Date?
 
+        // Token usage aggregation
+        var totalInput = 0
+        var totalOutput = 0
+        var totalCacheRead = 0
+        var totalCacheCreation = 0
+
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
+        // First pass: aggregate usage from all assistant messages
+        for line in lines {
+            guard let lineData = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+            else {
+                continue
+            }
+
+            // Parse usage from assistant messages containing "usage" field
+            if let usage = json["usage"] as? [String: Any] {
+                totalInput += usage["input_tokens"] as? Int ?? 0
+                totalOutput += usage["output_tokens"] as? Int ?? 0
+                totalCacheRead += usage["cache_read_input_tokens"] as? Int ?? 0
+                totalCacheCreation += usage["cache_creation_input_tokens"] as? Int ?? 0
+            }
+        }
+
+        // Create usage info if we have any tokens
+        let usageInfo = (totalInput + totalOutput > 0)
+            ? UsageInfo(
+                inputTokens: totalInput,
+                outputTokens: totalOutput,
+                cacheReadTokens: totalCacheRead,
+                cacheCreationTokens: totalCacheCreation
+            )
+            : nil
+
+        // Second pass: find first user message
         for line in lines {
             guard let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
@@ -441,7 +506,8 @@ actor ConversationParser {
             lastMessageRole: lastMessageRole,
             lastToolName: lastToolName,
             firstUserMessage: firstUserMessage,
-            lastUserMessageDate: lastUserMessageDate
+            lastUserMessageDate: lastUserMessageDate,
+            usage: usageInfo
         )
     }
 
