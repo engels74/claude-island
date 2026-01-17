@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-15  # Use macos-15 for Xcode 16.x support (macos-latest becomes macos-15 in Aug 2025)
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
