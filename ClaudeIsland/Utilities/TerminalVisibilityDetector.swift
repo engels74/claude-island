@@ -102,9 +102,9 @@ enum TerminalVisibilityDetector {
                   layer == 0 // Normal window layer
             else { continue }
 
-            // Check if this window belongs to the terminal (direct match or descendant)
+            // Check if this window belongs to the terminal (direct match or child process of terminal)
             if ownerPID == sessionTerminalPID ||
-                ProcessTreeBuilder.shared.isDescendant(targetPID: sessionPID, ofAncestor: ownerPID, tree: tree) {
+                ProcessTreeBuilder.shared.isDescendant(targetPID: ownerPID, ofAncestor: sessionTerminalPID, tree: tree) {
                 terminalWindowIDs.append(windowID)
             }
         }
