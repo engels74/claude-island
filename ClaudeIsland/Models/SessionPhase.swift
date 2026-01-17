@@ -216,7 +216,8 @@ enum SessionPhase: Sendable {
     private static func allowedTransitions(from phase: Self) -> [PhaseKey] {
         switch phase {
         case .idle:
-            [.processing, .waitingForApproval, .compacting]
+            // Note: .waitingForInput is allowed for history loading where we discover actual state
+            [.processing, .waitingForApproval, .compacting, .waitingForInput]
         case .processing:
             [.waitingForInput, .waitingForApproval, .compacting, .idle]
         case .waitingForInput:

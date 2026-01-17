@@ -310,9 +310,8 @@ struct NotchView: View {
                     .frame(width: self.closedNotchSize.width - 20)
             } else {
                 // Closed with activity: black spacer with session dots (with optional bounce)
-                let dotsWidth: CGFloat = self.hasMultipleActiveSessions
-                    ? CGFloat(min(self.activeSessions.count, 8) * 10 + 6)
-                    : 0
+                // Use SessionStateDots.expectedWidth to keep sizing in sync
+                let dotsWidth = SessionStateDots.expectedWidth(for: self.activeSessions.count)
                 HStack(spacing: 0) {
                     Rectangle()
                         .fill(.black)

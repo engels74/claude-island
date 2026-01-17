@@ -200,17 +200,24 @@ struct ReadyForInputIndicatorIcon: View {
 struct SessionStateDots: View {
     // MARK: Internal
 
+    /// Sizing constants (shared with NotchView for layout sync)
+    static let dotSize: CGFloat = 6
+    static let dotSpacing: CGFloat = 4
+    static let maxDots = 8
+    /// Approximate width for overflow text "+N" at 9pt font
+    static let overflowTextWidth: CGFloat = 18
+
     let sessions: [SessionState]
 
     var body: some View {
-        HStack(spacing: 4) {
-            let displaySessions = Array(sortedActiveSessions.prefix(self.maxDots))
-            let overflow = self.sortedActiveSessions.count - self.maxDots
+        HStack(spacing: Self.dotSpacing) {
+            let displaySessions = Array(sortedActiveSessions.prefix(Self.maxDots))
+            let overflow = self.sortedActiveSessions.count - Self.maxDots
 
             ForEach(displaySessions) { session in
                 Circle()
                     .fill(self.color(for: session.phase))
-                    .frame(width: self.dotSize, height: self.dotSize)
+                    .frame(width: Self.dotSize, height: Self.dotSize)
             }
 
             if overflow > 0 {
@@ -221,10 +228,21 @@ struct SessionStateDots: View {
         }
     }
 
-    // MARK: Private
+    /// Calculate expected width for a given number of active sessions
+    /// Used by NotchView to ensure spacer math stays in sync
+    static func expectedWidth(for sessionCount: Int) -> CGFloat {
+        guard sessionCount > 1 else { return 0 }
 
-    private let dotSize: CGFloat = 6
-    private let maxDots = 8
+        let visibleDots = min(sessionCount, maxDots)
+        // Each dot is dotSize, with dotSpacing between them
+        let dotsWidth = CGFloat(visibleDots) * self.dotSize + CGFloat(visibleDots - 1) * self.dotSpacing
+        // Add overflow text width if needed
+        let overflowWidth = sessionCount > self.maxDots ? (self.dotSpacing + self.overflowTextWidth) : 0
+
+        return dotsWidth + overflowWidth
+    }
+
+    // MARK: Private
 
     /// Filter to only active/attention-needed sessions and sort by priority
     private var sortedActiveSessions: [SessionState] {
