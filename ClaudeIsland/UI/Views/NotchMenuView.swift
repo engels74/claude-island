@@ -45,6 +45,7 @@ struct NotchMenuView: View {
             // Appearance settings
             ScreenPickerRow(screenSelector: self.screenSelector)
             SoundPickerRow(soundSelector: self.soundSelector)
+            SuppressionPickerRow(suppressionSelector: self.suppressionSelector)
 
             Divider()
                 .background(Color.white.opacity(0.08))
@@ -136,6 +137,7 @@ struct NotchMenuView: View {
     /// Singletons are @Observable, so SwiftUI automatically tracks property access
     private var screenSelector = ScreenSelector.shared
     private var soundSelector = SoundSelector.shared
+    private var suppressionSelector = SuppressionSelector.shared
 
     private func refreshStates() {
         self.hooksInstalled = HookInstaller.isInstalled()

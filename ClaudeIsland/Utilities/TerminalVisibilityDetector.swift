@@ -7,8 +7,11 @@
 
 import AppKit
 import CoreGraphics
+import OcclusionKit
 
 enum TerminalVisibilityDetector {
+    // MARK: Internal
+
     /// Check if any terminal window is visible on the current space
     static func isTerminalVisibleOnCurrentSpace() -> Bool {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
@@ -65,7 +68,67 @@ enum TerminalVisibilityDetector {
                 return false
             }
 
-            return sessionTerminalPID == Int(frontmostApp.processIdentifier)
+            // Use isDescendant for iTerm/Warp compatibility (child processes may differ from main app)
+            let frontmostPID = Int(frontmostApp.processIdentifier)
+            return sessionTerminalPID == frontmostPID ||
+                ProcessTreeBuilder.shared.isDescendant(targetPID: sessionPID, ofAncestor: frontmostPID, tree: tree)
         }
     }
+
+    /// Check if a Claude session's terminal window is visible (≥50% unobscured)
+    /// - Parameter sessionPID: The PID of the Claude process
+    /// - Returns: true if the session's terminal window is sufficiently visible
+    static func isSessionTerminalVisible(sessionPID: Int) async -> Bool {
+        let tree = ProcessTreeBuilder.shared.buildTree()
+
+        // Find the terminal PID for this session
+        guard let sessionTerminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: sessionPID, tree: tree) else {
+            return false
+        }
+
+        // Get all on-screen windows
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+
+        // Find windows belonging to the session's terminal
+        var terminalWindowIDs: [CGWindowID] = []
+
+        for window in windowList {
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? Int,
+                  let windowID = window[kCGWindowNumber as String] as? CGWindowID,
+                  let layer = window[kCGWindowLayer as String] as? Int,
+                  layer == 0 // Normal window layer
+            else { continue }
+
+            // Check if this window belongs to the terminal (direct match or descendant)
+            if ownerPID == sessionTerminalPID ||
+                ProcessTreeBuilder.shared.isDescendant(targetPID: sessionPID, ofAncestor: ownerPID, tree: tree) {
+                terminalWindowIDs.append(windowID)
+            }
+        }
+
+        // Check visibility of each terminal window using OcclusionKit
+        for windowID in terminalWindowIDs {
+            do {
+                let result = try await OcclusionKit.calculate(for: windowID)
+                if result.visiblePercentage >= self.visibilityThreshold {
+                    return true
+                }
+            } catch {
+                // If occlusion detection fails for this window, continue to the next
+                continue
+            }
+        }
+
+        return false
+    }
+
+    // MARK: Private
+
+    // MARK: - Constants
+
+    /// Minimum visible percentage to consider a window "visible"
+    private static let visibilityThreshold: CGFloat = 0.5
 }

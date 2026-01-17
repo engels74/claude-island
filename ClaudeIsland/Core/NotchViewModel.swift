@@ -118,7 +118,8 @@ final class NotchViewModel {
             // Compact size for settings menu
             return CGSize(
                 width: min(self.screenRect.width * 0.4, 480),
-                height: 500 + self.screenSelector.expandedPickerHeight + self.soundSelector.expandedPickerHeight
+                height: 500 + self.screenSelector.expandedPickerHeight + self.soundSelector.expandedPickerHeight + self.suppressionSelector
+                    .expandedPickerHeight
             )
         case .instances:
             return CGSize(
@@ -210,6 +211,7 @@ final class NotchViewModel {
 
     private let screenSelector = ScreenSelector.shared
     private let soundSelector = SoundSelector.shared
+    private let suppressionSelector = SuppressionSelector.shared
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     private let events = EventMonitors.shared
@@ -249,6 +251,7 @@ final class NotchViewModel {
             // Access the properties we want to observe
             _ = self.screenSelector.isPickerExpanded
             _ = self.soundSelector.isPickerExpanded
+            _ = self.suppressionSelector.isPickerExpanded
         } onChange: { [weak self] in
             // Dispatch to main actor since onChange may be called from any context
             Task { @MainActor [weak self] in

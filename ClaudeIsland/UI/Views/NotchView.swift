@@ -538,20 +538,49 @@ struct NotchView: View {
     }
 
     /// Determine if notification sound should play for the given sessions
-    /// Returns true if ANY session is not actively focused
+    /// Returns true if sound should play based on suppression settings
     private func shouldPlayNotificationSound(for sessions: [SessionState]) async -> Bool {
+        let suppressionMode = AppSettings.soundSuppression
+
+        // If suppression is disabled, always play sound
+        if suppressionMode == .never {
+            return true
+        }
+
+        // Suppress if Claude Island is active
+        if NSApplication.shared.isActive {
+            return false
+        }
+
+        // Check each session against the suppression mode
         for session in sessions {
             guard let pid = session.pid else {
-                // No PID means we can't check focus, assume not focused
+                // No PID means we can't check focus/visibility, assume should play
                 return true
             }
 
-            let isFocused = await TerminalVisibilityDetector.isSessionFocused(sessionPID: pid)
-            if !isFocused {
+            switch suppressionMode {
+            case .never:
+                // Already handled above, but included for completeness
                 return true
+
+            case .whenFocused:
+                // Suppress if the session's terminal is focused
+                let isFocused = await TerminalVisibilityDetector.isSessionFocused(sessionPID: pid)
+                if !isFocused {
+                    return true
+                }
+
+            case .whenVisible:
+                // Suppress if the session's terminal window is ≥50% visible
+                let isVisible = await TerminalVisibilityDetector.isSessionTerminalVisible(sessionPID: pid)
+                if !isVisible {
+                    return true
+                }
             }
         }
 
+        // All sessions are suppressed
         return false
     }
 }

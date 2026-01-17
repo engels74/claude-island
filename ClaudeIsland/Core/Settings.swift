@@ -7,6 +7,29 @@
 
 import Foundation
 
+// MARK: - SoundSuppression
+
+/// Sound suppression modes for notification sounds
+enum SoundSuppression: String, CaseIterable {
+    case never = "Never"
+    case whenFocused = "When Focused"
+    case whenVisible = "When Visible"
+
+    // MARK: Internal
+
+    /// Description for UI display
+    var description: String {
+        switch self {
+        case .never:
+            "Sound always plays"
+        case .whenFocused:
+            "Suppresses audio when Claude Island or the terminal is active"
+        case .whenVisible:
+            "Suppresses audio when the terminal is visible (≥50% unobscured)"
+        }
+    }
+}
+
 // MARK: - NotificationSound
 
 /// Available notification sounds
@@ -57,12 +80,30 @@ enum AppSettings {
         }
     }
 
+    // MARK: - Sound Suppression
+
+    /// When to suppress notification sounds
+    static var soundSuppression: SoundSuppression {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.soundSuppression),
+                  let suppression = SoundSuppression(rawValue: rawValue)
+            else {
+                return .whenFocused // Default to suppressing when terminal is focused
+            }
+            return suppression
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.soundSuppression)
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
 
     private enum Keys {
         static let notificationSound = "notificationSound"
+        static let soundSuppression = "soundSuppression"
     }
 
     private static let defaults = UserDefaults.standard
