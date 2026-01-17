@@ -76,8 +76,13 @@ jobs:
 
           # Extract signature from generated appcast
           if [ -f "releases/appcast/appcast.xml" ]; then
-            SIG=$(grep -oE 'sparkle:edSignature="[^"]+"' releases/appcast/appcast.xml | head -1 | sed 's/sparkle:edSignature="//;s/"$//')
-            echo "signature=$SIG" >> $GITHUB_OUTPUT
+            # Use grep with || true to avoid pipefail failure when no match exists
+            SIG=$(grep -oE 'sparkle:edSignature="[^"]+"' releases/appcast/appcast.xml 2>/dev/null | head -1 | sed 's/sparkle:edSignature="//;s/"$//' || true)
+            if [ -n "$SIG" ]; then
+              echo "signature=$SIG" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️ No EdDSA signature found in appcast.xml"
+            fi
           fi
 
           # Get minimum system version from Info.plist
@@ -188,7 +193,8 @@ jobs:
     name: Update Website Appcast
     needs: build
     runs-on: ubuntu-latest
-    if: needs.build.outputs.has_sparkle == 'true'
+    # Only run if Sparkle signing was configured AND signature was actually generated
+    if: needs.build.outputs.has_sparkle == 'true' && needs.build.outputs.ed_signature != ''
 
     steps:
       - name: Trigger website appcast update
