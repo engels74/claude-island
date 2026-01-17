@@ -2,10 +2,21 @@
 """Claude Island Hook - Session state bridge to ClaudeIsland.app.
 
 Sends session state to ClaudeIsland.app via Unix socket.
-For PermissionRequest events, waits for user decision from the app.
+For PermissionRequest events, waits for user decisions from the app.
+
+Requires: Python 3.14+
 """
 
-from __future__ import annotations
+__all__ = [
+    "SessionState",
+    "validate_tty",
+    "is_session_active",
+    "get_tty",
+    "send_event",
+    "determine_status",
+    "handle_permission_response",
+    "main",
+]
 
 import json
 import os
@@ -20,7 +31,7 @@ SOCKET_PATH = Path("/tmp/claude-island.sock")
 TIMEOUT_SECONDS = 300  # 5 minutes for permission decisions
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class SessionState:
     """Represents the state of a Claude Code session."""
 
@@ -72,18 +83,17 @@ def validate_tty(tty: str | None, /) -> bool:
         tty: The TTY path to validate (e.g., "/dev/ttys001")
 
     Returns:
-        True if the TTY exists and is writable, False otherwise
+        True if the TTY exists, is a character device, and is writable
     """
     if not tty:
         return False
-
     tty_path = Path(tty)
-    if not tty_path.exists():
-        return False
-
-    # Check if TTY is writable (indicates active session)
     try:
-        return os.access(tty_path, os.W_OK)
+        return (
+            tty_path.exists()
+            and tty_path.is_char_device()
+            and os.access(tty_path, os.W_OK)
+        )
     except OSError:
         return False
 
@@ -137,14 +147,14 @@ def get_tty(ppid: int, /) -> str | None:
             if tty not in ("??", "-"):
                 # ps returns just "ttys001", we need "/dev/ttys001"
                 return tty if tty.startswith("/dev/") else f"/dev/{tty}"
-    except (subprocess.TimeoutExpired, OSError):
+    except subprocess.TimeoutExpired, OSError:
         pass
 
     # Fallback: try current process stdin/stdout
     for fd in (sys.stdin, sys.stdout):
         try:
             return os.ttyname(fd.fileno())
-        except (OSError, AttributeError):
+        except OSError, AttributeError:
             continue
 
     return None
@@ -160,19 +170,15 @@ def send_event(state: SessionState, /) -> dict[str, Any] | None:
         Response dictionary for permission requests, None otherwise
     """
     try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(TIMEOUT_SECONDS)
-        sock.connect(str(SOCKET_PATH))
-        sock.sendall(json.dumps(state.to_dict()).encode())
-
-        # For permission requests, wait for response
-        if state.status == "waiting_for_approval":
-            if response := sock.recv(4096):
-                sock.close()
-                return json.loads(response.decode())
-        sock.close()
-        return None
-    except (OSError, json.JSONDecodeError):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(TIMEOUT_SECONDS)
+            sock.connect(str(SOCKET_PATH))
+            sock.sendall(json.dumps(state.to_dict()).encode())
+            if state.status == "waiting_for_approval":
+                if response := sock.recv(4096):
+                    return json.loads(response.decode())
+            return None
+    except OSError, json.JSONDecodeError:
         return None
 
 
