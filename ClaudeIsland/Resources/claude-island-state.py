@@ -78,7 +78,7 @@ class SessionStateDict(TypedDict):
     session_active: bool
     status: str
     tool: NotRequired[str]
-    tool_input: NotRequired[dict[str, str | int | bool | list[str] | None]]
+    tool_input: dict[str, str | int | bool | list[str] | None]  # Always included
     tool_use_id: NotRequired[str]
     notification_type: NotRequired[str]
     message: NotRequired[str]
@@ -123,8 +123,8 @@ class SessionState:
 
         if self.tool is not None:
             result["tool"] = self.tool
-        if self.tool_input:
-            result["tool_input"] = self.tool_input
+        # Always include tool_input for backwards compatibility (even if empty)
+        result["tool_input"] = self.tool_input
         if self.tool_use_id is not None:
             result["tool_use_id"] = self.tool_use_id
         if self.notification_type is not None:
@@ -337,6 +337,8 @@ def determine_status(
                     extras_notif: ToolExtras = {}
                     if notification_type:
                         extras_notif["notification_type"] = notification_type
+                    if msg := data.get("message"):
+                        extras_notif["message"] = msg
                     return "waiting_for_input", extras_notif
                 case _:
                     extras_other: ToolExtras = {}
