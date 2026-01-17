@@ -73,7 +73,7 @@ jobs:
             After first launch, auto-updates via Sparkle work normally.
 
       - name: Upload appcast artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: appcast
           path: releases/appcast/appcast.xml
