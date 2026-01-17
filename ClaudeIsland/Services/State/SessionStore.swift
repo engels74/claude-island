@@ -875,6 +875,18 @@ actor SessionStore {
         // Update conversationInfo (summary, lastMessage, etc.)
         session.conversationInfo = payload.conversationInfo
 
+        // Infer phase from conversation state when loading history
+        // If Claude was the last to respond, the session is waiting for user input
+        if session.phase == .idle {
+            if let lastRole = payload.conversationInfo.lastMessageRole,
+               lastRole == "assistant" || lastRole == "tool" {
+                session.phase = .waitingForInput
+                Self.logger.debug(
+                    "History loaded: inferred phase .waitingForInput from lastMessageRole=\(lastRole, privacy: .public)"
+                )
+            }
+        }
+
         // Convert messages to chat items
         var context = ItemCreationContext(
             existingIDs: Set(session.chatItems.map(\.id)),

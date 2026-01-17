@@ -193,3 +193,71 @@ struct ReadyForInputIndicatorIcon: View {
         (29, 7), // End of checkmark
     ]
 }
+
+// MARK: - SessionStateDots
+
+/// Displays colored dots representing session states in minimized notch
+struct SessionStateDots: View {
+    // MARK: Internal
+
+    let sessions: [SessionState]
+
+    var body: some View {
+        HStack(spacing: 4) {
+            let displaySessions = Array(sortedActiveSessions.prefix(self.maxDots))
+            let overflow = self.sortedActiveSessions.count - self.maxDots
+
+            ForEach(displaySessions) { session in
+                Circle()
+                    .fill(self.color(for: session.phase))
+                    .frame(width: self.dotSize, height: self.dotSize)
+            }
+
+            if overflow > 0 {
+                Text("+\(overflow)")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+        }
+    }
+
+    // MARK: Private
+
+    private let dotSize: CGFloat = 6
+    private let maxDots = 8
+
+    /// Filter to only active/attention-needed sessions and sort by priority
+    private var sortedActiveSessions: [SessionState] {
+        self.sessions
+            .filter { $0.phase != .ended && $0.phase != .idle }
+            .sorted { self.priority(for: $0.phase) < self.priority(for: $1.phase) }
+    }
+
+    /// Lower number = higher priority (shows first/left)
+    private func priority(for phase: SessionPhase) -> Int {
+        switch phase {
+        case .waitingForApproval: 0
+        case .processing,
+             .compacting: 1
+        case .waitingForInput: 2
+        case .idle,
+             .ended: 3
+        }
+    }
+
+    /// Color for each session phase
+    private func color(for phase: SessionPhase) -> Color {
+        switch phase {
+        case .waitingForApproval:
+            TerminalColors.blue
+        case .processing,
+             .compacting:
+            TerminalColors.prompt
+        case .waitingForInput:
+            TerminalColors.green
+        case .idle,
+             .ended:
+            Color.white.opacity(0.25)
+        }
+    }
+}

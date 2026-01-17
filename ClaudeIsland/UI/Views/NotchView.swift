@@ -158,6 +158,16 @@ struct NotchView: View {
         }
     }
 
+    /// Sessions that are active (not idle/ended) - used for dots display
+    private var activeSessions: [SessionState] {
+        self.sessionMonitor.instances.filter { $0.phase != .ended && $0.phase != .idle }
+    }
+
+    /// Whether we have multiple active sessions to show dots for
+    private var hasMultipleActiveSessions: Bool {
+        self.activeSessions.count > 1
+    }
+
     // MARK: - Sizing
 
     private var closedNotchSize: CGSize {
@@ -240,7 +250,7 @@ struct NotchView: View {
 
     /// Whether to show the expanded closed state (processing, pending permission, or waiting for input)
     private var showClosedActivity: Bool {
-        self.isProcessing || self.hasPendingPermission || self.hasWaitingForInput
+        self.isProcessing || self.hasPendingPermission || self.hasWaitingForInput || self.hasMultipleActiveSessions
     }
 
     private var sideWidth: CGFloat {
@@ -299,10 +309,23 @@ struct NotchView: View {
                     .fill(.clear)
                     .frame(width: self.closedNotchSize.width - 20)
             } else {
-                // Closed with activity: black spacer (with optional bounce)
-                Rectangle()
-                    .fill(.black)
-                    .frame(width: self.closedNotchSize.width - cornerRadiusInsets.closed.top + (self.isBouncing ? 16 : 0))
+                // Closed with activity: black spacer with session dots (with optional bounce)
+                let dotsWidth: CGFloat = self.hasMultipleActiveSessions
+                    ? CGFloat(min(self.activeSessions.count, 8) * 10 + 6)
+                    : 0
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(.black)
+                        .frame(
+                            width: max(20, self.closedNotchSize.width - cornerRadiusInsets.closed.top - dotsWidth)
+                                + (self.isBouncing ? 16 : 0)
+                        )
+                    // Session state dots (only when closed with multiple active sessions)
+                    if self.hasMultipleActiveSessions {
+                        SessionStateDots(sessions: self.activeSessions)
+                            .padding(.leading, 6)
+                    }
+                }
             }
 
             // Right side - spinner when processing/pending, checkmark when waiting for input
@@ -416,7 +439,8 @@ struct NotchView: View {
                 self.hideVisibilityTask = Task {
                     try? await Task.sleep(for: .seconds(0.5))
                     guard !Task.isCancelled else { return }
-                    if !self.isAnyProcessing && !self.hasPendingPermission && !self.hasWaitingForInput && self.viewModel.status == .closed {
+                    if !self.isAnyProcessing && !self.hasPendingPermission && !self.hasWaitingForInput
+                        && !self.hasMultipleActiveSessions && self.viewModel.status == .closed {
                         self.isVisible = false
                     }
                 }
@@ -441,9 +465,9 @@ struct NotchView: View {
             self.hideVisibilityTask = Task {
                 try? await Task.sleep(for: .seconds(0.35))
                 guard !Task.isCancelled else { return }
-                if self.viewModel.status == .closed && !self.isAnyProcessing && !self.hasPendingPermission && !self.hasWaitingForInput && !self
-                    .activityCoordinator
-                    .expandingActivity.show {
+                if self.viewModel.status == .closed && !self.isAnyProcessing && !self.hasPendingPermission
+                    && !self.hasWaitingForInput && !self.hasMultipleActiveSessions
+                    && !self.activityCoordinator.expandingActivity.show {
                     self.isVisible = false
                 }
             }
