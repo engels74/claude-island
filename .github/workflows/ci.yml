@@ -1,25 +1,25 @@
-name: Build and Release
+name: CI
 
 on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (without v prefix)'
-        required: true
+  workflow_run:
+    workflows: ["Code Quality"]
+    types: [completed]
+    branches: [main]
 
 jobs:
   build:
-    runs-on: macos-15  # Use macos-15 for Xcode 16.x support (macos-latest becomes macos-15 in Aug 2025)
+    name: Build DMG
+    runs-on: macos-15
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     outputs:
       version: ${{ steps.version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Select Xcode
+      - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
@@ -43,50 +43,16 @@ jobs:
       - name: Get version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-          fi
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" \
+            "build/export/Claude Island.app/Contents/Info.plist")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v6
         with:
-          name: release-dmg
+          name: claude-island-dmg
           path: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
-          retention-days: 7
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          files: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
-          body: |
-            ## Claude Island v${{ steps.version.outputs.version }}
-
-            ### Installation
-
-            **First Launch (Required):** macOS will block this app since it's not notarized.
-
-            **Option 1 (GUI):**
-            1. Download the DMG and drag Claude Island to Applications
-            2. Try to open — it will be blocked
-            3. Go to **System Settings → Privacy & Security**
-            4. Find "Claude Island was blocked" and click **Open Anyway**
-
-            **Option 2 (Terminal):**
-            ```bash
-            xattr -d com.apple.quarantine "/Applications/Claude Island.app"
-            ```
-
-            ### Auto-updates
-            After first launch, auto-updates via Sparkle work normally.
-
-      - name: Upload appcast artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: appcast
-          path: releases/appcast/appcast.xml
+          retention-days: 30
 
   virustotal-scan:
     name: VirusTotal Scan
@@ -97,7 +63,7 @@ jobs:
       - name: Download DMG artifact
         uses: actions/download-artifact@v7
         with:
-          name: release-dmg
+          name: claude-island-dmg
 
       - name: Scan with VirusTotal
         uses: crazy-max/ghaction-virustotal@v4
