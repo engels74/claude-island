@@ -66,11 +66,33 @@ jobs:
             echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Rename DMG to match release version
+        id: rename-dmg
+        run: |
+          RELEASE_VERSION="${{ steps.version.outputs.version }}"
+          # Find the actual DMG created by create-release.sh (uses Info.plist version)
+          ACTUAL_DMG=$(ls -1 releases/ClaudeIsland-*.dmg 2>/dev/null | head -1)
+          if [ -z "$ACTUAL_DMG" ]; then
+            echo "ERROR: No DMG found in releases/"
+            exit 1
+          fi
+          TARGET_DMG="releases/ClaudeIsland-${RELEASE_VERSION}.dmg"
+          if [ "$ACTUAL_DMG" != "$TARGET_DMG" ]; then
+            echo "Renaming $ACTUAL_DMG -> $TARGET_DMG"
+            mv "$ACTUAL_DMG" "$TARGET_DMG"
+            # Also rename in appcast directory if exists
+            ACTUAL_APPCAST_DMG="releases/appcast/$(basename "$ACTUAL_DMG")"
+            if [ -f "$ACTUAL_APPCAST_DMG" ]; then
+              mv "$ACTUAL_APPCAST_DMG" "releases/appcast/ClaudeIsland-${RELEASE_VERSION}.dmg"
+            fi
+          fi
+          echo "dmg_path=$TARGET_DMG" >> $GITHUB_OUTPUT
+
       - name: Get DMG info
         id: dmg-info
         if: steps.sparkle-key.outputs.has_key == 'true'
         run: |
-          DMG_PATH="releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg"
+          DMG_PATH="${{ steps.rename-dmg.outputs.dmg_path }}"
           SIZE=$(stat -f%z "$DMG_PATH")
           echo "size=$SIZE" >> $GITHUB_OUTPUT
 
