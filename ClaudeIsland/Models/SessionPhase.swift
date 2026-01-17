@@ -40,26 +40,41 @@ struct PermissionContext: Sendable {
     let toolInputJSON: String?
     let receivedAt: Date
 
-    /// Format tool input for display
+    /// Format tool input for display with smart prioritization
+    /// - Bash: Shows `command` parameter directly
+    /// - Read/Write/Edit: Shows filename only (lastPathComponent)
+    /// - Other tools: First non-empty string value as fallback
     var formattedInput: String? {
         guard let input = toolInput else { return nil }
-        var parts: [String] = []
-        for (key, value) in input {
-            let valueStr: String = switch value {
-            case let str as String:
-                str.count > 100 ? String(str.prefix(100)) + "..." : str
-            case let num as Int:
-                String(num)
-            case let num as Double:
-                String(num)
-            case let bool as Bool:
-                bool ? "true" : "false"
-            default:
-                "..."
+
+        // Priority keys for specific tools
+        let priorityKeys: [String: String] = [
+            "Bash": "command",
+            "Read": "file_path",
+            "Write": "file_path",
+            "Edit": "file_path",
+        ]
+
+        // Check if tool has a priority key
+        if let key = priorityKeys[toolName],
+           let value = input[key] as? String,
+           !value.isEmpty {
+            // For file operations, show only filename
+            if ["Read", "Write", "Edit"].contains(self.toolName) {
+                return (value as NSString).lastPathComponent
             }
-            parts.append("\(key): \(valueStr)")
+            return value.count > 100 ? String(value.prefix(100)) + "..." : value
         }
-        return parts.joined(separator: "\n")
+
+        // Fallback: first non-empty string value (skip "description" key)
+        for (key, value) in input {
+            if key == "description" { continue }
+            if let str = value as? String, !str.isEmpty {
+                return str.count > 100 ? String(str.prefix(100)) + "..." : str
+            }
+        }
+
+        return nil
     }
 
     // MARK: Private
