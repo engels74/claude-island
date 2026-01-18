@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/logo.svg" alt="Logo" width="100" height="100">
+  <img src="docs/logo.svg" alt="Logo" width="128" height="128">
   <h3 align="center">Claude Island</h3>
   <p align="center">
     A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions.
