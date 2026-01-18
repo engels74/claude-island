@@ -6,6 +6,12 @@
 //
 
 import Foundation
+import os.log
+
+/// Logger for hook installation
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+
+// MARK: - HookInstaller
 
 enum HookInstaller {
     // MARK: Internal
@@ -32,6 +38,7 @@ enum HookInstaller {
             )
         }
 
+        self.checkUvAvailability()
         self.updateSettings(at: settings)
     }
 
@@ -117,6 +124,36 @@ enum HookInstaller {
     }
 
     // MARK: Private
+
+    /// Check if uv is available on PATH
+    /// Logs a warning if uv is not found, as hooks require uv to execute
+    private static func checkUvAvailability() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = ["uv"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            if process.terminationStatus != 0 {
+                logger.warning(
+                    """
+                    uv not found on PATH. Claude Island hooks require uv to execute. \
+                    Install uv from https://docs.astral.sh/uv/getting-started/installation/
+                    """
+                )
+            }
+        } catch {
+            logger.warning(
+                """
+                Failed to check for uv availability: \(error.localizedDescription). \
+                Claude Island hooks require uv to execute.
+                """
+            )
+        }
+    }
 
     private static func updateSettings(at settingsURL: URL) {
         var json: [String: Any] = [:]
