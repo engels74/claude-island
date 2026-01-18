@@ -131,6 +131,7 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           files: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
+          generate_release_notes: true
           body: |
             ## Claude Island v${{ steps.version.outputs.version }}
 
