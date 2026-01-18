@@ -4,7 +4,7 @@
 Sends session state to ClaudeIsland.app via Unix socket.
 For PermissionRequest events, waits for user decisions from the app.
 
-Requires: Python 3.10+ (for match statements and TypeIs)
+Requires: Python 3.13+ (for match statements, TypeIs, and NotRequired)
 """
 
 __all__ = [
