@@ -152,6 +152,8 @@ jobs:
             ### Auto-updates
             After first launch, auto-updates via Sparkle work normally.
 
+            ---
+
       - name: Upload appcast artifact
         if: steps.sparkle-key.outputs.has_key == 'true'
         uses: actions/upload-artifact@v6
@@ -176,6 +178,7 @@ jobs:
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           request_rate: 4
+          update_release_body: true
           files: |
             *.dmg
 
