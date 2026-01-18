@@ -125,8 +125,7 @@ enum HookInstaller {
             json = existing
         }
 
-        let python = self.detectPython()
-        let command = "\(python) ~/.claude/hooks/claude-island-state.py"
+        let command = "uv run ~/.claude/hooks/claude-island-state.py"
         let hookEntry: [[String: Any]] = [["type": "command", "command": command]]
         let hookEntryWithTimeout: [[String: Any]] = [["type": "command", "command": command, "timeout": 86400]]
         let withMatcher: [[String: Any]] = [["matcher": "*", "hooks": hookEntry]]
@@ -180,23 +179,5 @@ enum HookInstaller {
         ) {
             try? data.write(to: settingsURL)
         }
-    }
-
-    private static func detectPython() -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = ["python3"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus == 0 {
-                return "python3"
-            }
-        } catch {}
-
-        return "python"
     }
 }

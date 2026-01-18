@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.14"
+# ///
 """Claude Island Hook - Session state bridge to ClaudeIsland.app.
 
 Sends session state to ClaudeIsland.app via Unix socket.

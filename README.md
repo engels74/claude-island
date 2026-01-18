@@ -36,6 +36,7 @@ Key improvements in this fork:
 
 - macOS 15.6+
 - Claude Code CLI
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (Python package manager)
 
 ## Install
 
