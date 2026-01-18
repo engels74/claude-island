@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="ClaudeIsland/Assets.xcassets/AppIcon.appiconset/icon_128x128.png" alt="Logo" width="100" height="100">
+  <img src="docs/logo.svg" alt="Logo" width="100" height="100">
   <h3 align="center">Claude Island</h3>
   <p align="center">
     A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions.
@@ -21,6 +21,16 @@
 - **Permission Approvals** — Approve or deny tool executions directly from the notch
 - **Chat History** — View full conversation history with markdown rendering
 - **Auto-Setup** — Hooks install automatically on first launch
+
+## About This Fork
+
+This is a fork of the original [claude-island](https://github.com/farouqaldori/claude-island) by farouqaldori.
+
+Key improvements in this fork:
+
+- **Code quality** — Strict linting with SwiftFormat, SwiftLint (70+ rules), pre-commit hooks, and modern Swift concurrency (`@Observable`, `Sendable`, structured concurrency)
+- **Bug fixes** — Various stability and reliability improvements
+- **Merged upstream PRs** — See [merged pull requests](https://github.com/engels74/claude-island/pulls?q=is%3Apr+is%3Amerged+) for integration details
 
 ## Requirements
 
