@@ -54,15 +54,25 @@ enum TerminalVisibilityDetector {
             return false
         }
 
-        let tree = ProcessTreeBuilder.shared.buildTree()
-        let isInTmux = ProcessTreeBuilder.shared.isInTmux(pid: sessionPID, tree: tree)
+        // Run blocking process tree operations on background thread to avoid main thread precondition
+        let treeResult: (tree: [Int: ProcessInfo], isInTmux: Bool, terminalPID: Int?)? =
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let tree = ProcessTreeBuilder.shared.buildTree()
+                    let isInTmux = ProcessTreeBuilder.shared.isInTmux(pid: sessionPID, tree: tree)
+                    let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: sessionPID, tree: tree)
+                    continuation.resume(returning: (tree, isInTmux, terminalPID))
+                }
+            }
 
-        if isInTmux {
+        guard let treeResult else { return false }
+
+        if treeResult.isInTmux {
             // For tmux sessions, check if the session's pane is active
             return await TmuxTargetFinder.shared.isSessionPaneActive(claudePID: sessionPID)
         } else {
             // For non-tmux sessions, check if the session's terminal app is frontmost
-            guard let sessionTerminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: sessionPID, tree: tree),
+            guard let sessionTerminalPID = treeResult.terminalPID,
                   let frontmostApp = NSWorkspace.shared.frontmostApplication
             else {
                 return false
@@ -71,7 +81,7 @@ enum TerminalVisibilityDetector {
             // Use isDescendant for iTerm/Warp compatibility (child processes may differ from main app)
             let frontmostPID = Int(frontmostApp.processIdentifier)
             return sessionTerminalPID == frontmostPID ||
-                ProcessTreeBuilder.shared.isDescendant(targetPID: sessionPID, ofAncestor: frontmostPID, tree: tree)
+                ProcessTreeBuilder.shared.isDescendant(targetPID: sessionPID, ofAncestor: frontmostPID, tree: treeResult.tree)
         }
     }
 
@@ -79,33 +89,50 @@ enum TerminalVisibilityDetector {
     /// - Parameter sessionPID: The PID of the Claude process
     /// - Returns: true if the session's terminal window is sufficiently visible
     static func isSessionTerminalVisible(sessionPID: Int) async -> Bool {
-        let tree = ProcessTreeBuilder.shared.buildTree()
+        // Run blocking process tree operations on background thread to avoid main thread precondition
+        let terminalWindowIDs: [CGWindowID] = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let tree = ProcessTreeBuilder.shared.buildTree()
 
-        // Find the terminal PID for this session
-        guard let sessionTerminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: sessionPID, tree: tree) else {
-            return false
-        }
+                // Find the terminal PID for this session
+                guard let sessionTerminalPID = ProcessTreeBuilder.shared.findTerminalPID(
+                    forProcess: sessionPID,
+                    tree: tree
+                )
+                else {
+                    continuation.resume(returning: [])
+                    return
+                }
 
-        // Get all on-screen windows
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return false
-        }
+                // Get all on-screen windows
+                let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+                guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+                    continuation.resume(returning: [])
+                    return
+                }
 
-        // Find windows belonging to the session's terminal
-        var terminalWindowIDs: [CGWindowID] = []
+                // Find windows belonging to the session's terminal
+                var windowIDs: [CGWindowID] = []
 
-        for window in windowList {
-            guard let ownerPID = window[kCGWindowOwnerPID as String] as? Int,
-                  let windowID = window[kCGWindowNumber as String] as? CGWindowID,
-                  let layer = window[kCGWindowLayer as String] as? Int,
-                  layer == 0 // Normal window layer
-            else { continue }
+                for window in windowList {
+                    guard let ownerPID = window[kCGWindowOwnerPID as String] as? Int,
+                          let windowID = window[kCGWindowNumber as String] as? CGWindowID,
+                          let layer = window[kCGWindowLayer as String] as? Int,
+                          layer == 0 // Normal window layer
+                    else { continue }
 
-            // Check if this window belongs to the terminal (direct match or child process of terminal)
-            if ownerPID == sessionTerminalPID ||
-                ProcessTreeBuilder.shared.isDescendant(targetPID: ownerPID, ofAncestor: sessionTerminalPID, tree: tree) {
-                terminalWindowIDs.append(windowID)
+                    // Check if this window belongs to the terminal (direct match or child process of terminal)
+                    if ownerPID == sessionTerminalPID ||
+                        ProcessTreeBuilder.shared.isDescendant(
+                            targetPID: ownerPID,
+                            ofAncestor: sessionTerminalPID,
+                            tree: tree
+                        ) {
+                        windowIDs.append(windowID)
+                    }
+                }
+
+                continuation.resume(returning: windowIDs)
             }
         }
 
