@@ -18,6 +18,7 @@ __all__ = [
     "ToolExtras",
     "ToolInputType",
     "determine_status",
+    "get_claude_pid",
     "get_tty",
     "handle_permission_response",
     "is_hook_event_data",
@@ -219,6 +220,52 @@ def get_tty(ppid: int, /) -> str | None:
             continue
 
     return None
+
+
+def get_claude_pid() -> int:
+    """Walk process tree to find Claude Code process PID.
+
+    When hooks are run via 'uv run', os.getppid() returns uv's PID,
+    which exits after the hook completes. This causes the session
+    to disappear since the stored PID becomes invalid.
+
+    This function walks up the process tree to find the actual
+    Claude Code process (identified by command name 'claude').
+
+    Returns:
+        The PID of the Claude Code process, or falls back to immediate parent.
+    """
+    current_pid = os.getpid()
+
+    for _ in range(10):  # Max depth to prevent infinite loops
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(current_pid), "-o", "ppid=,comm="],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if result.returncode != 0:
+                break
+
+            parts = result.stdout.strip().split()
+            if len(parts) < 2:
+                break
+
+            ppid = int(parts[0])
+            command = parts[1].lower()
+
+            # Claude Code process shows as 'claude' in ps output
+            if command == "claude":
+                return current_pid
+
+            current_pid = ppid
+        except subprocess.TimeoutExpired, ValueError, OSError:
+            break
+
+    # Fallback to immediate parent
+    return os.getppid()
 
 
 def _all_keys_are_strings(d: dict[object, object], /) -> bool:
@@ -460,7 +507,7 @@ def main() -> None:
     cwd = data.get("cwd", "")
 
     # Get process info
-    claude_pid = os.getppid()
+    claude_pid = get_claude_pid()
     tty = get_tty(claude_pid)
 
     # Validate session state
