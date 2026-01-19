@@ -203,6 +203,12 @@ struct NotchView: View {
             return 2 * max(0, self.closedNotchSize.height - 12) + 20
         }
 
+        // Expand for multiple active sessions to accommodate session state dots
+        if self.hasMultipleActiveSessions {
+            let dotsWidth = SessionStateDots.expectedWidth(for: self.activeSessions.count)
+            return self.sideWidth + dotsWidth + 6
+        }
+
         return 0
     }
 
