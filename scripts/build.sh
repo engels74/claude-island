@@ -9,7 +9,7 @@ EXPORT_PATH="$BUILD_DIR/export"
 
 # Check if local version matches latest git tag
 check_version_sync() {
-    LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+    LATEST_TAG=$(cd "$PROJECT_DIR" && git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
     if [ -n "$LATEST_TAG" ]; then
         CURRENT_VERSION=$(cd "$PROJECT_DIR" && agvtool what-marketing-version -terse1 2>/dev/null)
         if [ -n "$CURRENT_VERSION" ] && [ "$LATEST_TAG" != "$CURRENT_VERSION" ]; then
