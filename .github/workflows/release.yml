@@ -9,6 +9,9 @@ on:
         description: 'Version to release (without v prefix)'
         required: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15  # Use macos-15 for Xcode 16.x support (macos-latest becomes macos-15 in Aug 2025)
@@ -37,12 +40,29 @@ jobs:
             echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update Xcode project version from tag
+      - name: Update Xcode project version and commit
         run: |
           # Set marketing version (CFBundleShortVersionString) from tag
           agvtool new-marketing-version "${{ steps.version.outputs.version }}"
           # Set build number (CFBundleVersion) using timestamp for uniqueness
           agvtool new-version -all "$(date +%Y%m%d%H%M)"
+
+          # Commit version changes back to repository
+          if git diff --quiet ClaudeIsland.xcodeproj/project.pbxproj; then
+            echo "Version already matches tag, no commit needed"
+          else
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            # Commit version change (--no-verify bypasses pre-commit hooks)
+            git add ClaudeIsland.xcodeproj/project.pbxproj
+            git commit --no-verify -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]"
+
+            # Push to main branch
+            git push origin HEAD:main
+            echo "✅ Version committed and pushed to main"
+          fi
 
       - name: Build with ad-hoc signing
         run: ./scripts/build.sh
