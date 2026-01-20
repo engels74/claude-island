@@ -204,9 +204,9 @@ struct NotchView: View {
         }
 
         // Expand for multiple active sessions to accommodate session state dots
+        // Uses symmetric expansion (sideWidth on both left and right) like processing
         if self.hasMultipleActiveSessions {
-            let dotsWidth = SessionStateDots.expectedWidth(for: self.activeSessions.count)
-            return self.sideWidth + dotsWidth + 6
+            return 2 * max(0, self.closedNotchSize.height - 12) + 20
         }
 
         return 0
@@ -333,7 +333,8 @@ struct NotchView: View {
                 }
             }
 
-            // Right side - spinner when processing/pending, checkmark when waiting for input
+            // Right side - spinner when processing/pending, checkmark when waiting for input,
+            // or empty spacer for symmetric expansion with session dots
             if self.showClosedActivity {
                 if self.isProcessing || self.hasPendingPermission {
                     ProcessingSpinner()
@@ -346,6 +347,12 @@ struct NotchView: View {
                         .matchedGeometryEffect(id: "spinner", in: self.activityNamespace, isSource: self.showClosedActivity)
                         .frame(width: self.viewModel.status == .opened ? 20 : self.sideWidth)
                         .padding(.trailing, self.viewModel.status == .opened ? 0 : 4)
+                } else if self.hasMultipleActiveSessions && self.viewModel.status != .opened {
+                    // Empty spacer maintains symmetric expansion when showing session dots
+                    // (matches sideWidth used by spinner/checkmark in other activity states)
+                    Color.clear
+                        .frame(width: self.sideWidth)
+                        .padding(.trailing, 4)
                 }
             }
         }
