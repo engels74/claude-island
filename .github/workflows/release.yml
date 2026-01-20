@@ -42,10 +42,17 @@ jobs:
 
       - name: Update Xcode project version and commit
         run: |
-          # Set marketing version (CFBundleShortVersionString) from tag
-          agvtool new-marketing-version "${{ steps.version.outputs.version }}"
-          # Set build number (CFBundleVersion) using timestamp for uniqueness
-          agvtool new-version -all "$(date +%Y%m%d%H%M)"
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_NUMBER="$(date +%Y%m%d%H%M)"
+
+          # Update MARKETING_VERSION directly in project.pbxproj
+          # (agvtool doesn't work when Info.plist uses $(MARKETING_VERSION) variable references)
+          sed -i '' "s/MARKETING_VERSION = .*;/MARKETING_VERSION = $VERSION;/g" ClaudeIsland.xcodeproj/project.pbxproj
+
+          # Update CURRENT_PROJECT_VERSION directly in project.pbxproj
+          sed -i '' "s/CURRENT_PROJECT_VERSION = .*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" ClaudeIsland.xcodeproj/project.pbxproj
+
+          echo "✅ Set MARKETING_VERSION=$VERSION, CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
           # Commit version changes back to repository
           if git diff --quiet ClaudeIsland.xcodeproj/project.pbxproj; then
@@ -57,7 +64,7 @@ jobs:
 
             # Commit version change (--no-verify bypasses pre-commit hooks)
             git add ClaudeIsland.xcodeproj/project.pbxproj
-            git commit --no-verify -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]"
+            git commit --no-verify -m "chore: bump version to $VERSION [skip ci]"
 
             # Push to main branch
             git push origin HEAD:main
