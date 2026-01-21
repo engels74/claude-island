@@ -44,7 +44,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        HookInstaller.installIfNeeded()
+        Task {
+            await HookInstaller.installIfNeeded()
+        }
         NSApplication.shared.setActivationPolicy(.accessory)
 
         self.windowManager = WindowManager()

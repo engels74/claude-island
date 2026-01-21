@@ -16,8 +16,11 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "H
 enum HookInstaller {
     // MARK: Internal
 
+    /// Cached detected runtime for command generation
+    private(set) static var detectedRuntime: PythonRuntimeDetector.PythonRuntime?
+
     /// Install hook script and update settings.json on app launch
-    static func installIfNeeded() {
+    static func installIfNeeded() async {
         let claudeDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude")
         let hooksDir = claudeDir.appendingPathComponent("hooks")
@@ -38,8 +41,14 @@ enum HookInstaller {
             )
         }
 
-        self.checkUvAvailability()
-        self.updateSettings(at: settings)
+        await self.detectPythonRuntime()
+
+        // Only update settings if a runtime is available
+        guard case .unavailable = self.detectedRuntime else {
+            self.updateSettings(at: settings)
+            return
+        }
+        // Don't update settings if no runtime available - alert was already shown
     }
 
     /// Check if hooks are currently installed
@@ -125,44 +134,56 @@ enum HookInstaller {
 
     // MARK: Private
 
-    /// Check if uv is available on PATH
-    /// Logs a warning if uv is not found, as hooks require uv to execute
-    private static func checkUvAvailability() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = ["uv"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+    /// Detect the best available Python runtime
+    private static func detectPythonRuntime() async {
+        self.detectedRuntime = await PythonRuntimeDetector.shared.detectRuntime()
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus != 0 {
-                logger.warning(
-                    """
-                    uv not found on PATH. Claude Island hooks require uv to execute. \
-                    Install uv from https://docs.astral.sh/uv/getting-started/installation/
-                    """
-                )
+        if case let .unavailable(reason) = detectedRuntime {
+            await MainActor.run {
+                PythonRuntimeAlert.showUnavailableAlert(reason: reason)
             }
-        } catch {
-            logger.warning(
-                """
-                Failed to check for uv availability: \(error.localizedDescription). \
-                Claude Island hooks require uv to execute.
-                """
-            )
         }
     }
 
     private static func updateSettings(at settingsURL: URL) {
+        guard let runtime = detectedRuntime,
+              let command = PythonRuntimeDetector.shared.getCommand(
+                  for: "~/.claude/hooks/claude-island-state.py",
+                  runtime: runtime
+              )
+        else {
+            logger.warning("Skipping hook settings update - no suitable Python runtime")
+            return
+        }
+
+        logger.info("Using hook command: \(command)")
+
         var json: [String: Any] = [:]
         if let data = try? Data(contentsOf: settingsURL),
            let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             json = existing
         }
 
-        let command = "uv run ~/.claude/hooks/claude-island-state.py"
+        var hooks = json["hooks"] as? [String: Any] ?? [:]
+        let hookEvents = self.buildHookConfigurations(command: command)
+
+        for (event, config) in hookEvents {
+            hooks[event] = self.updateOrAddHookEntries(
+                existing: hooks[event] as? [[String: Any]],
+                config: config,
+                command: command
+            )
+        }
+
+        json["hooks"] = hooks
+
+        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: settingsURL)
+        }
+    }
+
+    /// Build hook configurations for all events
+    private static func buildHookConfigurations(command: String) -> [(String, [[String: Any]])] {
         let hookEntry: [[String: Any]] = [["type": "command", "command": command]]
         let hookEntryWithTimeout: [[String: Any]] = [["type": "command", "command": command, "timeout": 86400]]
         let withMatcher: [[String: Any]] = [["matcher": "*", "hooks": hookEntry]]
@@ -173,9 +194,7 @@ enum HookInstaller {
             ["matcher": "manual", "hooks": hookEntry],
         ]
 
-        var hooks = json["hooks"] as? [String: Any] ?? [:]
-
-        let hookEvents: [(String, [[String: Any]])] = [
+        return [
             ("UserPromptSubmit", withoutMatcher),
             ("PreToolUse", withMatcher),
             ("PostToolUse", withMatcher),
@@ -187,34 +206,39 @@ enum HookInstaller {
             ("SessionEnd", withoutMatcher),
             ("PreCompact", preCompactConfig),
         ]
+    }
 
-        for (event, config) in hookEvents {
-            if var existingEvent = hooks[event] as? [[String: Any]] {
-                let hasOurHook = existingEvent.contains { entry in
-                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
-                        return entryHooks.contains { hookEntry in
-                            let cmd = hookEntry["command"] as? String ?? ""
-                            return cmd.contains("claude-island-state.py")
-                        }
+    /// Update existing hook entries or add new ones
+    private static func updateOrAddHookEntries(
+        existing: [[String: Any]]?,
+        config: [[String: Any]],
+        command: String
+    ) -> [[String: Any]] {
+        guard var existingEvent = existing else {
+            return config
+        }
+
+        var updated = false
+        for i in existingEvent.indices {
+            if var entry = existingEvent[i] as? [String: Any],
+               var entryHooks = entry["hooks"] as? [[String: Any]] {
+                for j in entryHooks.indices {
+                    if var hook = entryHooks[j] as? [String: Any],
+                       let cmd = hook["command"] as? String,
+                       cmd.contains("claude-island-state.py") {
+                        hook["command"] = command
+                        entryHooks[j] = hook
+                        updated = true
                     }
-                    return false
                 }
-                if !hasOurHook {
-                    existingEvent.append(contentsOf: config)
-                    hooks[event] = existingEvent
-                }
-            } else {
-                hooks[event] = config
+                entry["hooks"] = entryHooks
+                existingEvent[i] = entry
             }
         }
 
-        json["hooks"] = hooks
-
-        if let data = try? JSONSerialization.data(
-            withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys]
-        ) {
-            try? data.write(to: settingsURL)
+        if !updated {
+            existingEvent.append(contentsOf: config)
         }
+        return existingEvent
     }
 }

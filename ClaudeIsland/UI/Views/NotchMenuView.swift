@@ -79,8 +79,12 @@ struct NotchMenuView: View {
                     HookInstaller.uninstall()
                     self.hooksInstalled = false
                 } else {
-                    HookInstaller.installIfNeeded()
-                    self.hooksInstalled = true
+                    Task {
+                        await HookInstaller.installIfNeeded()
+                        await MainActor.run {
+                            self.hooksInstalled = HookInstaller.isInstalled()
+                        }
+                    }
                 }
             }
 
