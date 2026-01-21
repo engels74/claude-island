@@ -76,7 +76,9 @@ actor PythonRuntimeDetector {
     }
 
     /// Clear cached runtime (for testing or forced refresh)
+    /// Cancels any in-flight detection task to prevent stale results from overwriting the cache
     func clearCache() {
+        self.detectionTask?.cancel()
         self.cachedRuntime = nil
         self.detectionTask = nil
     }

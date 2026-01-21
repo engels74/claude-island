@@ -38,6 +38,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.windowManager?.windowController
     }
 
+    /// Cancel any in-flight hook installation task
+    /// Called by NotchMenuView when user toggles hooks off to prevent race conditions
+    func cancelHookInstallTask() {
+        self.hookInstallTask?.cancel()
+        self.hookInstallTask = nil
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !self.ensureSingleInstance() {
             NSApplication.shared.terminate(nil)

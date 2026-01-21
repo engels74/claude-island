@@ -75,9 +75,12 @@ struct NotchMenuView: View {
                 label: "Hooks",
                 isOn: self.hooksInstalled
             ) {
-                // Cancel any in-flight installation task first (fixes race condition)
+                // Cancel any in-flight installation tasks first (both local and AppDelegate's)
+                // This prevents race conditions where an app-launch install could re-write settings.json
+                // after uninstall completes
                 self.hookInstallTask?.cancel()
                 self.hookInstallTask = nil
+                AppDelegate.shared?.cancelHookInstallTask()
 
                 if self.hooksInstalled {
                     HookInstaller.uninstall()

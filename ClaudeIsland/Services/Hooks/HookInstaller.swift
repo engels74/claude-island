@@ -58,7 +58,8 @@ enum HookInstaller {
         guard !Task.isCancelled else { return }
 
         // Skip settings update if no runtime available (alert was already shown during detection)
-        if case .unavailable = self.detectedRuntime {
+        // Use ? suffix for optional pattern matching (required to match .some(.unavailable(...)))
+        if case .unavailable? = self.detectedRuntime {
             return
         }
         self.updateSettings(at: settings)
@@ -141,7 +142,8 @@ enum HookInstaller {
         self.detectedRuntime = await PythonRuntimeDetector.shared.detectRuntime()
 
         // Already on MainActor, can call directly without wrapper
-        if case let .unavailable(reason) = detectedRuntime {
+        // Use ? suffix for optional pattern matching (required to match .some(.unavailable(...)))
+        if case let .unavailable(reason)? = detectedRuntime {
             PythonRuntimeAlert.showUnavailableAlert(reason: reason)
         }
     }
