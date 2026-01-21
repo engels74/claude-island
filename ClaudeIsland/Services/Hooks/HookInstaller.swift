@@ -13,10 +13,14 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "H
 
 // MARK: - HookInstaller
 
+/// Hook installer with @MainActor isolation to protect static mutable state
+/// This ensures thread-safe access to detectedRuntime across all call sites
+@MainActor
 enum HookInstaller {
     // MARK: Internal
 
     /// Cached detected runtime for command generation
+    /// Protected by @MainActor isolation to prevent data races
     private(set) static var detectedRuntime: PythonRuntimeDetector.PythonRuntime?
 
     /// Install hook script and update settings.json on app launch
@@ -43,12 +47,11 @@ enum HookInstaller {
 
         await self.detectPythonRuntime()
 
-        // Only update settings if a runtime is available
-        guard case .unavailable = self.detectedRuntime else {
-            self.updateSettings(at: settings)
+        // Skip settings update if no runtime available (alert was already shown during detection)
+        if case .unavailable = self.detectedRuntime {
             return
         }
-        // Don't update settings if no runtime available - alert was already shown
+        self.updateSettings(at: settings)
     }
 
     /// Check if hooks are currently installed
@@ -138,10 +141,9 @@ enum HookInstaller {
     private static func detectPythonRuntime() async {
         self.detectedRuntime = await PythonRuntimeDetector.shared.detectRuntime()
 
+        // Already on MainActor, can call directly without wrapper
         if case let .unavailable(reason) = detectedRuntime {
-            await MainActor.run {
-                PythonRuntimeAlert.showUnavailableAlert(reason: reason)
-            }
+            PythonRuntimeAlert.showUnavailableAlert(reason: reason)
         }
     }
 

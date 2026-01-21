@@ -44,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        Task {
+        self.hookInstallTask = Task {
             await HookInstaller.installIfNeeded()
         }
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -67,6 +67,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Cancel any in-flight hook installation
+        self.hookInstallTask?.cancel()
+
         // Stop socket server and clean up socket file
         HookSocketServer.shared.stop()
 
@@ -82,6 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
     private var updateCheckTimer: Timer?
+    private var hookInstallTask: Task<Void, Never>?
 
     private let userDriver: NotchUserDriver
 
