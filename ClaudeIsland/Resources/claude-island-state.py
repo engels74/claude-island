@@ -209,14 +209,14 @@ def get_tty(ppid: int, /) -> str | None:
             if tty not in ("??", "-"):
                 # ps returns just "ttys001", we need "/dev/ttys001"
                 return tty if tty.startswith("/dev/") else f"/dev/{tty}"
-    except subprocess.TimeoutExpired, OSError:
+    except (subprocess.TimeoutExpired, OSError):
         pass
 
     # Fallback: try current process stdin/stdout
     for fd in (sys.stdin, sys.stdout):
         try:
             return os.ttyname(fd.fileno())
-        except OSError, AttributeError:
+        except (OSError, AttributeError):
             continue
 
     return None
@@ -261,7 +261,7 @@ def get_claude_pid() -> int:
                 return current_pid
 
             current_pid = ppid
-        except subprocess.TimeoutExpired, ValueError, OSError:
+        except (subprocess.TimeoutExpired, ValueError, OSError):
             break
 
     # Fallback to immediate parent
@@ -355,7 +355,7 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
                     if is_permission_response(parsed):
                         return parsed
             return None
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return None
 
 
