@@ -232,8 +232,12 @@ actor PythonRuntimeDetector {
         }
 
         // Output is like "Python 3.14.0"
+        // Note: Older Python versions (< 3.4) write to stderr instead of stdout
         let output = processResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
-        return self.parseVersionFromOutput(output)
+        let combinedOutput = output.isEmpty
+            ? (processResult.stderr ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            : output
+        return self.parseVersionFromOutput(combinedOutput)
     }
 
     /// Parse version string from "Python X.Y.Z" output

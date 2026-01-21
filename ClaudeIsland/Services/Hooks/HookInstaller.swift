@@ -69,15 +69,9 @@ enum HookInstaller {
 
         for (_, value) in hooks {
             if let entries = value as? [[String: Any]] {
-                for entry in entries {
-                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
-                        for hook in entryHooks {
-                            if let cmd = hook["command"] as? String,
-                               cmd.contains("claude-island-state.py") {
-                                return true
-                            }
-                        }
-                    }
+                // Check both modern wrapped format and legacy direct format
+                for entry in entries where self.containsClaudeIslandCommand(entry) {
+                    return true
                 }
             }
         }
@@ -103,14 +97,9 @@ enum HookInstaller {
 
         for (event, value) in hooks {
             if var entries = value as? [[String: Any]] {
+                // Remove both modern wrapped format and legacy direct format entries
                 entries.removeAll { entry in
-                    if let entryHooks = entry["hooks"] as? [[String: Any]] {
-                        return entryHooks.contains { hook in
-                            let cmd = hook["command"] as? String ?? ""
-                            return cmd.contains("claude-island-state.py")
-                        }
-                    }
-                    return false
+                    self.containsClaudeIslandCommand(entry)
                 }
 
                 if entries.isEmpty {
@@ -220,6 +209,11 @@ enum HookInstaller {
             return config
         }
 
+        // First, remove any legacy direct format entries (not wrapped in "hooks")
+        existingEvent.removeAll { entry in
+            self.isLegacyDirectEntry(entry)
+        }
+
         var updated = false
         for i in existingEvent.indices {
             if var entry = existingEvent[i] as? [String: Any],
@@ -242,5 +236,38 @@ enum HookInstaller {
             existingEvent.append(contentsOf: config)
         }
         return existingEvent
+    }
+
+    /// Check if entry is a legacy direct format (type: command at top level, not wrapped in hooks)
+    private static func isLegacyDirectEntry(_ entry: [String: Any]) -> Bool {
+        // Legacy format: {"type": "command", "command": "...claude-island-state.py..."}
+        // Modern format: {"hooks": [{"type": "command", "command": "..."}]}
+        if entry["hooks"] != nil {
+            return false // This is the modern wrapped format
+        }
+        if let type = entry["type"] as? String, type == "command",
+           let cmd = entry["command"] as? String,
+           cmd.contains("claude-island-state.py") {
+            return true
+        }
+        return false
+    }
+
+    /// Check if entry contains a Claude Island command (either wrapped or direct format)
+    private static func containsClaudeIslandCommand(_ entry: [String: Any]) -> Bool {
+        // Check modern wrapped format: {"hooks": [{"type": "command", "command": "..."}]}
+        if let entryHooks = entry["hooks"] as? [[String: Any]] {
+            for hook in entryHooks {
+                if let cmd = hook["command"] as? String,
+                   cmd.contains("claude-island-state.py") {
+                    return true
+                }
+            }
+        }
+        // Check legacy direct format: {"type": "command", "command": "..."}
+        if self.isLegacyDirectEntry(entry) {
+            return true
+        }
+        return false
     }
 }
