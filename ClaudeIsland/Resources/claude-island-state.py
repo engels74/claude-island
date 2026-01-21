@@ -10,6 +10,28 @@ For PermissionRequest events, waits for user decisions from the app.
 Requires: Python 3.14+
 """
 
+# Version check - must run before any 3.14+ imports/syntax
+import sys as _sys
+
+if _sys.version_info < (3, 14):
+    _sys.stderr.write(
+        "Error: Claude Island hook requires Python 3.14+, "
+        "but you have Python %d.%d\n"
+        "\n"
+        "To fix this, install Python 3.14+ using one of these methods:\n"
+        "  - brew install python@3.14\n"
+        "  - uv python install 3.14\n"
+        "  - pyenv install 3.14\n"
+        "\n"
+        "Then ensure the hook runs with Python 3.14+:\n"
+        "  - Update your PATH to prioritize Python 3.14\n"
+        "  - Or use 'uv run' which respects the requires-python metadata\n"
+        % (_sys.version_info.major, _sys.version_info.minor)
+    )
+    _sys.exit(0)  # Exit 0 to not block Claude Code
+
+del _sys  # Clean up namespace
+
 __all__ = [
     "HookEventData",
     "PermissionResponse",
