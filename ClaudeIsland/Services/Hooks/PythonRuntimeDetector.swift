@@ -117,9 +117,13 @@ actor PythonRuntimeDetector {
 
     /// Find uv executable
     private func findUv() async -> String? {
+        let localBinUv = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/bin/uv").path
+
         let possiblePaths = [
             "/opt/homebrew/bin/uv", // Apple Silicon Homebrew
             "/usr/local/bin/uv", // Intel Homebrew
+            localBinUv, // Official uv installer (https://astral.sh/uv)
         ]
 
         // Check known paths first (like TmuxPathFinder)
