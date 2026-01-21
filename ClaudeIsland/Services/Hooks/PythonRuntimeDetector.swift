@@ -139,7 +139,10 @@ actor PythonRuntimeDetector {
         if case let .success(processResult) = result, processResult.isSuccess {
             let path = processResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
             if !path.isEmpty && FileManager.default.isExecutableFile(atPath: path) {
-                return path
+                // Verify it actually works (consistent with known paths check above)
+                if await self.verifyExecutable(path, arguments: ["--version"]) {
+                    return path
+                }
             }
         }
 

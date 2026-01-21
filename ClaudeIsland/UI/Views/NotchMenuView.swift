@@ -75,16 +75,20 @@ struct NotchMenuView: View {
                 label: "Hooks",
                 isOn: self.hooksInstalled
             ) {
+                // Cancel any in-flight installation task first (fixes race condition)
+                self.hookInstallTask?.cancel()
+                self.hookInstallTask = nil
+
                 if self.hooksInstalled {
                     HookInstaller.uninstall()
                     self.hooksInstalled = false
                 } else {
-                    // Cancel any in-flight installation task before starting a new one
-                    self.hookInstallTask?.cancel()
-                    self.hookInstallTask = Task {
+                    self.hookInstallTask = Task { @MainActor in
                         await HookInstaller.installIfNeeded()
-                        // HookInstaller is @MainActor, so after await we're on main actor
-                        self.hooksInstalled = HookInstaller.isInstalled()
+                        // Only update state if task wasn't cancelled
+                        if !Task.isCancelled {
+                            self.hooksInstalled = HookInstaller.isInstalled()
+                        }
                     }
                 }
             }

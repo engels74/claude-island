@@ -24,12 +24,16 @@ enum HookInstaller {
     private(set) static var detectedRuntime: PythonRuntimeDetector.PythonRuntime?
 
     /// Install hook script and update settings.json on app launch
+    /// Supports cooperative cancellation - checks Task.isCancelled at key points
     static func installIfNeeded() async {
         let claudeDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude")
         let hooksDir = claudeDir.appendingPathComponent("hooks")
         let pythonScript = hooksDir.appendingPathComponent("claude-island-state.py")
         let settings = claudeDir.appendingPathComponent("settings.json")
+
+        // Check for cancellation before file operations
+        guard !Task.isCancelled else { return }
 
         try? FileManager.default.createDirectory(
             at: hooksDir,
@@ -45,7 +49,13 @@ enum HookInstaller {
             )
         }
 
+        // Check for cancellation before async runtime detection
+        guard !Task.isCancelled else { return }
+
         await self.detectPythonRuntime()
+
+        // Check for cancellation after async operation (state may have changed)
+        guard !Task.isCancelled else { return }
 
         // Skip settings update if no runtime available (alert was already shown during detection)
         if case .unavailable = self.detectedRuntime {
