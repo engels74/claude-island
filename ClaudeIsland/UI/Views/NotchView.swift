@@ -38,7 +38,9 @@ struct NotchView: View {
             VStack(spacing: 0) {
                 self.notchLayout
                     .frame(
-                        maxWidth: self.viewModel.status == .opened ? self.notchSize.width : nil,
+                        maxWidth: self.viewModel.status == .opened
+                            ? self.notchSize.width
+                            : (self.showClosedActivity ? self.closedContentWidth : nil),
                         alignment: .top
                     )
                     .padding(
@@ -61,7 +63,9 @@ struct NotchView: View {
                         radius: 6
                     )
                     .frame(
-                        maxWidth: self.viewModel.status == .opened ? self.notchSize.width : nil,
+                        maxWidth: self.viewModel.status == .opened
+                            ? self.notchSize.width
+                            : (self.showClosedActivity ? self.closedContentWidth : nil),
                         maxHeight: self.viewModel.status == .opened ? self.notchSize.height : nil,
                         alignment: .top
                     )
