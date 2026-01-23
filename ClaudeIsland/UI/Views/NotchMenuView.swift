@@ -96,7 +96,7 @@ struct NotchMenuView: View {
                 }
             }
 
-            AccessibilityRow(isEnabled: AXIsProcessTrusted())
+            AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
             Divider()
                 .background(Color.white.opacity(0.08))
@@ -155,6 +155,7 @@ struct NotchMenuView: View {
     private var screenSelector = ScreenSelector.shared
     private var soundSelector = SoundSelector.shared
     private var suppressionSelector = SuppressionSelector.shared
+    private var accessibilityManager = AccessibilityPermissionManager.shared
 
     private func refreshStates() {
         self.hooksInstalled = HookInstaller.isInstalled()
@@ -424,7 +425,8 @@ struct UpdateRow: View {
 struct AccessibilityRow: View {
     // MARK: Internal
 
-    let isEnabled: Bool
+    /// AccessibilityPermissionManager is @Observable, so SwiftUI automatically tracks property access
+    var accessibilityManager: AccessibilityPermissionManager
 
     var body: some View {
         HStack(spacing: 10) {
@@ -439,7 +441,7 @@ struct AccessibilityRow: View {
 
             Spacer()
 
-            if self.isEnabled {
+            if self.accessibilityManager.isAccessibilityEnabled {
                 Circle()
                     .fill(TerminalColors.green)
                     .frame(width: 6, height: 6)
@@ -448,7 +450,7 @@ struct AccessibilityRow: View {
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.4))
             } else {
-                Button(action: self.openAccessibilitySettings) {
+                Button(action: self.handleEnableAction) {
                     Text("Enable")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.black)
@@ -456,7 +458,7 @@ struct AccessibilityRow: View {
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 5)
-                                .fill(Color.white)
+                                .fill(TerminalColors.amber)
                         )
                 }
                 .buttonStyle(.plain)
@@ -470,29 +472,24 @@ struct AccessibilityRow: View {
         )
         .onHover { self.isHovered = $0 }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            self.refreshTrigger.toggle()
+            // Re-check permission when app becomes active (user may have granted permission in System Settings)
+            self.accessibilityManager.checkPermission()
         }
     }
 
     // MARK: Private
 
     @State private var isHovered = false
-    @State private var refreshTrigger = false
-
-    private var currentlyEnabled: Bool {
-        // Re-check on each render when refreshTrigger changes
-        _ = self.refreshTrigger
-        return self.isEnabled
-    }
 
     private var textColor: Color {
-        .white.opacity(self.isHovered ? 1.0 : 0.7)
+        if !self.accessibilityManager.isAccessibilityEnabled {
+            return TerminalColors.amber.opacity(self.isHovered ? 1.0 : 0.8)
+        }
+        return .white.opacity(self.isHovered ? 1.0 : 0.7)
     }
 
-    private func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+    private func handleEnableAction() {
+        self.accessibilityManager.openAccessibilitySettings()
     }
 }
 

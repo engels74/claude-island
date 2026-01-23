@@ -206,6 +206,61 @@ struct ReadyForInputIndicatorIcon: View {
     ]
 }
 
+// MARK: - AccessibilityWarningIcon
+
+/// Pixel art warning icon for missing accessibility permission
+struct AccessibilityWarningIcon: View {
+    // MARK: Lifecycle
+
+    init(size: CGFloat = 14, color: Color = TerminalColors.amber) {
+        self.size = size
+        self.color = color
+    }
+
+    // MARK: Internal
+
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        Canvas { context, _ in
+            let scale = self.size / 30.0
+            let pixelSize: CGFloat = 4 * scale
+
+            for (x, y) in self.pixels {
+                let rect = CGRect(
+                    x: x * scale - pixelSize / 2,
+                    y: y * scale - pixelSize / 2,
+                    width: pixelSize,
+                    height: pixelSize
+                )
+                context.fill(Path(rect), with: .color(self.color))
+            }
+        }
+        .frame(width: self.size, height: self.size)
+    }
+
+    // MARK: Private
+
+    /// Triangle warning shape pixel positions (at 30x30 scale)
+    private let pixels: [(CGFloat, CGFloat)] = [
+        // Top point
+        (15, 3),
+        // Second row
+        (13, 7), (17, 7),
+        // Third row
+        (11, 11), (15, 11), (19, 11),
+        // Fourth row
+        (9, 15), (15, 15), (21, 15),
+        // Fifth row
+        (7, 19), (15, 19), (23, 19),
+        // Bottom row (base of triangle)
+        (5, 23), (9, 23), (13, 23), (17, 23), (21, 23), (25, 23),
+        // Exclamation mark (inside triangle)
+        (15, 27),
+    ]
+}
+
 // MARK: - SessionStateDots
 
 /// Displays colored dots representing session states in minimized notch
