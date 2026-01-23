@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import Foundation
 import Observation
+import Synchronization
 
 // MARK: - ClaudeSessionMonitor
 
@@ -171,31 +172,28 @@ final class ClaudeSessionMonitor {
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     /// Active tasks that should be cancelled when monitoring stops
-    @ObservationIgnored private var activeTasks: [UUID: Task<Void, Never>] = [:]
-    @ObservationIgnored private let tasksLock = NSLock()
+    /// Uses Mutex for thread-safe access per Swift 6 patterns
+    @ObservationIgnored private let activeTasks = Mutex<[UUID: Task<Void, Never>]>([:])
 
     /// Track a task for cancellation on stop
     private func trackTask(_ task: Task<Void, Never>) {
         let id = UUID()
-        self.tasksLock.lock()
-        self.activeTasks[id] = task
-        self.tasksLock.unlock()
+        self.activeTasks.withLock { $0[id] = task }
 
         // Auto-remove when task completes
         Task {
             _ = await task.result
-            self.tasksLock.lock()
-            self.activeTasks.removeValue(forKey: id)
-            self.tasksLock.unlock()
+            _ = self.activeTasks.withLock { $0.removeValue(forKey: id) }
         }
     }
 
     /// Cancel all tracked tasks
     private func cancelAllTasks() {
-        self.tasksLock.lock()
-        let tasks = self.activeTasks.values
-        self.activeTasks.removeAll()
-        self.tasksLock.unlock()
+        let tasks = self.activeTasks.withLock { tasks -> [Task<Void, Never>] in
+            let values = Array(tasks.values)
+            tasks.removeAll()
+            return values
+        }
 
         for task in tasks {
             task.cancel()
