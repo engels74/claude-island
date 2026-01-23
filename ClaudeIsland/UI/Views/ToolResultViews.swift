@@ -923,6 +923,12 @@ struct SimpleDiffView: View {
     var filename: String?
 
     var body: some View {
+        // Compute diff once per render pass (LCS is expensive)
+        let diff = self.computeDiffResult()
+        let diffLines = diff.lines
+        let hasMoreChanges = diff.hasMore
+        let hasLinesBefore = diffLines.first.map { $0.lineNumber > 1 } ?? false
+
         VStack(alignment: .leading, spacing: 0) {
             // Filename header
             if let name = filename {
@@ -942,7 +948,7 @@ struct SimpleDiffView: View {
             }
 
             // Top overflow indicator
-            if self.hasLinesBefore {
+            if hasLinesBefore {
                 Text("...")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
@@ -957,9 +963,9 @@ struct SimpleDiffView: View {
             }
 
             // Diff lines
-            ForEach(Array(self.diffLines.enumerated()), id: \.offset) { index, line in
-                let isFirst = index == 0 && self.filename == nil && !self.hasLinesBefore
-                let isLast = index == self.diffLines.count - 1 && !self.hasMoreChanges
+            ForEach(Array(diffLines.enumerated()), id: \.offset) { index, line in
+                let isFirst = index == 0 && self.filename == nil && !hasLinesBefore
+                let isLast = index == diffLines.count - 1 && !hasMoreChanges
                 DiffLineView(
                     line: line.text,
                     type: line.type,
@@ -970,7 +976,7 @@ struct SimpleDiffView: View {
             }
 
             // Bottom overflow indicator
-            if self.hasMoreChanges {
+            if hasMoreChanges {
                 Text("...")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
@@ -1049,60 +1055,6 @@ struct SimpleDiffView: View {
         }
     }
 
-    /// Single computation of all diff data - called once per render
-    private var cachedDiffResult: DiffResult {
-        let oldLines = self.oldString.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let newLines = self.newString.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-
-        // Compute LCS once
-        let lcs = Self.computeLCS(oldLines, newLines)
-        let totalChanges = (oldLines.count - lcs.count) + (newLines.count - lcs.count)
-
-        // Build diff lines (max 12)
-        var result: [DiffLine] = []
-        result.reserveCapacity(min(12, totalChanges))
-
-        var oldIdx = 0
-        var newIdx = 0
-        var lcsIdx = 0
-
-        while oldIdx < oldLines.count || newIdx < newLines.count {
-            if result.count >= 12 { break }
-
-            let lcsLine = lcsIdx < lcs.count ? lcs[lcsIdx] : nil
-
-            if oldIdx < oldLines.count && (lcsLine == nil || oldLines[oldIdx] != lcsLine) {
-                result.append(DiffLine(text: oldLines[oldIdx], type: .removed, lineNumber: oldIdx + 1))
-                oldIdx += 1
-            } else if newIdx < newLines.count && (lcsLine == nil || newLines[newIdx] != lcsLine) {
-                result.append(DiffLine(text: newLines[newIdx], type: .added, lineNumber: newIdx + 1))
-                newIdx += 1
-            } else {
-                oldIdx += 1
-                newIdx += 1
-                lcsIdx += 1
-            }
-        }
-
-        return DiffResult(lines: result, hasMore: totalChanges > 12, totalChanges: totalChanges)
-    }
-
-    /// Diff lines from cached computation
-    private var diffLines: [DiffLine] {
-        self.cachedDiffResult.lines
-    }
-
-    /// Whether there are more changes than displayed
-    private var hasMoreChanges: Bool {
-        self.cachedDiffResult.hasMore
-    }
-
-    /// Whether there are lines before the first diff line
-    private var hasLinesBefore: Bool {
-        guard let firstLine = cachedDiffResult.lines.first else { return false }
-        return firstLine.lineNumber > 1
-    }
-
     /// Compute Longest Common Subsequence using space-optimized DP
     /// Uses O(min(n,m)) space instead of O(n*m) by keeping only two rows
     private static func computeLCS(_ oldLines: [String], _ newLines: [String]) -> [String] {
@@ -1160,6 +1112,44 @@ struct SimpleDiffView: View {
         }
 
         return lcs.reversed()
+    }
+
+    /// Compute diff using LCS algorithm - call once per render pass
+    private func computeDiffResult() -> DiffResult {
+        let oldLines = self.oldString.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let newLines = self.newString.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        // Compute LCS once
+        let lcs = Self.computeLCS(oldLines, newLines)
+        let totalChanges = (oldLines.count - lcs.count) + (newLines.count - lcs.count)
+
+        // Build diff lines (max 12)
+        var result: [DiffLine] = []
+        result.reserveCapacity(min(12, totalChanges))
+
+        var oldIdx = 0
+        var newIdx = 0
+        var lcsIdx = 0
+
+        while oldIdx < oldLines.count || newIdx < newLines.count {
+            if result.count >= 12 { break }
+
+            let lcsLine = lcsIdx < lcs.count ? lcs[lcsIdx] : nil
+
+            if oldIdx < oldLines.count && (lcsLine == nil || oldLines[oldIdx] != lcsLine) {
+                result.append(DiffLine(text: oldLines[oldIdx], type: .removed, lineNumber: oldIdx + 1))
+                oldIdx += 1
+            } else if newIdx < newLines.count && (lcsLine == nil || newLines[newIdx] != lcsLine) {
+                result.append(DiffLine(text: newLines[newIdx], type: .added, lineNumber: newIdx + 1))
+                newIdx += 1
+            } else {
+                oldIdx += 1
+                newIdx += 1
+                lcsIdx += 1
+            }
+        }
+
+        return DiffResult(lines: result, hasMore: totalChanges > 12, totalChanges: totalChanges)
     }
 }
 

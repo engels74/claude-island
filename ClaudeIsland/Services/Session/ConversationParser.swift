@@ -108,7 +108,10 @@ actor ConversationParser {
     /// 2. The algorithm requires both forward and backward iteration
     /// 3. For very long conversations, the summary is typically updated, invalidating old data
     ///
-    /// File I/O is performed off-actor to prevent actor starvation during disk operations.
+    /// Note: File I/O helpers are nonisolated static methods, but when called synchronously
+    /// from within an actor method, they still execute on the actor's executor. The async
+    /// signature allows callers to await without blocking, but disk operations are not
+    /// automatically dispatched to a background thread.
     func parse(sessionID: String, cwd: String) async -> ConversationInfo {
         let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
 
@@ -172,7 +175,6 @@ actor ConversationParser {
     // MARK: - Full Conversation Parsing
 
     /// Parse full conversation history for chat view (returns ALL messages - use sparingly)
-    /// File I/O is performed off-actor to prevent actor starvation during disk operations.
     func parseFullConversation(sessionID: String, cwd: String) async -> [ChatMessage] {
         let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
 
@@ -190,7 +192,6 @@ actor ConversationParser {
     }
 
     /// Parse only NEW messages since last call (efficient incremental updates)
-    /// File I/O is performed off-actor to prevent actor starvation during disk operations.
     func parseIncremental(sessionID: String, cwd: String) async -> IncrementalParseResult {
         let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
 
@@ -276,7 +277,7 @@ actor ConversationParser {
         var clearPending = false // True if a /clear was just detected
     }
 
-    // MARK: - Nonisolated File I/O Helpers (run off-actor to prevent starvation)
+    // MARK: - Nonisolated File I/O Helpers
 
     /// File info result from off-actor file attribute check
     private struct FileInfo: Sendable {
@@ -595,9 +596,9 @@ actor ConversationParser {
             return []
         }
 
-        // No new content
+        // No new content - return empty array (not state.messages) since no NEW messages
         guard let newContent = readResult.content else {
-            return state.messages
+            return []
         }
 
         state.clearPending = false
