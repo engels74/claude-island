@@ -9,9 +9,6 @@
 import Foundation
 import os.log
 
-/// Logger for agent file watcher (nonisolated(unsafe) required due to MainActor inference in this file)
-private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AgentFileWatcher")
-
 // MARK: - AgentFileWatcherDelegate
 
 /// Protocol for receiving agent file update notifications
@@ -47,6 +44,9 @@ final class AgentFileWatcher: @unchecked Sendable {
     }
 
     // MARK: Internal
+
+    /// Logger for agent file watcher
+    nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AgentFileWatcher")
 
     weak var delegate: AgentFileWatcherDelegate?
 
@@ -86,7 +86,7 @@ final class AgentFileWatcher: @unchecked Sendable {
         guard FileManager.default.fileExists(atPath: self.filePath),
               let handle = FileHandle(forReadingAtPath: self.filePath)
         else {
-            logger.warning("Failed to open agent file: \(self.filePath, privacy: .public)")
+            Self.logger.warning("Failed to open agent file: \(self.filePath, privacy: .public)")
             return
         }
 
@@ -97,7 +97,7 @@ final class AgentFileWatcher: @unchecked Sendable {
         do {
             self.lastOffset = try handle.seekToEnd()
         } catch {
-            logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
             return
         }
 
@@ -120,7 +120,7 @@ final class AgentFileWatcher: @unchecked Sendable {
         self.source = newSource
         newSource.resume()
 
-        logger
+        Self.logger
             .debug(
                 "Started watching agent file: \(self.agentID.prefix(8), privacy: .public) for task: \(self.taskToolID.prefix(12), privacy: .public)"
             )
@@ -133,7 +133,7 @@ final class AgentFileWatcher: @unchecked Sendable {
         guard !newTools.isEmpty || tools.count != self.seenToolIDs.count else { return }
 
         self.seenToolIDs = Set(tools.map(\.id))
-        logger.debug("Agent \(self.agentID.prefix(8), privacy: .public) has \(tools.count) tools")
+        Self.logger.debug("Agent \(self.agentID.prefix(8), privacy: .public) has \(tools.count) tools")
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -147,7 +147,7 @@ final class AgentFileWatcher: @unchecked Sendable {
 
     private nonisolated func stopInternal() {
         guard let existingSource = source else { return }
-        logger.debug("Stopped watching agent file: \(self.agentID.prefix(8), privacy: .public)")
+        Self.logger.debug("Stopped watching agent file: \(self.agentID.prefix(8), privacy: .public)")
         existingSource.cancel()
         self.source = nil
     }
@@ -182,7 +182,7 @@ class AgentFileWatcherManager {
         watcher.start()
         self.watchers[key] = watcher
 
-        logger.info("Started agent watcher for task \(taskToolID.prefix(12), privacy: .public)")
+        AgentFileWatcher.logger.info("Started agent watcher for task \(taskToolID.prefix(12), privacy: .public)")
     }
 
     /// Stop watching a specific Task's agent file

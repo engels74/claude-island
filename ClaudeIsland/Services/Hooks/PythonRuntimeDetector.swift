@@ -9,9 +9,6 @@
 import Foundation
 import os.log
 
-/// Logger for Python runtime detection (nonisolated(unsafe) for actor access)
-private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeDetector")
-
 // MARK: - PythonRuntimeDetector
 
 /// Actor that handles Python runtime detection with caching
@@ -86,6 +83,9 @@ actor PythonRuntimeDetector {
 
     // MARK: Private
 
+    /// Logger for Python runtime detection
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeDetector")
+
     /// Cached detection result
     private var cachedRuntime: PythonRuntime?
 
@@ -94,27 +94,27 @@ actor PythonRuntimeDetector {
 
     /// Perform the actual runtime detection
     private func performDetection() async -> PythonRuntime {
-        logger.info("Starting Python runtime detection")
+        Self.logger.info("Starting Python runtime detection")
 
         // Tier 1: Check for uv
         if let uvPath = await findUv() {
-            logger.info("Found uv at \(uvPath)")
+            Self.logger.info("Found uv at \(uvPath)")
             return .uvRun(path: uvPath)
         }
 
         // Tier 2: Check for Python 3.14+
         if let (pythonPath, version) = await findPython314() {
-            logger.info("Found Python \(version) at \(pythonPath)")
+            Self.logger.info("Found Python \(version) at \(pythonPath)")
             return .directPython(path: pythonPath, version: version)
         }
 
         // Tier 3: Check for any Python and report version mismatch
         if let (_, version) = await findAnyPython() {
-            logger.warning("Found Python \(version) but need 3.14+")
+            Self.logger.warning("Found Python \(version) but need 3.14+")
             return .unavailable(reason: .pythonTooOld(foundVersion: version))
         }
 
-        logger.warning("No Python runtime found")
+        Self.logger.warning("No Python runtime found")
         return .unavailable(reason: .noPythonFound)
     }
 

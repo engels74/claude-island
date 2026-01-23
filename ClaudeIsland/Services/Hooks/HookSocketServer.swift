@@ -10,9 +10,6 @@
 import Foundation
 import os.log
 
-/// Logger for hook socket server (nonisolated(unsafe) required due to MainActor inference in this file)
-private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Hooks")
-
 // MARK: - SocketReconnectionManager
 
 /// Manages exponential backoff retry logic for socket server creation
@@ -225,6 +222,9 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     nonisolated static let shared = HookSocketServer()
     nonisolated static let socketPath = "/tmp/claude-island.sock"
 
+    /// Logger for hook socket server
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Hooks")
+
     /// Start the socket server
     nonisolated func start(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler? = nil) {
         queue.async { [weak self] in
@@ -305,7 +305,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     // MARK: - Tool Use ID Cache
 
     /// Encoder with sorted keys for deterministic cache keys
-    private nonisolated(unsafe) static let sortedEncoder: JSONEncoder = {
+    private nonisolated static let sortedEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         return encoder
@@ -355,7 +355,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     private nonisolated func attemptServerStart() {
         // Check if stopped to prevent restarts after stop() was called
         guard !isStopped else {
-            logger.debug("Server start aborted - server has been stopped")
+            Self.logger.debug("Server start aborted - server has been stopped")
             return
         }
 
@@ -364,7 +364,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
         serverSocket = socket(AF_UNIX, SOCK_STREAM, 0)
         guard serverSocket >= 0 else {
-            logger.error("Failed to create socket: \(errno)")
+            Self.logger.error("Failed to create socket: \(errno)")
             scheduleRetry()
             return
         }
@@ -389,7 +389,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         guard bindResult == 0 else {
-            logger.error("Failed to bind socket: \(errno)")
+            Self.logger.error("Failed to bind socket: \(errno)")
             close(serverSocket)
             serverSocket = -1
             scheduleRetry()
@@ -399,7 +399,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         chmod(Self.socketPath, 0o777)
 
         guard listen(serverSocket, 10) == 0 else {
-            logger.error("Failed to listen: \(errno)")
+            Self.logger.error("Failed to listen: \(errno)")
             close(serverSocket)
             serverSocket = -1
             scheduleRetry()
@@ -410,7 +410,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         Task {
             await reconnectionManager.reset()
         }
-        logger.info("Listening on \(Self.socketPath, privacy: .public)")
+        Self.logger.info("Listening on \(Self.socketPath, privacy: .public)")
 
         acceptSource = DispatchSource.makeReadSource(fileDescriptor: serverSocket, queue: queue)
         acceptSource?.setEventHandler { [weak self] in
@@ -428,7 +428,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     private nonisolated func scheduleRetry() {
         // Check if stopped before scheduling retry
         guard !isStopped else {
-            logger.debug("Retry aborted - server has been stopped")
+            Self.logger.debug("Retry aborted - server has been stopped")
             return
         }
 
@@ -438,25 +438,25 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             // Check again after Task starts in case stop() was called
             let stopped = await MainActor.run { self.queue.sync { self.isStopped } }
             guard !stopped else {
-                logger.debug("Retry cancelled - server has been stopped")
+                Self.logger.debug("Retry cancelled - server has been stopped")
                 return
             }
 
             guard let delay = await reconnectionManager.nextDelay() else {
                 let attempts = await reconnectionManager.currentAttempt
-                logger.error("Socket server failed after \(attempts) attempts - giving up")
+                Self.logger.error("Socket server failed after \(attempts) attempts - giving up")
                 return
             }
 
             let attempt = await reconnectionManager.currentAttempt
-            logger.warning("Socket server failed, retrying in \(String(format: "%.1f", delay))s (attempt \(attempt))")
+            Self.logger.warning("Socket server failed, retrying in \(String(format: "%.1f", delay))s (attempt \(attempt))")
 
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
 
             // Final check after sleep before actually restarting
             let stoppedAfterSleep = self.queue.sync { self.isStopped }
             guard !stoppedAfterSleep else {
-                logger.debug("Retry cancelled after sleep - server has been stopped")
+                Self.logger.debug("Retry cancelled after sleep - server has been stopped")
                 return
             }
 
@@ -477,7 +477,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         markPermissionResponded(toolUseID: toolUseID)
         permissionsLock.unlock()
 
-        logger
+        Self.logger
             .debug(
                 "Tool completed externally, closing socket for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)"
             )
@@ -502,7 +502,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         permissionsLock.lock()
         let matching = pendingPermissions.filter { $0.value.sessionID == sessionID }
         for (toolUseID, pending) in matching {
-            logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+            Self.logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
             close(pending.clientSocket)
             pendingPermissions.removeValue(forKey: toolUseID)
         }
@@ -534,7 +534,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         toolUseIDCache[key]?.append(toolUseID)
         cacheLock.unlock()
 
-        logger
+        Self.logger
             .debug(
                 "Cached tool_use_id for \(event.sessionID.prefix(8), privacy: .public) tool:\(event.tool ?? "?", privacy: .public) id:\(toolUseID.prefix(12), privacy: .public)"
             )
@@ -559,7 +559,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             toolUseIDCache[key] = queue
         }
 
-        logger
+        Self.logger
             .debug(
                 "Retrieved cached tool_use_id for \(event.sessionID.prefix(8), privacy: .public) tool:\(event.tool ?? "?", privacy: .public) id:\(toolUseID.prefix(12), privacy: .public)"
             )
@@ -576,7 +576,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         cacheLock.unlock()
 
         if !keysToRemove.isEmpty {
-            logger.debug("Cleaned up \(keysToRemove.count) cache entries for session \(sessionID.prefix(8), privacy: .public)")
+            Self.logger.debug("Cleaned up \(keysToRemove.count) cache entries for session \(sessionID.prefix(8), privacy: .public)")
         }
     }
 
@@ -642,10 +642,10 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     private nonisolated func parseHookEvent(from data: Data) -> HookEvent? {
         guard let event = try? JSONDecoder().decode(HookEvent.self, from: data) else {
-            logger.warning("Failed to parse event: \(String(data: data, encoding: .utf8) ?? "?", privacy: .public)")
+            Self.logger.warning("Failed to parse event: \(String(data: data, encoding: .utf8) ?? "?", privacy: .public)")
             return nil
         }
-        logger.debug("Received: \(event.event, privacy: .public) for \(event.sessionID.prefix(8), privacy: .public)")
+        Self.logger.debug("Received: \(event.event, privacy: .public) for \(event.sessionID.prefix(8), privacy: .public)")
         return event
     }
 
@@ -660,13 +660,13 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     private nonisolated func handlePermissionRequest(event: HookEvent, clientSocket: Int32) {
         guard let toolUseID = resolveToolUseID(for: event) else {
-            logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - no cache hit")
+            Self.logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - no cache hit")
             close(clientSocket)
             eventHandler?(event)
             return
         }
 
-        logger.debug("Permission request - keeping socket open for \(event.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+        Self.logger.debug("Permission request - keeping socket open for \(event.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
 
         let updatedEvent = createUpdatedEvent(from: event, with: toolUseID)
         storePendingPermission(event: updatedEvent, toolUseID: toolUseID, clientSocket: clientSocket)
@@ -742,7 +742,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         pendingPermissions.removeValue(forKey: toolUseID)
         permissionsLock.unlock()
 
-        logger.warning("Permission timed out after \(Int(age))s for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+        Self.logger.warning("Permission timed out after \(Int(age))s for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
         close(pending.clientSocket)
 
         // Notify of failure
@@ -755,13 +755,13 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         // Check if already responded (race condition with terminal approval)
         if respondedPermissions.contains(toolUseID) {
             permissionsLock.unlock()
-            logger.debug("Permission already responded for toolUseId: \(toolUseID.prefix(12), privacy: .public) - skipping duplicate")
+            Self.logger.debug("Permission already responded for toolUseId: \(toolUseID.prefix(12), privacy: .public) - skipping duplicate")
             return
         }
 
         guard let pending = pendingPermissions.removeValue(forKey: toolUseID) else {
             permissionsLock.unlock()
-            logger.debug("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public)")
+            Self.logger.debug("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public)")
             return
         }
 
@@ -776,21 +776,21 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         let age = Date().timeIntervalSince(pending.receivedAt)
-        logger
+        Self.logger
             .info(
                 "Sending response: \(decision, privacy: .public) for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
             )
 
         data.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else {
-                logger.error("Failed to get data buffer address")
+                Self.logger.error("Failed to get data buffer address")
                 return
             }
             let result = write(pending.clientSocket, baseAddress, data.count)
             if result < 0 {
-                logger.error("Write failed with errno: \(errno)")
+                Self.logger.error("Write failed with errno: \(errno)")
             } else {
-                logger.debug("Write succeeded: \(result) bytes")
+                Self.logger.debug("Write succeeded: \(result) bytes")
             }
         }
 
@@ -805,14 +805,14 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
         guard let pending = matchingPending else {
             permissionsLock.unlock()
-            logger.debug("No pending permission for session: \(sessionID.prefix(8), privacy: .public)")
+            Self.logger.debug("No pending permission for session: \(sessionID.prefix(8), privacy: .public)")
             return
         }
 
         // Check if already responded (race condition with terminal approval)
         if respondedPermissions.contains(pending.toolUseID) {
             permissionsLock.unlock()
-            logger.debug("Permission already responded for session: \(sessionID.prefix(8), privacy: .public) - skipping duplicate")
+            Self.logger.debug("Permission already responded for session: \(sessionID.prefix(8), privacy: .public) - skipping duplicate")
             return
         }
 
@@ -828,7 +828,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         let age = Date().timeIntervalSince(pending.receivedAt)
-        logger
+        Self.logger
             .info(
                 "Sending response: \(decision, privacy: .public) for \(sessionID.prefix(8), privacy: .public) tool:\(pending.toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
             )
@@ -836,14 +836,14 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         var writeSuccess = false
         data.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else {
-                logger.error("Failed to get data buffer address")
+                Self.logger.error("Failed to get data buffer address")
                 return
             }
             let result = write(pending.clientSocket, baseAddress, data.count)
             if result < 0 {
-                logger.error("Write failed with errno: \(errno)")
+                Self.logger.error("Write failed with errno: \(errno)")
             } else {
-                logger.debug("Write succeeded: \(result) bytes")
+                Self.logger.debug("Write succeeded: \(result) bytes")
                 writeSuccess = true
             }
         }

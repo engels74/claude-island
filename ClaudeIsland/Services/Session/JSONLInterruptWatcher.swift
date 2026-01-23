@@ -9,9 +9,6 @@
 import Foundation
 import os.log
 
-/// Logger for interrupt watcher (nonisolated(unsafe) required due to MainActor inference in this file)
-private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
-
 // MARK: - JSONLInterruptWatcherDelegate
 
 protocol JSONLInterruptWatcherDelegate: AnyObject {
@@ -65,9 +62,12 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
 
     // MARK: Private
 
+    /// Logger for interrupt watcher
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
+
     /// Patterns that indicate an interrupt occurred
     /// We check for is_error:true combined with interrupt content
-    private nonisolated(unsafe) static let interruptContentPatterns = [
+    private nonisolated static let interruptContentPatterns = [
         "Interrupted by user",
         "interrupted by user",
         "user doesn't want to proceed",
@@ -99,7 +99,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
 
     private nonisolated func startFileWatcher() {
         guard let handle = FileHandle(forReadingAtPath: filePath) else {
-            logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
+            Self.logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
             return
         }
 
@@ -108,7 +108,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         do {
             self.lastOffset = try handle.seekToEnd()
         } catch {
-            logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
             return
         }
 
@@ -131,18 +131,18 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         self.source = newSource
         newSource.resume()
 
-        logger.debug("Started watching file: \(self.sessionID.prefix(8), privacy: .public)...")
+        Self.logger.debug("Started watching file: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
     private nonisolated func startDirectoryWatcher() {
         // Ensure the directory exists
         guard FileManager.default.fileExists(atPath: self.directoryPath) else {
-            logger.warning("Directory doesn't exist: \(self.directoryPath, privacy: .public)")
+            Self.logger.warning("Directory doesn't exist: \(self.directoryPath, privacy: .public)")
             return
         }
 
         guard let handle = FileHandle(forReadingAtPath: self.directoryPath) else {
-            logger.warning("Failed to open directory for watching: \(self.directoryPath, privacy: .public)")
+            Self.logger.warning("Failed to open directory for watching: \(self.directoryPath, privacy: .public)")
             return
         }
 
@@ -167,7 +167,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         self.directorySource = newSource
         newSource.resume()
 
-        logger.debug("Started watching directory for file appearance: \(self.sessionID.prefix(8), privacy: .public)...")
+        Self.logger.debug("Started watching directory for file appearance: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
     private nonisolated func checkForFileAppearance() {
@@ -176,7 +176,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
             return
         }
 
-        logger.debug("File appeared, switching to file watcher: \(self.sessionID.prefix(8), privacy: .public)")
+        Self.logger.debug("File appeared, switching to file watcher: \(self.sessionID.prefix(8), privacy: .public)")
 
         // Stop directory watcher
         if let existingDirSource = directorySource {
@@ -217,7 +217,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         let lines = newContent.components(separatedBy: "\n")
         for line in lines where !line.isEmpty {
             if isInterruptLine(line) {
-                logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
+                Self.logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
                     self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
@@ -260,7 +260,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
             self.directorySource = nil
         }
         // fileHandle and directoryHandle closed by cancel handlers
-        logger.debug("Stopped watching: \(self.sessionID.prefix(8), privacy: .public)...")
+        Self.logger.debug("Stopped watching: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 }
 

@@ -9,9 +9,6 @@ import AppKit
 import Foundation
 import os
 
-/// Logger for terminal focus operations (nonisolated(unsafe) for cross-context access)
-private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TerminalFocuser")
-
 // MARK: - TerminalFocuser
 
 /// Focuses terminal applications using NSRunningApplication.activate()
@@ -50,7 +47,7 @@ struct TerminalFocuser: Sendable {
         }
 
         guard let result else {
-            logger.debug("No terminal found for Claude PID \(claudePID)")
+            Self.logger.debug("No terminal found for Claude PID \(claudePID)")
             return false
         }
 
@@ -87,7 +84,7 @@ struct TerminalFocuser: Sendable {
         }
 
         guard let result else {
-            logger.debug("No terminal found for working directory \(workingDirectory)")
+            Self.logger.debug("No terminal found for working directory \(workingDirectory)")
             return false
         }
 
@@ -98,6 +95,9 @@ struct TerminalFocuser: Sendable {
 
     // MARK: Private
 
+    /// Logger for terminal focus operations
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TerminalFocuser")
+
     /// Activate a terminal app by PID and command
     /// - Parameters:
     ///   - terminalPID: The terminal's process ID
@@ -107,7 +107,7 @@ struct TerminalFocuser: Sendable {
         // Try to get the running app directly by PID
         if let app = NSRunningApplication(processIdentifier: pid_t(terminalPID)) {
             if app.activate() {
-                logger.debug("Activated terminal via PID: \(terminalPID)")
+                Self.logger.debug("Activated terminal via PID: \(terminalPID)")
                 return true
             }
         }
@@ -115,12 +115,12 @@ struct TerminalFocuser: Sendable {
         // Fallback: find by bundle identifier matching command name
         if let app = self.findRunningTerminalApp(command: command) {
             if app.activate() {
-                logger.debug("Activated terminal via bundle ID for command: \(command)")
+                Self.logger.debug("Activated terminal via bundle ID for command: \(command)")
                 return true
             }
         }
 
-        logger.debug("Failed to activate terminal PID \(terminalPID) with command \(command)")
+        Self.logger.debug("Failed to activate terminal PID \(terminalPID) with command \(command)")
         return false
     }
 
