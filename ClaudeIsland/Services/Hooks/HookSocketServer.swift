@@ -9,6 +9,7 @@
 
 import Foundation
 import os.log
+import Synchronization
 
 // MARK: - SocketReconnectionManager
 
@@ -207,11 +208,27 @@ typealias HookEventHandler = @Sendable (HookEvent) -> Void
 /// Callback for permission response failures (socket died)
 typealias PermissionFailureHandler = @Sendable (_ sessionID: String, _ toolUseID: String) -> Void
 
+// MARK: - PermissionsState
+
+/// State protected by permissions Mutex
+private struct PermissionsState: Sendable {
+    var pendingPermissions: [String: PendingPermission] = [:]
+    var respondedPermissions: Set<String> = []
+}
+
+// MARK: - CacheState
+
+/// State protected by cache Mutex
+private struct CacheState: Sendable {
+    var toolUseIDCache: [String: [String]] = [:]
+}
+
 // MARK: - HookSocketServer
 
 /// Unix domain socket server that receives events from Claude Code hooks
 /// Uses GCD DispatchSource for non-blocking I/O
-/// `@unchecked Sendable` because thread safety is managed via the private serial queue and NSLock
+/// `@unchecked Sendable` because queue-protected state requires manual synchronization.
+/// Lock-protected state uses Mutex for proper Sendable conformance.
 final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this type_body_length
     // MARK: Lifecycle
 
@@ -246,13 +263,15 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
         unlink(Self.socketPath)
 
-        // Clean up pending permissions
-        permissionsLock.lock()
-        for (_, pending) in pendingPermissions {
-            close(pending.clientSocket)
+        // Clean up pending permissions - collect sockets outside the lock
+        let socketsToClose = permissionsState.withLock { state -> [Int32] in
+            let sockets = state.pendingPermissions.values.map(\.clientSocket)
+            state.pendingPermissions.removeAll()
+            return sockets
         }
-        pendingPermissions.removeAll()
-        permissionsLock.unlock()
+        for socket in socketsToClose {
+            close(socket)
+        }
     }
 
     /// Respond to a pending permission request by toolUseID
@@ -278,19 +297,19 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     /// Check if there's a pending permission request for a session
     nonisolated func hasPendingPermission(sessionID: String) -> Bool {
-        permissionsLock.lock()
-        defer { permissionsLock.unlock() }
-        return pendingPermissions.values.contains { $0.sessionID == sessionID }
+        permissionsState.withLock { state in
+            state.pendingPermissions.values.contains { $0.sessionID == sessionID }
+        }
     }
 
     /// Get the pending permission details for a session (if any)
     nonisolated func getPendingPermission(sessionID: String) -> (toolName: String?, toolID: String?, toolInput: [String: AnyCodable]?)? {
-        permissionsLock.lock()
-        defer { permissionsLock.unlock() }
-        guard let pending = pendingPermissions.values.first(where: { $0.sessionID == sessionID }) else {
-            return nil
+        permissionsState.withLock { state -> (toolName: String?, toolID: String?, toolInput: [String: AnyCodable]?)? in
+            guard let pending = state.pendingPermissions.values.first(where: { $0.sessionID == sessionID }) else {
+                return nil
+            }
+            return (pending.event.tool, pending.toolUseID, pending.event.toolInput)
         }
-        return (pending.event.tool, pending.toolUseID, pending.event.toolInput)
     }
 
     /// Cancel a specific pending permission by toolUseID (when tool completes via terminal approval)
@@ -322,13 +341,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     /// Explicit stopped state to prevent retries after stop() is called
     private nonisolated(unsafe) var isStopped = false
 
-    /// Pending permission requests indexed by toolUseID (protected by permissionsLock)
-    private nonisolated(unsafe) var pendingPermissions: [String: PendingPermission] = [:]
-    private let permissionsLock = NSLock()
-
-    /// Permissions that have already been responded to (prevents race condition duplicates)
-    /// Uses a bounded set that auto-cleans old entries (protected by permissionsLock)
-    private nonisolated(unsafe) var respondedPermissions: Set<String> = []
+    /// Permissions and responded-permissions state protected by Mutex
+    private let permissionsState = Mutex(PermissionsState())
     private let maxRespondedPermissions = 100
 
     /// Timeout for pending permission sockets (5 minutes)
@@ -336,9 +350,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     /// Cache tool_use_id from PreToolUse to correlate with PermissionRequest
     /// Key: "sessionId:toolName:serializedInput" -> Queue of tool_use_ids (FIFO)
-    /// PermissionRequest events don't include tool_use_id, so we cache from PreToolUse (protected by cacheLock)
-    private nonisolated(unsafe) var toolUseIDCache: [String: [String]] = [:]
-    private let cacheLock = NSLock()
+    /// PermissionRequest events don't include tool_use_id, so we cache from PreToolUse
+    private let cacheState = Mutex(CacheState())
 
     private nonisolated func startServer(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler?) {
         guard serverSocket < 0 else { return }
@@ -467,16 +480,15 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     private nonisolated func cleanupSpecificPermission(toolUseID: String) {
-        permissionsLock.lock()
-        guard let pending = pendingPermissions.removeValue(forKey: toolUseID) else {
-            permissionsLock.unlock()
-            return
+        let pending = permissionsState.withLock { state -> PendingPermission? in
+            guard let removed = state.pendingPermissions.removeValue(forKey: toolUseID) else {
+                return nil
+            }
+            Self.markPermissionResponded(in: &state, toolUseID: toolUseID, maxCount: maxRespondedPermissions)
+            return removed
         }
 
-        // Mark as responded (tool completed via terminal approval)
-        markPermissionResponded(toolUseID: toolUseID)
-        permissionsLock.unlock()
-
+        guard let pending else { return }
         Self.logger
             .debug(
                 "Tool completed externally, closing socket for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)"
@@ -485,28 +497,32 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     /// Mark a permission as responded to prevent duplicate responses
-    /// Must be called while holding permissionsLock
-    private nonisolated func markPermissionResponded(toolUseID: String) {
-        respondedPermissions.insert(toolUseID)
+    /// Static helper that operates on state within the Mutex lock
+    private nonisolated static func markPermissionResponded(in state: inout PermissionsState, toolUseID: String, maxCount: Int) {
+        state.respondedPermissions.insert(toolUseID)
 
         // Bound the set size to prevent unbounded growth
-        if respondedPermissions.count > maxRespondedPermissions {
+        if state.respondedPermissions.count > maxCount {
             // Remove oldest entries (arbitrary since Set is unordered, but keeps size bounded)
-            while respondedPermissions.count > maxRespondedPermissions / 2 {
-                _ = respondedPermissions.removeFirst()
+            while state.respondedPermissions.count > maxCount / 2 {
+                _ = state.respondedPermissions.removeFirst()
             }
         }
     }
 
     private nonisolated func cleanupPendingPermissions(sessionID: String) {
-        permissionsLock.lock()
-        let matching = pendingPermissions.filter { $0.value.sessionID == sessionID }
-        for (toolUseID, pending) in matching {
-            Self.logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
-            close(pending.clientSocket)
-            pendingPermissions.removeValue(forKey: toolUseID)
+        let socketsToClose = permissionsState.withLock { state -> [(String, Int32)] in
+            let matching = state.pendingPermissions.filter { $0.value.sessionID == sessionID }
+            for (toolUseID, _) in matching {
+                state.pendingPermissions.removeValue(forKey: toolUseID)
+            }
+            return matching.map { ($0.key, $0.value.clientSocket) }
         }
-        permissionsLock.unlock()
+
+        for (toolUseID, socket) in socketsToClose {
+            Self.logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+            close(socket)
+        }
     }
 
     /// Generate cache key from event properties
@@ -527,12 +543,9 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
         let key = cacheKey(sessionID: event.sessionID, toolName: event.tool, toolInput: event.toolInput)
 
-        cacheLock.lock()
-        if toolUseIDCache[key] == nil {
-            toolUseIDCache[key] = []
+        cacheState.withLock { state in
+            state.toolUseIDCache[key, default: []].append(toolUseID)
         }
-        toolUseIDCache[key]?.append(toolUseID)
-        cacheLock.unlock()
 
         Self.logger
             .debug(
@@ -544,39 +557,40 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     private nonisolated func popCachedToolUseID(event: HookEvent) -> String? {
         let key = cacheKey(sessionID: event.sessionID, toolName: event.tool, toolInput: event.toolInput)
 
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-
-        guard var queue = toolUseIDCache[key], !queue.isEmpty else {
-            return nil
+        let toolUseID = cacheState.withLock { state -> String? in
+            guard var queue = state.toolUseIDCache[key], !queue.isEmpty else {
+                return nil
+            }
+            let id = queue.removeFirst()
+            if queue.isEmpty {
+                state.toolUseIDCache.removeValue(forKey: key)
+            } else {
+                state.toolUseIDCache[key] = queue
+            }
+            return id
         }
 
-        let toolUseID = queue.removeFirst()
-
-        if queue.isEmpty {
-            toolUseIDCache.removeValue(forKey: key)
-        } else {
-            toolUseIDCache[key] = queue
+        if let toolUseID {
+            Self.logger
+                .debug(
+                    "Retrieved cached tool_use_id for \(event.sessionID.prefix(8), privacy: .public) tool:\(event.tool ?? "?", privacy: .public) id:\(toolUseID.prefix(12), privacy: .public)"
+                )
         }
-
-        Self.logger
-            .debug(
-                "Retrieved cached tool_use_id for \(event.sessionID.prefix(8), privacy: .public) tool:\(event.tool ?? "?", privacy: .public) id:\(toolUseID.prefix(12), privacy: .public)"
-            )
         return toolUseID
     }
 
     /// Clean up cache entries for a session (on session end)
     private nonisolated func cleanupCache(sessionID: String) {
-        cacheLock.lock()
-        let keysToRemove = toolUseIDCache.keys.filter { $0.hasPrefix("\(sessionID):") }
-        for key in keysToRemove {
-            toolUseIDCache.removeValue(forKey: key)
+        let removedCount = cacheState.withLock { state -> Int in
+            let keysToRemove = state.toolUseIDCache.keys.filter { $0.hasPrefix("\(sessionID):") }
+            for key in keysToRemove {
+                state.toolUseIDCache.removeValue(forKey: key)
+            }
+            return keysToRemove.count
         }
-        cacheLock.unlock()
 
-        if !keysToRemove.isEmpty {
-            Self.logger.debug("Cleaned up \(keysToRemove.count) cache entries for session \(sessionID.prefix(8), privacy: .public)")
+        if removedCount > 0 {
+            Self.logger.debug("Cleaned up \(removedCount) cache entries for session \(sessionID.prefix(8), privacy: .public)")
         }
     }
 
@@ -704,9 +718,9 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             event: event,
             receivedAt: Date()
         )
-        permissionsLock.lock()
-        pendingPermissions[toolUseID] = pending
-        permissionsLock.unlock()
+        permissionsState.withLock { state in
+            state.pendingPermissions[toolUseID] = pending
+        }
 
         // Schedule timeout cleanup to prevent FD leak if Claude dies
         schedulePermissionTimeout(toolUseID: toolUseID, sessionID: event.sessionID)
@@ -718,30 +732,33 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
     }
 
+    private enum TimeoutResult {
+        case notFound
+        case wrongSession
+        case notTimedOut
+        case timedOut(pending: PendingPermission, age: TimeInterval)
+    }
+
     private nonisolated func cleanupTimedOutPermission(toolUseID: String, sessionID: String) {
-        permissionsLock.lock()
-        guard let pending = pendingPermissions[toolUseID] else {
-            // Already handled (approved/denied/cancelled)
-            permissionsLock.unlock()
-            return
+        let result = permissionsState.withLock { state -> TimeoutResult in
+            guard let pending = state.pendingPermissions[toolUseID] else {
+                // Already handled (approved/denied/cancelled)
+                return .notFound
+            }
+            // Verify this is actually the same permission (not a reused toolUseID)
+            guard pending.sessionID == sessionID else {
+                return .wrongSession
+            }
+            // Check if it's actually timed out (could have been refreshed)
+            let age = Date().timeIntervalSince(pending.receivedAt)
+            guard age >= permissionTimeoutSeconds else {
+                return .notTimedOut
+            }
+            state.pendingPermissions.removeValue(forKey: toolUseID)
+            return .timedOut(pending: pending, age: age)
         }
 
-        // Verify this is actually the same permission (not a reused toolUseID)
-        guard pending.sessionID == sessionID else {
-            permissionsLock.unlock()
-            return
-        }
-
-        // Check if it's actually timed out (could have been refreshed)
-        let age = Date().timeIntervalSince(pending.receivedAt)
-        guard age >= permissionTimeoutSeconds else {
-            permissionsLock.unlock()
-            return
-        }
-
-        pendingPermissions.removeValue(forKey: toolUseID)
-        permissionsLock.unlock()
-
+        guard case let .timedOut(pending, age) = result else { return }
         Self.logger.warning("Permission timed out after \(Int(age))s for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
         close(pending.clientSocket)
 
@@ -749,109 +766,121 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         permissionFailureHandler?(sessionID, toolUseID)
     }
 
-    private nonisolated func sendPermissionResponse(toolUseID: String, decision: String, reason: String?) {
-        permissionsLock.lock()
+    private enum PermissionLookupResult {
+        case alreadyResponded
+        case notFound
+        case found(pending: PendingPermission)
+    }
 
-        // Check if already responded (race condition with terminal approval)
-        if respondedPermissions.contains(toolUseID) {
-            permissionsLock.unlock()
+    private nonisolated func sendPermissionResponse(toolUseID: String, decision: String, reason: String?) {
+        let result = permissionsState.withLock { state -> PermissionLookupResult in
+            // Check if already responded (race condition with terminal approval)
+            if state.respondedPermissions.contains(toolUseID) {
+                return .alreadyResponded
+            }
+            guard let pending = state.pendingPermissions.removeValue(forKey: toolUseID) else {
+                return .notFound
+            }
+            Self.markPermissionResponded(in: &state, toolUseID: toolUseID, maxCount: maxRespondedPermissions)
+            return .found(pending: pending)
+        }
+
+        switch result {
+        case .alreadyResponded:
             Self.logger.debug("Permission already responded for toolUseId: \(toolUseID.prefix(12), privacy: .public) - skipping duplicate")
             return
-        }
-
-        guard let pending = pendingPermissions.removeValue(forKey: toolUseID) else {
-            permissionsLock.unlock()
+        case .notFound:
             Self.logger.debug("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public)")
             return
-        }
-
-        // Mark as responded
-        markPermissionResponded(toolUseID: toolUseID)
-        permissionsLock.unlock()
-
-        let response = HookResponse(decision: decision, reason: reason)
-        guard let data = try? JSONEncoder().encode(response) else {
-            close(pending.clientSocket)
-            return
-        }
-
-        let age = Date().timeIntervalSince(pending.receivedAt)
-        Self.logger
-            .info(
-                "Sending response: \(decision, privacy: .public) for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
-            )
-
-        data.withUnsafeBytes { bytes in
-            guard let baseAddress = bytes.baseAddress else {
-                Self.logger.error("Failed to get data buffer address")
+        case let .found(pending):
+            let response = HookResponse(decision: decision, reason: reason)
+            guard let data = try? JSONEncoder().encode(response) else {
+                close(pending.clientSocket)
                 return
             }
-            let result = write(pending.clientSocket, baseAddress, data.count)
-            if result < 0 {
-                Self.logger.error("Write failed with errno: \(errno)")
-            } else {
-                Self.logger.debug("Write succeeded: \(result) bytes")
-            }
-        }
 
-        close(pending.clientSocket)
+            let age = Date().timeIntervalSince(pending.receivedAt)
+            Self.logger
+                .info(
+                    "Sending response: \(decision, privacy: .public) for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
+                )
+
+            data.withUnsafeBytes { bytes in
+                guard let baseAddress = bytes.baseAddress else {
+                    Self.logger.error("Failed to get data buffer address")
+                    return
+                }
+                let writeResult = write(pending.clientSocket, baseAddress, data.count)
+                if writeResult < 0 {
+                    Self.logger.error("Write failed with errno: \(errno)")
+                } else {
+                    Self.logger.debug("Write succeeded: \(writeResult) bytes")
+                }
+            }
+
+            close(pending.clientSocket)
+        }
     }
 
     private nonisolated func sendPermissionResponseBySession(sessionID: String, decision: String, reason: String?) {
-        permissionsLock.lock()
-        let matchingPending = pendingPermissions.values
-            .filter { $0.sessionID == sessionID }
-            .max { $0.receivedAt < $1.receivedAt }
+        let result = permissionsState.withLock { state -> PermissionLookupResult in
+            let matchingPending = state.pendingPermissions.values
+                .filter { $0.sessionID == sessionID }
+                .max { $0.receivedAt < $1.receivedAt }
 
-        guard let pending = matchingPending else {
-            permissionsLock.unlock()
+            guard let pending = matchingPending else {
+                return .notFound
+            }
+            // Check if already responded (race condition with terminal approval)
+            if state.respondedPermissions.contains(pending.toolUseID) {
+                return .alreadyResponded
+            }
+            state.pendingPermissions.removeValue(forKey: pending.toolUseID)
+            Self.markPermissionResponded(in: &state, toolUseID: pending.toolUseID, maxCount: maxRespondedPermissions)
+            return .found(pending: pending)
+        }
+
+        switch result {
+        case .notFound:
             Self.logger.debug("No pending permission for session: \(sessionID.prefix(8), privacy: .public)")
             return
-        }
-
-        // Check if already responded (race condition with terminal approval)
-        if respondedPermissions.contains(pending.toolUseID) {
-            permissionsLock.unlock()
+        case .alreadyResponded:
             Self.logger.debug("Permission already responded for session: \(sessionID.prefix(8), privacy: .public) - skipping duplicate")
             return
-        }
-
-        pendingPermissions.removeValue(forKey: pending.toolUseID)
-        markPermissionResponded(toolUseID: pending.toolUseID)
-        permissionsLock.unlock()
-
-        let response = HookResponse(decision: decision, reason: reason)
-        guard let data = try? JSONEncoder().encode(response) else {
-            close(pending.clientSocket)
-            permissionFailureHandler?(sessionID, pending.toolUseID)
-            return
-        }
-
-        let age = Date().timeIntervalSince(pending.receivedAt)
-        Self.logger
-            .info(
-                "Sending response: \(decision, privacy: .public) for \(sessionID.prefix(8), privacy: .public) tool:\(pending.toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
-            )
-
-        var writeSuccess = false
-        data.withUnsafeBytes { bytes in
-            guard let baseAddress = bytes.baseAddress else {
-                Self.logger.error("Failed to get data buffer address")
+        case let .found(pending):
+            let response = HookResponse(decision: decision, reason: reason)
+            guard let data = try? JSONEncoder().encode(response) else {
+                close(pending.clientSocket)
+                permissionFailureHandler?(sessionID, pending.toolUseID)
                 return
             }
-            let result = write(pending.clientSocket, baseAddress, data.count)
-            if result < 0 {
-                Self.logger.error("Write failed with errno: \(errno)")
-            } else {
-                Self.logger.debug("Write succeeded: \(result) bytes")
-                writeSuccess = true
+
+            let age = Date().timeIntervalSince(pending.receivedAt)
+            Self.logger
+                .info(
+                    "Sending response: \(decision, privacy: .public) for \(sessionID.prefix(8), privacy: .public) tool:\(pending.toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
+                )
+
+            var writeSuccess = false
+            data.withUnsafeBytes { bytes in
+                guard let baseAddress = bytes.baseAddress else {
+                    Self.logger.error("Failed to get data buffer address")
+                    return
+                }
+                let writeResult = write(pending.clientSocket, baseAddress, data.count)
+                if writeResult < 0 {
+                    Self.logger.error("Write failed with errno: \(errno)")
+                } else {
+                    Self.logger.debug("Write succeeded: \(writeResult) bytes")
+                    writeSuccess = true
+                }
             }
-        }
 
-        close(pending.clientSocket)
+            close(pending.clientSocket)
 
-        if !writeSuccess {
-            permissionFailureHandler?(sessionID, pending.toolUseID)
+            if !writeSuccess {
+                permissionFailureHandler?(sessionID, pending.toolUseID)
+            }
         }
     }
 }
