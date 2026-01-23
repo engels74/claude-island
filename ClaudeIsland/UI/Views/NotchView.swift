@@ -238,7 +238,7 @@ struct NotchView: View {
 
         // Expand just for accessibility warning (when no other activity)
         if self.needsAccessibilityWarning {
-            return 2 * max(0, self.closedNotchSize.height - 12) + 20
+            return 2 * max(0, self.closedNotchSize.height - 12) + 20 + accessibilityWarningWidth
         }
 
         return 0
