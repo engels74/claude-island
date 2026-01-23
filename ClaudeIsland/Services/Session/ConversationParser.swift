@@ -705,6 +705,7 @@ actor ConversationParser {
         }
 
         var blocks: [MessageBlock] = []
+        blocks.reserveCapacity(4) // Most messages have 2-4 blocks
 
         if let content = messageDict["content"] as? String {
             if content.hasPrefix("<command-name>") || content.hasPrefix("<local-command") || content.hasPrefix("Caveat:") {

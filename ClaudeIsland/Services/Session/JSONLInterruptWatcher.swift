@@ -214,21 +214,20 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
 
         self.lastOffset = currentSize
 
-        let lines = newContent.components(separatedBy: "\n")
-        for line in lines where !line.isEmpty {
-            if isInterruptLine(line) {
-                Self.logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
-                // Use explicit MainActor isolation for Swift 6 compliance
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
-                }
-                return
+        // Use split with early exit - avoids full array allocation when interrupt found early
+        for line in newContent.split(separator: "\n", omittingEmptySubsequences: true)
+            where self.isInterruptLine(line) {
+            Self.logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
+            // Use explicit MainActor isolation for Swift 6 compliance
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
             }
+            return
         }
     }
 
-    private nonisolated func isInterruptLine(_ line: String) -> Bool {
+    private nonisolated func isInterruptLine(_ line: some StringProtocol) -> Bool {
         if line.contains("\"type\":\"user\"") {
             if line.contains("[Request interrupted by user]") ||
                 line.contains("[Request interrupted by user for tool use]") {

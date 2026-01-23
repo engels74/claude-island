@@ -17,6 +17,34 @@ struct ProcessInfo: Sendable {
     let tty: String?
 }
 
+// MARK: - ProcessTree
+
+/// Indexed process tree with O(1) parent→children lookup
+struct ProcessTree: Sendable {
+    // MARK: Lifecycle
+
+    /// Create an indexed process tree from process info dictionary
+    nonisolated init(info: [Int: ProcessInfo]) {
+        self.infoByPID = info
+
+        // Build parent→children index during construction
+        var children: [Int: [Int]] = [:]
+        children.reserveCapacity(info.count / 4) // Estimate ~4 children per parent on average
+        for (pid, processInfo) in info {
+            children[processInfo.ppid, default: []].append(pid)
+        }
+        self.childrenByPID = children
+    }
+
+    // MARK: Internal
+
+    /// PID → ProcessInfo mapping
+    let infoByPID: [Int: ProcessInfo]
+
+    /// Parent PID → Child PIDs index for O(1) descendant lookup
+    let childrenByPID: [Int: [Int]]
+}
+
 // MARK: - ProcessTreeBuilder
 
 /// Builds and queries the system process tree
@@ -31,29 +59,12 @@ struct ProcessTreeBuilder: Sendable {
 
     /// Build a process tree mapping PID -> ProcessInfo
     nonisolated func buildTree() -> [Int: ProcessInfo] {
-        guard let output = ProcessExecutor.shared.runSyncOrNil("/bin/ps", arguments: ["-eo", "pid,ppid,tty,comm"]) else {
-            return [:]
-        }
+        self.buildInfoDict()
+    }
 
-        var tree: [Int: ProcessInfo] = [:]
-
-        for line in output.components(separatedBy: "\n") {
-            let parts = line.trimmingCharacters(in: .whitespaces)
-                .components(separatedBy: .whitespaces)
-                .filter { !$0.isEmpty }
-
-            guard parts.count >= 4,
-                  let pid = Int(parts[0]),
-                  let ppid = Int(parts[1])
-            else { continue }
-
-            let tty = parts[2] == "??" ? nil : parts[2]
-            let command = parts[3...].joined(separator: " ")
-
-            tree[pid] = ProcessInfo(pid: pid, ppid: ppid, command: command, tty: tty)
-        }
-
-        return tree
+    /// Build an indexed process tree with O(1) children lookup
+    nonisolated func buildIndexedTree() -> ProcessTree {
+        ProcessTree(info: self.buildInfoDict())
     }
 
     /// Check if a process has tmux in its parent chain
@@ -109,7 +120,8 @@ struct ProcessTreeBuilder: Sendable {
         return false
     }
 
-    /// Find all descendant PIDs of a given process
+    /// Find all descendant PIDs of a given process (O(n) - scans entire tree)
+    /// Prefer `findDescendants(of:indexedTree:)` for O(d) performance where d = descendant count
     nonisolated func findDescendants(of pid: Int, tree: [Int: ProcessInfo]) -> Set<Int> {
         var descendants: Set<Int> = []
         var queue = [pid]
@@ -118,6 +130,25 @@ struct ProcessTreeBuilder: Sendable {
             let current = queue.removeFirst()
             for (childPID, info) in tree where info.ppid == current {
                 if !descendants.contains(childPID) {
+                    descendants.insert(childPID)
+                    queue.append(childPID)
+                }
+            }
+        }
+
+        return descendants
+    }
+
+    /// Find all descendant PIDs using indexed tree (O(d) where d = descendant count)
+    nonisolated func findDescendants(of pid: Int, indexedTree: ProcessTree) -> Set<Int> {
+        var descendants: Set<Int> = []
+        var queue = [pid]
+
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            // O(1) children lookup via index
+            if let children = indexedTree.childrenByPID[current] {
+                for childPID in children where !descendants.contains(childPID) {
                     descendants.insert(childPID)
                     queue.append(childPID)
                 }
@@ -143,5 +174,34 @@ struct ProcessTreeBuilder: Sendable {
         }
 
         return nil
+    }
+
+    // MARK: Private
+
+    /// Internal: Build the raw info dictionary
+    private nonisolated func buildInfoDict() -> [Int: ProcessInfo] {
+        guard let output = ProcessExecutor.shared.runSyncOrNil("/bin/ps", arguments: ["-eo", "pid,ppid,tty,comm"]) else {
+            return [:]
+        }
+
+        var tree: [Int: ProcessInfo] = [:]
+
+        // Use split() which returns Substrings - more efficient than components()
+        for line in output.split(separator: "\n") {
+            // Split on whitespace, filtering empty strings
+            let parts = line.split(whereSeparator: \.isWhitespace)
+
+            guard parts.count >= 4,
+                  let pid = Int(parts[0]),
+                  let ppid = Int(parts[1])
+            else { continue }
+
+            let tty = parts[2] == "??" ? nil : String(parts[2])
+            let command = parts[3...].joined(separator: " ")
+
+            tree[pid] = ProcessInfo(pid: pid, ppid: ppid, command: command, tty: tty)
+        }
+
+        return tree
     }
 }
