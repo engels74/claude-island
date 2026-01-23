@@ -9,7 +9,8 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeDetector")
+/// Logger for Python runtime detection (nonisolated(unsafe) for actor access)
+private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeDetector")
 
 // MARK: - PythonRuntimeDetector
 

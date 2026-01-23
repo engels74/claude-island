@@ -3,6 +3,7 @@ import os
 @preconcurrency import Sparkle
 import SwiftUI
 
+/// Logger for app delegate
 private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
 
 // MARK: - AppDelegate
@@ -69,8 +70,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         self.updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-            guard let updater = self?.updater, updater.canCheckForUpdates else { return }
-            updater.checkForUpdates()
+            Task { @MainActor [weak self] in
+                guard let updater = self?.updater, updater.canCheckForUpdates else { return }
+                updater.checkForUpdates()
+            }
         }
     }
 

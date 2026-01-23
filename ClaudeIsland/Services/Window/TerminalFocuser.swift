@@ -9,7 +9,8 @@ import AppKit
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TerminalFocuser")
+/// Logger for terminal focus operations (nonisolated(unsafe) for cross-context access)
+private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TerminalFocuser")
 
 // MARK: - TerminalFocuser
 
@@ -105,7 +106,7 @@ struct TerminalFocuser: Sendable {
     private nonisolated func activateTerminal(terminalPID: Int, command: String) -> Bool {
         // Try to get the running app directly by PID
         if let app = NSRunningApplication(processIdentifier: pid_t(terminalPID)) {
-            if app.activate(options: [.activateIgnoringOtherApps]) {
+            if app.activate() {
                 logger.debug("Activated terminal via PID: \(terminalPID)")
                 return true
             }
@@ -113,7 +114,7 @@ struct TerminalFocuser: Sendable {
 
         // Fallback: find by bundle identifier matching command name
         if let app = self.findRunningTerminalApp(command: command) {
-            if app.activate(options: [.activateIgnoringOtherApps]) {
+            if app.activate() {
                 logger.debug("Activated terminal via bundle ID for command: \(command)")
                 return true
             }
