@@ -17,7 +17,7 @@ struct PermissionContext: Sendable {
     // MARK: Lifecycle
 
     /// Initialize with raw tool input dictionary (serializes to JSON)
-    init(toolUseID: String, toolName: String, toolInput: [String: AnyCodable]?, receivedAt: Date) {
+    nonisolated init(toolUseID: String, toolName: String, toolInput: [String: AnyCodable]?, receivedAt: Date) {
         self.toolUseID = toolUseID
         self.toolName = toolName
         self.receivedAt = receivedAt
@@ -150,7 +150,7 @@ enum SessionPhase: Sendable {
     }
 
     /// Whether this is a waitingForApproval phase
-    var isWaitingForApproval: Bool {
+    nonisolated var isWaitingForApproval: Bool {
         if case .waitingForApproval = self {
             return true
         }
@@ -197,7 +197,7 @@ enum SessionPhase: Sendable {
 
         // MARK: Internal
 
-        func matches(_ phase: SessionPhase) -> Bool {
+        nonisolated func matches(_ phase: SessionPhase) -> Bool {
             switch (self, phase) {
             case (.idle, .idle),
                  (.processing, .processing),
@@ -213,7 +213,7 @@ enum SessionPhase: Sendable {
     }
 
     /// Valid transitions from each phase
-    private static func allowedTransitions(from phase: Self) -> [PhaseKey] {
+    private nonisolated static func allowedTransitions(from phase: Self) -> [PhaseKey] {
         switch phase {
         case .idle:
             // Note: .waitingForInput is allowed for history loading where we discover actual state

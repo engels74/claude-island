@@ -18,7 +18,7 @@ struct ItemCreationContext {
     let structuredResults: [String: ToolResultData]
     var toolTracker: ToolTracker
 
-    mutating func markToolSeen(_ id: String) -> Bool {
+    nonisolated mutating func markToolSeen(_ id: String) -> Bool {
         self.toolTracker.markSeen(id)
     }
 }
@@ -30,7 +30,7 @@ enum ChatItemFactory {
 
     /// Create a chat history item from a message block
     /// Returns nil if the item already exists or should be skipped
-    static func createItem(
+    nonisolated static func createItem(
         from block: MessageBlock,
         message: ChatMessage,
         blockIndex: Int,
@@ -69,7 +69,7 @@ enum ChatItemFactory {
 
     // MARK: - Private Helpers
 
-    private static func createTextItem(
+    private nonisolated static func createTextItem(
         text: String,
         message: ChatMessage,
         blockIndex: Int,
@@ -85,7 +85,7 @@ enum ChatItemFactory {
         }
     }
 
-    private static func createToolUseItem(
+    private nonisolated static func createToolUseItem(
         tool: ToolUseBlock,
         message: ChatMessage,
         context: inout ItemCreationContext
@@ -121,7 +121,7 @@ enum ChatItemFactory {
         )
     }
 
-    private static func createThinkingItem(
+    private nonisolated static func createThinkingItem(
         text: String,
         message: ChatMessage,
         blockIndex: Int,
@@ -132,7 +132,7 @@ enum ChatItemFactory {
         return ChatHistoryItem(id: itemID, type: .thinking(text), timestamp: message.timestamp)
     }
 
-    private static func createInterruptedItem(
+    private nonisolated static func createInterruptedItem(
         message: ChatMessage,
         blockIndex: Int,
         existingIDs: Set<String>

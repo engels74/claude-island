@@ -247,9 +247,10 @@ struct ExitPlanModeResult: Equatable, Sendable {
 struct MCPResult: Equatable, @unchecked Sendable {
     let serverName: String
     let toolName: String
-    let rawResult: [String: Any]
+    /// nonisolated(unsafe) because [String: Any] isn't Sendable but we need cross-context access
+    nonisolated(unsafe) let rawResult: [String: Any]
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.serverName == rhs.serverName &&
             lhs.toolName == rhs.toolName &&
             NSDictionary(dictionary: lhs.rawResult).isEqual(to: rhs.rawResult)
@@ -260,9 +261,10 @@ struct MCPResult: Equatable, @unchecked Sendable {
 
 struct GenericResult: Equatable, @unchecked Sendable {
     let rawContent: String?
-    let rawData: [String: Any]?
+    /// nonisolated(unsafe) because [String: Any] isn't Sendable but we need cross-context access
+    nonisolated(unsafe) let rawData: [String: Any]?
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.rawContent == rhs.rawContent
     }
 }

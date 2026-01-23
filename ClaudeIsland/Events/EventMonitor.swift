@@ -59,7 +59,7 @@ final class EventMonitor: @unchecked Sendable {
     private let handler: @Sendable (NSEvent) -> Void
 
     /// Internal stop that can be called from deinit
-    private func stopInternal() {
+    private nonisolated func stopInternal() {
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)
             self.globalMonitor = nil

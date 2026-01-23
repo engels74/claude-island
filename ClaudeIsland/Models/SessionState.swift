@@ -234,17 +234,17 @@ struct ToolTracker: Equatable, Sendable {
     var lastSyncTime: Date?
 
     /// Mark a tool ID as seen, returns true if it was new
-    mutating func markSeen(_ id: String) -> Bool {
+    nonisolated mutating func markSeen(_ id: String) -> Bool {
         self.seenIDs.insert(id).inserted
     }
 
     /// Check if a tool ID has been seen
-    func hasSeen(_ id: String) -> Bool {
+    nonisolated func hasSeen(_ id: String) -> Bool {
         self.seenIDs.contains(id)
     }
 
     /// Start tracking a tool
-    mutating func startTool(id: String, name: String) {
+    nonisolated mutating func startTool(id: String, name: String) {
         guard self.markSeen(id) else { return }
         self.inProgress[id] = ToolInProgress(
             id: id,
@@ -255,7 +255,7 @@ struct ToolTracker: Equatable, Sendable {
     }
 
     /// Complete a tool
-    mutating func completeTool(id: String, success: Bool) {
+    nonisolated mutating func completeTool(id: String, success: Bool) {
         self.inProgress.removeValue(forKey: id)
     }
 }
@@ -304,12 +304,12 @@ struct SubagentState: Equatable, Sendable {
     var agentDescriptions: [String: String]
 
     /// Whether there's an active subagent
-    var hasActiveSubagent: Bool {
+    nonisolated var hasActiveSubagent: Bool {
         !self.activeTasks.isEmpty
     }
 
     /// Start tracking a Task tool
-    mutating func startTask(taskToolID: String, description: String? = nil) {
+    nonisolated mutating func startTask(taskToolID: String, description: String? = nil) {
         self.activeTasks[taskToolID] = TaskContext(
             taskToolID: taskToolID,
             startTime: Date(),
@@ -320,12 +320,12 @@ struct SubagentState: Equatable, Sendable {
     }
 
     /// Stop tracking a Task tool
-    mutating func stopTask(taskToolID: String) {
+    nonisolated mutating func stopTask(taskToolID: String) {
         self.activeTasks.removeValue(forKey: taskToolID)
     }
 
     /// Set the agentID for a Task (called when agent file is discovered)
-    mutating func setAgentID(_ agentID: String, for taskToolID: String) {
+    nonisolated mutating func setAgentID(_ agentID: String, for taskToolID: String) {
         self.activeTasks[taskToolID]?.agentID = agentID
         if let description = activeTasks[taskToolID]?.description {
             self.agentDescriptions[agentID] = description
@@ -333,17 +333,17 @@ struct SubagentState: Equatable, Sendable {
     }
 
     /// Add a subagent tool to a specific Task by ID
-    mutating func addSubagentToolToTask(_ tool: SubagentToolCall, taskID: String) {
+    nonisolated mutating func addSubagentToolToTask(_ tool: SubagentToolCall, taskID: String) {
         self.activeTasks[taskID]?.subagentTools.append(tool)
     }
 
     /// Set all subagent tools for a specific Task (used when updating from agent file)
-    mutating func setSubagentTools(_ tools: [SubagentToolCall], for taskID: String) {
+    nonisolated mutating func setSubagentTools(_ tools: [SubagentToolCall], for taskID: String) {
         self.activeTasks[taskID]?.subagentTools = tools
     }
 
     /// Add a subagent tool to the most recent active Task
-    mutating func addSubagentTool(_ tool: SubagentToolCall) {
+    nonisolated mutating func addSubagentTool(_ tool: SubagentToolCall) {
         // Find most recent active task (for parallel Task support)
         guard let mostRecentTaskID = activeTasks.keys.max(by: {
             (activeTasks[$0]?.startTime ?? .distantPast) < (activeTasks[$1]?.startTime ?? .distantPast)
@@ -354,7 +354,7 @@ struct SubagentState: Equatable, Sendable {
     }
 
     /// Update the status of a subagent tool across all active Tasks
-    mutating func updateSubagentToolStatus(toolID: String, status: ToolStatus) {
+    nonisolated mutating func updateSubagentToolStatus(toolID: String, status: ToolStatus) {
         for taskID in self.activeTasks.keys {
             if let index = activeTasks[taskID]?.subagentTools.firstIndex(where: { $0.id == toolID }) {
                 self.activeTasks[taskID]?.subagentTools[index].status = status
