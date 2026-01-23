@@ -632,24 +632,28 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     private nonisolated func readClientData(clientSocket: Int32) -> Data? {
         var allData = Data()
-        var buffer = [UInt8](repeating: 0, count: 131_072)
         var pollFd = pollfd(fd: clientSocket, events: Int16(POLLIN), revents: 0)
 
         let startTime = Date()
-        while Date().timeIntervalSince(startTime) < 0.5 {
-            let pollResult = poll(&pollFd, 1, 50)
+        // Use stack allocation for buffer to avoid heap allocation per read
+        withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 131_072) { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
 
-            if pollResult > 0 && (pollFd.revents & Int16(POLLIN)) != 0 {
-                let bytesRead = read(clientSocket, &buffer, buffer.count)
-                if bytesRead > 0 {
-                    allData.append(contentsOf: buffer[0 ..< bytesRead])
-                } else if bytesRead == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
+            while Date().timeIntervalSince(startTime) < 0.5 {
+                let pollResult = poll(&pollFd, 1, 50)
+
+                if pollResult > 0 && (pollFd.revents & Int16(POLLIN)) != 0 {
+                    let bytesRead = read(clientSocket, baseAddress, buffer.count)
+                    if bytesRead > 0 {
+                        allData.append(baseAddress, count: bytesRead)
+                    } else if bytesRead == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
+                        break
+                    }
+                } else if pollResult == 0 && !allData.isEmpty {
+                    break
+                } else if pollResult != 0 {
                     break
                 }
-            } else if pollResult == 0 && !allData.isEmpty {
-                break
-            } else if pollResult != 0 {
-                break
             }
         }
 

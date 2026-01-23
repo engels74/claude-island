@@ -107,15 +107,14 @@ actor ConversationParser {
     /// 1. This is called infrequently (only when cache is stale)
     /// 2. The algorithm requires both forward and backward iteration
     /// 3. For very long conversations, the summary is typically updated, invalidating old data
-    func parse(sessionID: String, cwd: String) -> ConversationInfo {
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let sessionFile = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
+    ///
+    /// File I/O is performed off-actor to prevent actor starvation during disk operations.
+    func parse(sessionID: String, cwd: String) async -> ConversationInfo {
+        let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
 
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: sessionFile),
-              let attrs = try? fileManager.attributesOfItem(atPath: sessionFile),
-              let modDate = attrs[.modificationDate] as? Date
-        else {
+        // Check file attributes off-actor (file I/O)
+        let fileInfo = Self.getFileInfo(path: sessionFile)
+        guard let modDate = fileInfo.modificationDate else {
             return ConversationInfo(
                 summary: nil,
                 lastMessage: nil,
@@ -127,22 +126,31 @@ actor ConversationParser {
             )
         }
 
+        // Check cache (fast, actor-isolated)
         if let cached = cache[sessionFile], cached.modificationDate == modDate {
             return cached.info
         }
 
         // Check file size to avoid memory pressure for very large conversation files
-        if let fileSize = attrs[.size] as? Int, fileSize > Self.maxFullLoadFileSize {
+        if let fileSize = fileInfo.size, fileSize > Self.maxFullLoadFileSize {
             Self.logger.info("File size \(fileSize) exceeds max (\(Self.maxFullLoadFileSize)), using tail-based parsing")
-            // For large files, read only the last portion to get recent info
-            let info = self.parseLargeFile(path: sessionFile)
+            // For large files, read only the last portion to get recent info (off-actor)
+            let content = Self.readLargeFileTail(path: sessionFile)
+            let info = content.map { self.parseContent($0) } ?? ConversationInfo(
+                summary: nil,
+                lastMessage: nil,
+                lastMessageRole: nil,
+                lastToolName: nil,
+                firstUserMessage: nil,
+                lastUserMessageDate: nil,
+                usage: nil
+            )
             self.cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
             return info
         }
 
-        guard let data = fileManager.contents(atPath: sessionFile),
-              let content = String(data: data, encoding: .utf8)
-        else {
+        // Read file content off-actor
+        guard let content = Self.readFileContent(path: sessionFile) else {
             return ConversationInfo(
                 summary: nil,
                 lastMessage: nil,
@@ -154,6 +162,7 @@ actor ConversationParser {
             )
         }
 
+        // Parse and cache (back on actor)
         let info = self.parseContent(content)
         self.cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
 
@@ -163,25 +172,29 @@ actor ConversationParser {
     // MARK: - Full Conversation Parsing
 
     /// Parse full conversation history for chat view (returns ALL messages - use sparingly)
-    func parseFullConversation(sessionID: String, cwd: String) -> [ChatMessage] {
+    /// File I/O is performed off-actor to prevent actor starvation during disk operations.
+    func parseFullConversation(sessionID: String, cwd: String) async -> [ChatMessage] {
         let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
 
-        guard FileManager.default.fileExists(atPath: sessionFile) else {
+        guard Self.fileExists(path: sessionFile) else {
             return []
         }
 
         var state = self.incrementalState[sessionID] ?? IncrementalParseState()
-        _ = self.parseNewLines(filePath: sessionFile, state: &state)
+        // Read new content off-actor, then process on-actor
+        let parseResult = Self.readIncrementalContent(filePath: sessionFile, lastOffset: state.lastFileOffset)
+        _ = self.processIncrementalContent(parseResult, state: &state)
         self.incrementalState[sessionID] = state
 
         return state.messages
     }
 
     /// Parse only NEW messages since last call (efficient incremental updates)
-    func parseIncremental(sessionID: String, cwd: String) -> IncrementalParseResult {
+    /// File I/O is performed off-actor to prevent actor starvation during disk operations.
+    func parseIncremental(sessionID: String, cwd: String) async -> IncrementalParseResult {
         let sessionFile = Self.sessionFilePath(sessionID: sessionID, cwd: cwd)
 
-        guard FileManager.default.fileExists(atPath: sessionFile) else {
+        guard Self.fileExists(path: sessionFile) else {
             return IncrementalParseResult(
                 newMessages: [],
                 allMessages: [],
@@ -193,7 +206,9 @@ actor ConversationParser {
         }
 
         var state = self.incrementalState[sessionID] ?? IncrementalParseState()
-        let newMessages = self.parseNewLines(filePath: sessionFile, state: &state)
+        // Read new content off-actor, then process on-actor
+        let parseResult = Self.readIncrementalContent(filePath: sessionFile, lastOffset: state.lastFileOffset)
+        let newMessages = self.processIncrementalContent(parseResult, state: &state)
         let clearDetected = state.clearPending
         if clearDetected {
             state.clearPending = false
@@ -261,6 +276,22 @@ actor ConversationParser {
         var clearPending = false // True if a /clear was just detected
     }
 
+    // MARK: - Nonisolated File I/O Helpers (run off-actor to prevent starvation)
+
+    /// File info result from off-actor file attribute check
+    private struct FileInfo: Sendable {
+        let exists: Bool
+        let modificationDate: Date?
+        let size: Int?
+    }
+
+    /// Result from off-actor incremental file read
+    private struct IncrementalReadResult: Sendable {
+        let content: String?
+        let newFileSize: UInt64
+        let needsReset: Bool // true if file was truncated (size < lastOffset)
+    }
+
     /// Tool input key mapping for display formatting
     private static let toolInputKeys: [String: String] = [
         "Read": "file_path",
@@ -308,19 +339,38 @@ actor ConversationParser {
         return NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionID + ".jsonl"
     }
 
-    /// Parse a large file by reading only the last portion
-    /// Used when file exceeds maxFullLoadFileSize to avoid memory pressure
-    private func parseLargeFile(path: String) -> ConversationInfo {
+    /// Check file existence off-actor
+    private nonisolated static func fileExists(path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
+    }
+
+    /// Get file info (existence, modification date, size) off-actor
+    private nonisolated static func getFileInfo(path: String) -> FileInfo {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: path),
+              let attrs = try? fileManager.attributesOfItem(atPath: path)
+        else {
+            return FileInfo(exists: false, modificationDate: nil, size: nil)
+        }
+        return FileInfo(
+            exists: true,
+            modificationDate: attrs[.modificationDate] as? Date,
+            size: attrs[.size] as? Int
+        )
+    }
+
+    /// Read file content off-actor
+    private nonisolated static func readFileContent(path: String) -> String? {
+        guard let data = FileManager.default.contents(atPath: path) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Read the tail of a large file off-actor (last 2 MB)
+    private nonisolated static func readLargeFileTail(path: String) -> String? {
         guard let fileHandle = FileHandle(forReadingAtPath: path) else {
-            return ConversationInfo(
-                summary: nil,
-                lastMessage: nil,
-                lastMessageRole: nil,
-                lastToolName: nil,
-                firstUserMessage: nil,
-                lastUserMessageDate: nil,
-                usage: nil
-            )
+            return nil
         }
         defer { try? fileHandle.close() }
 
@@ -334,40 +384,64 @@ actor ConversationParser {
             guard let data = try fileHandle.readToEnd(),
                   let content = String(data: data, encoding: .utf8)
             else {
-                return ConversationInfo(
-                    summary: nil,
-                    lastMessage: nil,
-                    lastMessageRole: nil,
-                    lastToolName: nil,
-                    firstUserMessage: nil,
-                    lastUserMessageDate: nil,
-                    usage: nil
-                )
+                return nil
             }
 
             // Skip partial first line if we didn't start at beginning
-            var trimmedContent = content
             if startOffset > 0, let firstNewline = content.firstIndex(of: "\n") {
-                trimmedContent = String(content[content.index(after: firstNewline)...])
+                return String(content[content.index(after: firstNewline)...])
             }
 
-            return self.parseContent(trimmedContent)
+            return content
         } catch {
-            return ConversationInfo(
-                summary: nil,
-                lastMessage: nil,
-                lastMessageRole: nil,
-                lastToolName: nil,
-                firstUserMessage: nil,
-                lastUserMessageDate: nil,
-                usage: nil
-            )
+            return nil
         }
+    }
+
+    /// Read new content from file since last offset (off-actor)
+    private nonisolated static func readIncrementalContent(filePath: String, lastOffset: UInt64) -> IncrementalReadResult {
+        guard let fileHandle = FileHandle(forReadingAtPath: filePath) else {
+            return IncrementalReadResult(content: nil, newFileSize: 0, needsReset: false)
+        }
+        defer { try? fileHandle.close() }
+
+        let fileSize: UInt64
+        do {
+            fileSize = try fileHandle.seekToEnd()
+        } catch {
+            return IncrementalReadResult(content: nil, newFileSize: 0, needsReset: false)
+        }
+
+        // File was truncated - need to reset state
+        if fileSize < lastOffset {
+            return IncrementalReadResult(content: nil, newFileSize: fileSize, needsReset: true)
+        }
+
+        // No new content
+        if fileSize == lastOffset {
+            return IncrementalReadResult(content: nil, newFileSize: fileSize, needsReset: false)
+        }
+
+        do {
+            try fileHandle.seek(toOffset: lastOffset)
+        } catch {
+            return IncrementalReadResult(content: nil, newFileSize: fileSize, needsReset: false)
+        }
+
+        guard let newData = try? fileHandle.readToEnd(),
+              let newContent = String(data: newData, encoding: .utf8)
+        else {
+            return IncrementalReadResult(content: nil, newFileSize: fileSize, needsReset: false)
+        }
+
+        return IncrementalReadResult(content: newContent, newFileSize: fileSize, needsReset: false)
     }
 
     /// Parse JSONL content
     private func parseContent(_ content: String) -> ConversationInfo {
-        let lines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        // Use split() instead of components(separatedBy:) for better performance
+        // split() with omittingEmptySubsequences (default true) avoids filter step
+        let lines = content.split(separator: "\n").map { String($0) }
 
         var summary: String?
         var lastMessage: String?
@@ -511,47 +585,30 @@ actor ConversationParser {
         )
     }
 
-    /// Parse only new lines since last read (incremental)
-    private func parseNewLines(filePath: String, state: inout IncrementalParseState) -> [ChatMessage] {
-        guard let fileHandle = FileHandle(forReadingAtPath: filePath) else {
-            return []
-        }
-        defer { try? fileHandle.close() }
-
-        let fileSize: UInt64
-        do {
-            fileSize = try fileHandle.seekToEnd()
-        } catch {
-            return []
-        }
-
-        if fileSize < state.lastFileOffset {
+    /// Process incremental content that was read off-actor
+    /// This runs on-actor to safely mutate state
+    private func processIncrementalContent(_ readResult: IncrementalReadResult, state: inout IncrementalParseState) -> [ChatMessage] {
+        // Handle file truncation (reset state)
+        if readResult.needsReset {
             state = IncrementalParseState()
+            state.lastFileOffset = readResult.newFileSize
+            return []
         }
 
-        if fileSize == state.lastFileOffset {
-            return state.messages
-        }
-
-        do {
-            try fileHandle.seek(toOffset: state.lastFileOffset)
-        } catch {
-            return state.messages
-        }
-
-        guard let newData = try? fileHandle.readToEnd(),
-              let newContent = String(data: newData, encoding: .utf8)
-        else {
+        // No new content
+        guard let newContent = readResult.content else {
             return state.messages
         }
 
         state.clearPending = false
         let isIncrementalRead = state.lastFileOffset > 0
-        let lines = newContent.components(separatedBy: "\n")
         var newMessages: [ChatMessage] = []
 
-        for line in lines where !line.isEmpty {
-            if line.contains("<command-name>/clear</command-name>") {
+        // Use lazy split to avoid allocating full array for large files
+        for line in newContent.lazy.split(separator: "\n") where !line.isEmpty {
+            let lineStr = String(line)
+
+            if lineStr.contains("<command-name>/clear</command-name>") {
                 state.messages = []
                 state.seenToolIDs = []
                 state.toolIDToName = [:]
@@ -567,8 +624,8 @@ actor ConversationParser {
                 continue
             }
 
-            if line.contains("\"tool_result\"") {
-                if let lineData = line.data(using: .utf8),
+            if lineStr.contains("\"tool_result\"") {
+                if let lineData = lineStr.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                    let messageDict = json["message"] as? [String: Any],
                    let contentArray = messageDict["content"] as? [[String: Any]] {
@@ -605,8 +662,8 @@ actor ConversationParser {
                         }
                     }
                 }
-            } else if line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"") {
-                if let lineData = line.data(using: .utf8),
+            } else if lineStr.contains("\"type\":\"user\"") || lineStr.contains("\"type\":\"assistant\"") {
+                if let lineData = lineStr.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                    let message = parseMessageLine(json, seenToolIDs: &state.seenToolIDs, toolIDToName: &state.toolIDToName) {
                     newMessages.append(message)
@@ -615,7 +672,7 @@ actor ConversationParser {
             }
         }
 
-        state.lastFileOffset = fileSize
+        state.lastFileOffset = readResult.newFileSize
         return newMessages
     }
 

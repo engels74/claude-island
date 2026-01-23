@@ -44,20 +44,15 @@ struct ClaudeCrabIcon: View {
 
             // Animated legs - alternating up/down pattern for walking effect
             // Legs stay attached to body (y=39), only height changes
-            let baseLegPositions: [CGFloat] = [6, 18, 42, 54]
             let baseLegHeight: CGFloat = 13
 
-            // Height offsets: positive = longer leg (down), negative = shorter leg (up)
-            let legHeightOffsets: [[CGFloat]] = [
-                [3, -3, 3, -3], // Phase 0: alternating
-                [0, 0, 0, 0], // Phase 1: neutral
-                [-3, 3, -3, 3], // Phase 2: alternating (opposite)
-                [0, 0, 0, 0], // Phase 3: neutral
-            ]
+            // Use static arrays to avoid allocation per frame
+            let currentHeightOffsets = self.animateLegs
+                ? Self.legHeightOffsets[self.legPhase % 4]
+                : Self.neutralOffsets
 
-            let currentHeightOffsets = self.animateLegs ? legHeightOffsets[self.legPhase % 4] : [CGFloat](repeating: 0, count: 4)
-
-            for (index, xPos) in baseLegPositions.enumerated() {
+            for index in 0 ..< 4 {
+                let xPos = Self.baseLegPositions[index]
                 let heightOffset = currentHeightOffsets[index]
                 let legHeight = baseLegHeight + heightOffset
                 let leg = Path { path in
@@ -93,6 +88,23 @@ struct ClaudeCrabIcon: View {
     }
 
     // MARK: Private
+
+    // MARK: - Static Animation Data
+
+    /// Base X positions for the 4 legs - static to avoid allocation per frame
+    private static let baseLegPositions: [CGFloat] = [6, 18, 42, 54]
+
+    /// Height offsets for each animation phase
+    /// Phase 0: alternating, Phase 1: neutral, Phase 2: opposite, Phase 3: neutral
+    private static let legHeightOffsets: [[CGFloat]] = [
+        [3, -3, 3, -3],
+        [0, 0, 0, 0],
+        [-3, 3, -3, 3],
+        [0, 0, 0, 0],
+    ]
+
+    /// Neutral height offsets (no animation)
+    private static let neutralOffsets: [CGFloat] = [0, 0, 0, 0]
 
     @State private var legPhase = 0
 

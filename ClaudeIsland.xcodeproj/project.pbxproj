@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		FD0F42E82EE7ACA500980302 /* OcclusionKit in Frameworks */ = {isa = PBXBuildFile; productRef = FD0F42E92EE7ACA500980302 /* OcclusionKit */; };
+		FD0F42EB2EE7ACB500980302 /* Subprocess in Frameworks */ = {isa = PBXBuildFile; productRef = FD0F42EC2EE7ACB500980302 /* Subprocess */; };
 		FDA49F7D2EE11E3C00F9612E /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = FD33FD722EDF32D7002A6548 /* Markdown */; };
 		FDA49F7E2EE11E3C00F9612E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FDA49F7F2EE11E3C00F9612E /* Sparkle */; };
 /* End PBXBuildFile section */
@@ -43,6 +44,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD0F42E82EE7ACA500980302 /* OcclusionKit in Frameworks */,
+				FD0F42EB2EE7ACB500980302 /* Subprocess in Frameworks */,
 				FDA49F7D2EE11E3C00F9612E /* Markdown in Frameworks */,
 				FDA49F7E2EE11E3C00F9612E /* Sparkle in Frameworks */,
 			);
@@ -90,6 +92,7 @@
 				FD33FD722EDF32D7002A6548 /* Markdown */,
 				FDA49F7F2EE11E3C00F9612E /* Sparkle */,
 				FD0F42E92EE7ACA500980302 /* OcclusionKit */,
+				FD0F42EC2EE7ACB500980302 /* Subprocess */,
 			);
 			productName = ClaudeIsland;
 			productReference = FD33FD5D2EDF32D7002A6548 /* Claude Island.app */;
@@ -123,6 +126,7 @@
 				FD33FD712EDF32D7002A6548 /* XCRemoteSwiftPackageReference "swift-markdown" */,
 				FDA49F802EE11E3C00F9612E /* XCRemoteSwiftPackageReference "Sparkle" */,
 				FD0F42EA2EE7ACA500980302 /* XCRemoteSwiftPackageReference "OcclusionKit" */,
+				FD0F42ED2EE7ACB500980302 /* XCRemoteSwiftPackageReference "swift-subprocess" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FD33FD5E2EDF32D7002A6548 /* Products */;
@@ -379,6 +383,14 @@
 				kind = branch;
 			};
 		};
+		FD0F42ED2EE7ACB500980302 /* XCRemoteSwiftPackageReference "swift-subprocess" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swiftlang/swift-subprocess";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.0;
+			};
+		};
 		FD33FD712EDF32D7002A6548 /* XCRemoteSwiftPackageReference "swift-markdown" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/swiftlang/swift-markdown";
@@ -402,6 +414,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FD0F42EA2EE7ACA500980302 /* XCRemoteSwiftPackageReference "OcclusionKit" */;
 			productName = OcclusionKit;
+		};
+		FD0F42EC2EE7ACB500980302 /* Subprocess */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FD0F42ED2EE7ACB500980302 /* XCRemoteSwiftPackageReference "swift-subprocess" */;
+			productName = Subprocess;
 		};
 		FD33FD722EDF32D7002A6548 /* Markdown */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -3,10 +3,13 @@
 //  ClaudeIsland
 //
 //  Shared utility for executing shell commands with proper error handling
+//  Uses swift-subprocess for async operations (Swift 6.2+)
 //
 
 import Foundation
 import os.log
+import Subprocess
+import System
 
 // MARK: - ProcessExecutorError
 
@@ -84,64 +87,53 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
 
     /// Run a command asynchronously and return a full Result with exit code and stderr
     ///
-    /// Note: Blocking operations (waitUntilExit, readDataToEndOfFile) are dispatched to a background
-    /// queue to avoid blocking the cooperative thread pool.
+    /// Uses swift-subprocess for efficient async execution without blocking the cooperative thread pool.
     nonisolated func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError> {
-        await withCheckedContinuation { continuation in
-            // Dispatch blocking work to background queue to avoid exhausting cooperative thread pool
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                let stdoutPipe = Pipe()
-                let stderrPipe = Pipe()
+        do {
+            let result = try await Subprocess.run(
+                .path(FilePath(executable)),
+                arguments: Arguments(arguments),
+                output: .string(limit: 10_000_000),
+                error: .string(limit: 1_000_000)
+            )
 
-                process.executableURL = URL(fileURLWithPath: executable)
-                process.arguments = arguments
-                process.standardOutput = stdoutPipe
-                process.standardError = stderrPipe
+            let stdout = result.standardOutput ?? ""
+            let stderr = result.standardError
 
-                do {
-                    try process.run()
-                    process.waitUntilExit()
-
-                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-
-                    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                    let stderr = String(data: stderrData, encoding: .utf8)
-
-                    let result = ProcessResult(
-                        output: stdout,
-                        exitCode: process.terminationStatus,
-                        stderr: stderr
-                    )
-
-                    if process.terminationStatus == 0 {
-                        continuation.resume(returning: .success(result))
-                    } else {
-                        Self.logger
-                            .warning(
-                                "Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(process.terminationStatus)"
-                            )
-                        continuation.resume(returning: .failure(.executionFailed(
-                            command: executable,
-                            exitCode: process.terminationStatus,
-                            stderr: stderr
-                        )))
-                    }
-                } catch let error as NSError {
-                    if error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
-                        Self.logger.error("Command not found: \(executable, privacy: .public)")
-                        continuation.resume(returning: .failure(.commandNotFound(executable)))
-                    } else {
-                        Self.logger
-                            .error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-                        continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
-                    }
-                } catch {
-                    Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
-                }
+            // Extract exit code from TerminationStatus enum
+            let exitCode: Int32 = switch result.terminationStatus {
+            case let .exited(code): code
+            case let .unhandledException(code): code
             }
+
+            let processResult = ProcessResult(
+                output: stdout,
+                exitCode: exitCode,
+                stderr: stderr
+            )
+
+            if result.terminationStatus.isSuccess {
+                return .success(processResult)
+            } else {
+                Self.logger
+                    .warning(
+                        "Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(exitCode)"
+                    )
+                return .failure(.executionFailed(
+                    command: executable,
+                    exitCode: exitCode,
+                    stderr: stderr
+                ))
+            }
+        } catch {
+            // Check if it's a "command not found" type error
+            let errorDescription = String(describing: error)
+            if errorDescription.contains("not found") || errorDescription.contains("No such file") {
+                Self.logger.error("Command not found: \(executable, privacy: .public)")
+                return .failure(.commandNotFound(executable))
+            }
+            Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
+            return .failure(.launchFailed(command: executable, underlying: error))
         }
     }
 
