@@ -228,11 +228,11 @@ enum HookInstaller {
 
         var updated = false
         for i in existingEvent.indices {
-            if var entry = existingEvent[i] as? [String: Any],
-               var entryHooks = entry["hooks"] as? [[String: Any]] {
+            var entry = existingEvent[i]
+            if var entryHooks = entry["hooks"] as? [[String: Any]] {
                 for j in entryHooks.indices {
-                    if var hook = entryHooks[j] as? [String: Any],
-                       let cmd = hook["command"] as? String,
+                    var hook = entryHooks[j]
+                    if let cmd = hook["command"] as? String,
                        cmd.contains("claude-island-state.py") {
                         hook["command"] = command
                         entryHooks[j] = hook
