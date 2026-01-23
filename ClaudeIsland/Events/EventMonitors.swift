@@ -8,6 +8,16 @@
 import AppKit
 import Combine
 
+// MARK: - SendableEvent
+
+/// Wrapper to safely pass NSEvent across MainActor boundaries.
+/// Safe because NSEvent monitor handlers are documented to run on main thread.
+private struct SendableEvent: @unchecked Sendable {
+    nonisolated(unsafe) let event: NSEvent
+}
+
+// MARK: - EventMonitors
+
 /// Singleton that aggregates all event monitors.
 /// @MainActor ensures thread-safe access to mutable state and Combine publishers
 /// since NSEvent monitors dispatch handlers on the main thread.
@@ -33,25 +43,26 @@ final class EventMonitors {
     private var mouseDraggedMonitor: EventMonitor?
 
     private func setupMonitors() {
-        // Note: Apple documents that NSEvent monitor handlers run on the main thread.
-        // Using DispatchQueue.main.async provides defensive safety in case this ever changes,
-        // avoiding potential crashes from MainActor.assumeIsolated violations.
+        // NSEvent monitor handlers are documented to run on the main thread.
+        // Using MainActor.assumeIsolated is safe and avoids Swift 6 Sendable warnings
+        // when passing NSEvent across isolation boundaries.
         self.mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
-            DispatchQueue.main.async {
+            MainActor.assumeIsolated {
                 self?.mouseLocation.send(NSEvent.mouseLocation)
             }
         }
         self.mouseMoveMonitor?.start()
 
         self.mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
-            DispatchQueue.main.async {
-                self?.mouseDown.send(event)
+            let wrapper = SendableEvent(event: event)
+            MainActor.assumeIsolated {
+                self?.mouseDown.send(wrapper.event)
             }
         }
         self.mouseDownMonitor?.start()
 
         self.mouseDraggedMonitor = EventMonitor(mask: .leftMouseDragged) { [weak self] _ in
-            DispatchQueue.main.async {
+            MainActor.assumeIsolated {
                 self?.mouseLocation.send(NSEvent.mouseLocation)
             }
         }

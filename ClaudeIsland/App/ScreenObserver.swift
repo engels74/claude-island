@@ -21,9 +21,13 @@ class ScreenObserver {
 
     // MARK: Private
 
-    private var observer: Any?
-    private let onScreenChange: () -> Void
-    private var pendingWork: DispatchWorkItem?
+    /// nonisolated(unsafe) is safe here because:
+    /// 1. These are only written in startObserving() which runs on init (implicitly @MainActor)
+    /// 2. They are read in stopObserving() which is either called from @MainActor or from deinit
+    ///    when there are no other references
+    private nonisolated(unsafe) var observer: Any?
+    private nonisolated(unsafe) let onScreenChange: () -> Void
+    private nonisolated(unsafe) var pendingWork: DispatchWorkItem?
 
     /// Debounce interval to coalesce rapid screen change notifications
     /// (e.g., when waking from sleep, displays reconnect in stages)
@@ -35,7 +39,9 @@ class ScreenObserver {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.scheduleScreenChange()
+            MainActor.assumeIsolated {
+                self?.scheduleScreenChange()
+            }
         }
     }
 
@@ -53,7 +59,7 @@ class ScreenObserver {
         )
     }
 
-    private func stopObserving() {
+    private nonisolated func stopObserving() {
         self.pendingWork?.cancel()
         if let observer {
             NotificationCenter.default.removeObserver(observer)
