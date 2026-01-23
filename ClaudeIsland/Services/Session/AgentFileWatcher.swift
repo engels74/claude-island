@@ -9,8 +9,8 @@
 import Foundation
 import os.log
 
-/// Logger for agent file watcher
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AgentFileWatcher")
+/// Logger for agent file watcher (nonisolated(unsafe) required due to MainActor inference in this file)
+private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AgentFileWatcher")
 
 // MARK: - AgentFileWatcherDelegate
 
@@ -22,10 +22,12 @@ protocol AgentFileWatcherDelegate: AnyObject {
 // MARK: - AgentFileWatcher
 
 /// Watches a single agent JSONL file for tool updates
-class AgentFileWatcher {
+/// Uses its own DispatchQueue for serialization, not MainActor
+/// `@unchecked Sendable` because thread safety is managed via the private serial queue
+final class AgentFileWatcher: @unchecked Sendable {
     // MARK: Lifecycle
 
-    init(sessionID: String, taskToolID: String, agentID: String, cwd: String) {
+    nonisolated init(sessionID: String, taskToolID: String, agentID: String, cwd: String) {
         self.sessionID = sessionID
         self.taskToolID = taskToolID
         self.agentID = agentID
@@ -49,14 +51,14 @@ class AgentFileWatcher {
     weak var delegate: AgentFileWatcherDelegate?
 
     /// Start watching the agent file
-    func start() {
+    nonisolated func start() {
         self.queue.async { [weak self] in
             self?.startWatching()
         }
     }
 
     /// Stop watching
-    func stop() {
+    nonisolated func stop() {
         self.queue.async { [weak self] in
             self?.stopInternal()
         }
@@ -64,9 +66,10 @@ class AgentFileWatcher {
 
     // MARK: Private
 
-    private var fileHandle: FileHandle?
-    private var source: DispatchSourceFileSystemObject?
-    private var lastOffset: UInt64 = 0
+    /// nonisolated(unsafe) properties: Thread safety managed via the private serial queue
+    private nonisolated(unsafe) var fileHandle: FileHandle?
+    private nonisolated(unsafe) var source: DispatchSourceFileSystemObject?
+    private nonisolated(unsafe) var lastOffset: UInt64 = 0
     private let sessionID: String
     private let taskToolID: String
     private let agentID: String
@@ -74,10 +77,10 @@ class AgentFileWatcher {
     private let filePath: String
     private let queue = DispatchQueue(label: "com.claudeisland.agentfilewatcher", qos: .userInitiated)
 
-    /// Track seen tool IDs to avoid duplicates
-    private var seenToolIDs: Set<String> = []
+    /// Track seen tool IDs to avoid duplicates (protected by queue)
+    private nonisolated(unsafe) var seenToolIDs: Set<String> = []
 
-    private func startWatching() {
+    private nonisolated func startWatching() {
         self.stopInternal()
 
         guard FileManager.default.fileExists(atPath: self.filePath),
@@ -123,7 +126,7 @@ class AgentFileWatcher {
             )
     }
 
-    private func parseTools() {
+    private nonisolated func parseTools() {
         let tools = ConversationParser.parseSubagentToolsSync(agentID: self.agentID, cwd: self.cwd)
 
         let newTools = tools.filter { !self.seenToolIDs.contains($0.id) }
@@ -142,7 +145,7 @@ class AgentFileWatcher {
         }
     }
 
-    private func stopInternal() {
+    private nonisolated func stopInternal() {
         guard let existingSource = source else { return }
         logger.debug("Stopped watching agent file: \(self.agentID.prefix(8), privacy: .public)")
         existingSource.cancel()

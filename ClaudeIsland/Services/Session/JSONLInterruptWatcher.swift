@@ -9,8 +9,8 @@
 import Foundation
 import os.log
 
-/// Logger for interrupt watcher
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
+/// Logger for interrupt watcher (nonisolated(unsafe) required due to MainActor inference in this file)
+private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
 
 // MARK: - JSONLInterruptWatcherDelegate
 
@@ -22,10 +22,12 @@ protocol JSONLInterruptWatcherDelegate: AnyObject {
 
 /// Watches a session's JSONL file for interrupt patterns in real-time
 /// Uses DispatchSource for immediate detection when new lines are written
-class JSONLInterruptWatcher {
+/// Uses its own DispatchQueue for serialization, not MainActor
+/// `@unchecked Sendable` because thread safety is managed via the private serial queue
+final class JSONLInterruptWatcher: @unchecked Sendable {
     // MARK: Lifecycle
 
-    init(sessionID: String, cwd: String) {
+    nonisolated init(sessionID: String, cwd: String) {
         self.sessionID = sessionID
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
@@ -48,14 +50,14 @@ class JSONLInterruptWatcher {
     weak var delegate: JSONLInterruptWatcherDelegate?
 
     /// Start watching the JSONL file for interrupts
-    func start() {
+    nonisolated func start() {
         self.queue.async { [weak self] in
             self?.startWatching()
         }
     }
 
     /// Stop watching
-    func stop() {
+    nonisolated func stop() {
         self.queue.async { [weak self] in
             self?.stopInternal()
         }
@@ -65,24 +67,25 @@ class JSONLInterruptWatcher {
 
     /// Patterns that indicate an interrupt occurred
     /// We check for is_error:true combined with interrupt content
-    private static let interruptContentPatterns = [
+    private nonisolated(unsafe) static let interruptContentPatterns = [
         "Interrupted by user",
         "interrupted by user",
         "user doesn't want to proceed",
         "[Request interrupted by user",
     ]
 
-    private var fileHandle: FileHandle?
-    private var source: DispatchSourceFileSystemObject?
-    private var directorySource: DispatchSourceFileSystemObject?
-    private var directoryHandle: FileHandle?
-    private var lastOffset: UInt64 = 0
+    /// nonisolated(unsafe) properties: Thread safety managed via the private serial queue
+    private nonisolated(unsafe) var fileHandle: FileHandle?
+    private nonisolated(unsafe) var source: DispatchSourceFileSystemObject?
+    private nonisolated(unsafe) var directorySource: DispatchSourceFileSystemObject?
+    private nonisolated(unsafe) var directoryHandle: FileHandle?
+    private nonisolated(unsafe) var lastOffset: UInt64 = 0
     private let sessionID: String
     private let filePath: String
     private let directoryPath: String
     private let queue = DispatchQueue(label: "com.claudeisland.interruptwatcher", qos: .userInteractive)
 
-    private func startWatching() {
+    private nonisolated func startWatching() {
         self.stopInternal()
 
         // Try to watch the file directly
@@ -94,7 +97,7 @@ class JSONLInterruptWatcher {
         }
     }
 
-    private func startFileWatcher() {
+    private nonisolated func startFileWatcher() {
         guard let handle = FileHandle(forReadingAtPath: filePath) else {
             logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
             return
@@ -131,7 +134,7 @@ class JSONLInterruptWatcher {
         logger.debug("Started watching file: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
-    private func startDirectoryWatcher() {
+    private nonisolated func startDirectoryWatcher() {
         // Ensure the directory exists
         guard FileManager.default.fileExists(atPath: self.directoryPath) else {
             logger.warning("Directory doesn't exist: \(self.directoryPath, privacy: .public)")
@@ -167,7 +170,7 @@ class JSONLInterruptWatcher {
         logger.debug("Started watching directory for file appearance: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
-    private func checkForFileAppearance() {
+    private nonisolated func checkForFileAppearance() {
         // Check if the file now exists
         guard FileManager.default.fileExists(atPath: self.filePath) else {
             return
@@ -185,7 +188,7 @@ class JSONLInterruptWatcher {
         self.startFileWatcher()
     }
 
-    private func checkForInterrupt() {
+    private nonisolated func checkForInterrupt() {
         guard let handle = fileHandle else { return }
 
         let currentSize: UInt64
@@ -224,7 +227,7 @@ class JSONLInterruptWatcher {
         }
     }
 
-    private func isInterruptLine(_ line: String) -> Bool {
+    private nonisolated func isInterruptLine(_ line: String) -> Bool {
         if line.contains("\"type\":\"user\"") {
             if line.contains("[Request interrupted by user]") ||
                 line.contains("[Request interrupted by user for tool use]") {
@@ -245,7 +248,7 @@ class JSONLInterruptWatcher {
         return false
     }
 
-    private func stopInternal() {
+    private nonisolated func stopInternal() {
         // Stop file watcher
         if let existingSource = source {
             existingSource.cancel()
