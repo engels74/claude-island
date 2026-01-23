@@ -7,7 +7,9 @@
 
 import AppKit
 
-class ScreenObserver {
+/// `@unchecked Sendable` because thread safety is managed via main thread
+/// notification delivery and debounced DispatchWorkItem execution
+final class ScreenObserver: @unchecked Sendable {
     // MARK: Lifecycle
 
     init(onScreenChange: @escaping () -> Void) {
