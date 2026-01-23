@@ -7,7 +7,7 @@
 
 import Combine
 import Foundation
-import Sparkle
+@preconcurrency import Sparkle
 
 // MARK: - UpdateState
 

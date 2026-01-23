@@ -5,7 +5,7 @@
 //  Markdown renderer using swift-markdown for efficient parsing
 //
 
-import Markdown
+@preconcurrency import Markdown
 import SwiftUI
 
 // MARK: - DocumentCache

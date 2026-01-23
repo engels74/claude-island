@@ -9,7 +9,7 @@ import ApplicationServices
 import Combine
 import os
 import ServiceManagement
-import Sparkle
+@preconcurrency import Sparkle
 import SwiftUI
 
 private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchMenuView")

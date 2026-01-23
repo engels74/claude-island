@@ -1,12 +1,13 @@
 import AppKit
 import os
-import Sparkle
+@preconcurrency import Sparkle
 import SwiftUI
 
 private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
 
 // MARK: - AppDelegate
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Lifecycle
 
