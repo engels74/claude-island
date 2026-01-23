@@ -251,15 +251,16 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     /// Stop the socket server
     nonisolated func stop() {
-        // Mark as stopped to prevent pending retries from restarting
+        // All state mutations must happen on the queue to avoid races
         queue.sync {
+            // Mark as stopped to prevent pending retries from restarting
             isStopped = true
-        }
 
-        // Cancel accept source if active
-        if let source = acceptSource {
-            source.cancel()
-            acceptSource = nil
+            // Cancel accept source if active
+            if let source = acceptSource {
+                source.cancel()
+                acceptSource = nil
+            }
         }
         unlink(Self.socketPath)
 
@@ -449,7 +450,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             guard let self else { return }
 
             // Check again after Task starts in case stop() was called
-            let stopped = await MainActor.run { self.queue.sync { self.isStopped } }
+            // Read isStopped directly on the queue without MainActor to avoid deadlock potential
+            let stopped = self.queue.sync { self.isStopped }
             guard !stopped else {
                 Self.logger.debug("Retry cancelled - server has been stopped")
                 return

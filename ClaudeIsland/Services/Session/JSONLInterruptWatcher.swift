@@ -218,7 +218,8 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         for line in lines where !line.isEmpty {
             if isInterruptLine(line) {
                 Self.logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
-                DispatchQueue.main.async { [weak self] in
+                // Use explicit MainActor isolation for Swift 6 compliance
+                Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
                 }

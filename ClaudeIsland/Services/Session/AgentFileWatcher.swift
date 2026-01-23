@@ -135,7 +135,8 @@ final class AgentFileWatcher: @unchecked Sendable {
         self.seenToolIDs = Set(tools.map(\.id))
         Self.logger.debug("Agent \(self.agentID.prefix(8), privacy: .public) has \(tools.count) tools")
 
-        DispatchQueue.main.async { [weak self] in
+        // Use explicit MainActor isolation for Swift 6 compliance
+        Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.didUpdateAgentTools(
                 sessionID: self.sessionID,
