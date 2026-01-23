@@ -605,10 +605,10 @@ actor ConversationParser {
         var newMessages: [ChatMessage] = []
 
         // Use lazy split to avoid allocating full array for large files
+        // String conversion is deferred - contains() works directly on Substring
         for line in newContent.lazy.split(separator: "\n") where !line.isEmpty {
-            let lineStr = String(line)
-
-            if lineStr.contains("<command-name>/clear</command-name>") {
+            // Check conditions on Substring first (no allocation) before converting to String
+            if line.contains("<command-name>/clear</command-name>") {
                 state.messages = []
                 state.seenToolIDs = []
                 state.toolIDToName = [:]
@@ -624,7 +624,9 @@ actor ConversationParser {
                 continue
             }
 
-            if lineStr.contains("\"tool_result\"") {
+            // Only convert to String when we need to parse JSON (deferred allocation)
+            if line.contains("\"tool_result\"") {
+                let lineStr = String(line)
                 if let lineData = lineStr.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                    let messageDict = json["message"] as? [String: Any],
@@ -662,7 +664,8 @@ actor ConversationParser {
                         }
                     }
                 }
-            } else if lineStr.contains("\"type\":\"user\"") || lineStr.contains("\"type\":\"assistant\"") {
+            } else if line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"") {
+                let lineStr = String(line)
                 if let lineData = lineStr.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                    let message = parseMessageLine(json, seenToolIDs: &state.seenToolIDs, toolIDToName: &state.toolIDToName) {
@@ -670,6 +673,7 @@ actor ConversationParser {
                     state.messages.append(message)
                 }
             }
+            // Lines that don't match any condition are skipped without String allocation
         }
 
         state.lastFileOffset = readResult.newFileSize

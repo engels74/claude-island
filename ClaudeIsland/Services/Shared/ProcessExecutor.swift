@@ -76,7 +76,9 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
 
     /// Run a command asynchronously and return output (throws on failure)
     ///
-    /// - Note: Swift 6.2 candidate for `@concurrent` - explicitly marks concurrent execution intent
+    /// Marked @concurrent to explicitly run on the cooperative thread pool,
+    /// enabling parallel subprocess execution without blocking the caller's executor.
+    @concurrent
     nonisolated func run(_ executable: String, arguments: [String]) async throws -> String {
         let result = await runWithResult(executable, arguments: arguments)
         switch result {
@@ -90,8 +92,8 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
     /// Run a command asynchronously and return a full Result with exit code and stderr
     ///
     /// Uses swift-subprocess for efficient async execution without blocking the cooperative thread pool.
-    ///
-    /// - Note: Swift 6.2 candidate for `@concurrent` - explicitly marks concurrent execution intent
+    /// Marked @concurrent to explicitly run on the cooperative thread pool.
+    @concurrent
     nonisolated func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError> {
         do {
             let result = try await Subprocess.run(
@@ -197,7 +199,8 @@ extension ProcessExecutor {
     /// Run a command and return output, returning nil only if the command itself fails to execute
     /// (as opposed to non-zero exit codes which may still have useful output)
     ///
-    /// - Note: Swift 6.2 candidate for `@concurrent` - explicitly marks concurrent execution intent
+    /// Marked @concurrent to explicitly run on the cooperative thread pool.
+    @concurrent
     nonisolated func runOrNil(_ executable: String, arguments: [String]) async -> String? {
         let result = await runWithResult(executable, arguments: arguments)
         switch result {
