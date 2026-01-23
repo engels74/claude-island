@@ -42,7 +42,7 @@ struct ProcessResult: Sendable {
     let exitCode: Int32
     let stderr: String?
 
-    var isSuccess: Bool { self.exitCode == 0 }
+    nonisolated var isSuccess: Bool { self.exitCode == 0 }
 }
 
 // MARK: - ProcessExecuting
@@ -57,22 +57,22 @@ protocol ProcessExecuting: Sendable {
 // MARK: - ProcessExecutor
 
 /// Default implementation using Foundation.Process
-actor ProcessExecutor: ProcessExecuting {
+/// Stateless service - uses struct per Swift 6 best practices (no mutable state to protect)
+struct ProcessExecutor: ProcessExecuting, Sendable {
     // MARK: Lifecycle
 
-    private init() {}
+    private nonisolated init() {}
 
     // MARK: Internal
 
-    /// Shared instance - actors are inherently thread-safe and static let is lazily initialized
-    /// with thread-safety guaranteed by Swift, so no special annotations are needed.
-    static let shared = ProcessExecutor()
+    /// Shared instance - struct has no mutable state so is inherently thread-safe
+    nonisolated static let shared = Self()
 
     /// Logger for process execution (nonisolated static for cross-context access)
     nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ProcessExecutor")
 
     /// Run a command asynchronously and return output (throws on failure)
-    func run(_ executable: String, arguments: [String]) async throws -> String {
+    nonisolated func run(_ executable: String, arguments: [String]) async throws -> String {
         let result = await runWithResult(executable, arguments: arguments)
         switch result {
         case let .success(processResult):
@@ -86,7 +86,7 @@ actor ProcessExecutor: ProcessExecuting {
     ///
     /// Note: Blocking operations (waitUntilExit, readDataToEndOfFile) are dispatched to a background
     /// queue to avoid blocking the cooperative thread pool.
-    func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError> {
+    nonisolated func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError> {
         await withCheckedContinuation { continuation in
             // Dispatch blocking work to background queue to avoid exhausting cooperative thread pool
             DispatchQueue.global(qos: .userInitiated).async {
@@ -200,7 +200,7 @@ actor ProcessExecutor: ProcessExecuting {
 extension ProcessExecutor {
     /// Run a command and return output, returning nil only if the command itself fails to execute
     /// (as opposed to non-zero exit codes which may still have useful output)
-    func runOrNil(_ executable: String, arguments: [String]) async -> String? {
+    nonisolated func runOrNil(_ executable: String, arguments: [String]) async -> String? {
         let result = await runWithResult(executable, arguments: arguments)
         switch result {
         case let .success(processResult):
