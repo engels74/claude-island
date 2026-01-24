@@ -100,6 +100,15 @@ struct HookEvent: Sendable {
             return .compacting
         }
 
+        // Handle Notification events explicitly (aligned with determinePhase())
+        if event == "Notification" {
+            if notificationType == "idle_prompt" {
+                return .waitingForInput
+            }
+            // Other notifications - session is still processing
+            return .processing
+        }
+
         switch status {
         case "waiting_for_approval":
             // Note: Full PermissionContext is constructed by SessionStore, not here
@@ -115,6 +124,9 @@ struct HookEvent: Sendable {
         case "running_tool",
              "processing",
              "starting":
+            return .processing
+        case "notification":
+            // Explicit notification status - session is still active
             return .processing
         case "compacting":
             return .compacting
