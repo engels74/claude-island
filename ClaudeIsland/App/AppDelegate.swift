@@ -135,11 +135,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Start periodic monitoring so UI updates when permission is granted
             manager.startPeriodicMonitoring()
 
-            // Trigger the official macOS accessibility prompt after a brief delay
-            // This shows the system dialog and adds the app to System Settings
+            // Show explanatory alert after a brief delay to explain why permission is needed
+            // The alert offers "Open Settings" to guide users to grant permission
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1.0))
-                manager.promptForPermission()
+                manager.showPermissionAlert()
             }
         }
     }
