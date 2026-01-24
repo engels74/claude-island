@@ -174,7 +174,8 @@ enum HookInstaller {
             hooks[event] = self.updateOrAddHookEntries(
                 existing: hooks[event] as? [[String: Any]],
                 config: config,
-                command: command
+                command: command,
+                eventName: event
             )
         }
 
@@ -211,11 +212,12 @@ enum HookInstaller {
         ]
     }
 
-    /// Update existing hook entries or add new ones
+    /// Update existing hook entries or add new ones, deduplicating claude-island entries by matcher
     private static func updateOrAddHookEntries(
         existing: [[String: Any]]?,
         config: [[String: Any]],
-        command: String
+        command: String,
+        eventName: String
     ) -> [[String: Any]] {
         guard var existingEvent = existing else {
             return config
@@ -226,27 +228,61 @@ enum HookInstaller {
             self.isLegacyDirectEntry(entry)
         }
 
-        var updated = false
+        // Track seen matchers for claude-island hooks to deduplicate
+        // Empty string represents entries without a matcher
+        var seenMatchers = Set<String>()
+        var indicesToRemove = [Int]()
+
         for i in existingEvent.indices {
             var entry = existingEvent[i]
             if var entryHooks = entry["hooks"] as? [[String: Any]] {
-                for j in entryHooks.indices {
-                    var hook = entryHooks[j]
-                    if let cmd = hook["command"] as? String,
-                       cmd.contains("claude-island-state.py") {
-                        hook["command"] = command
-                        entryHooks[j] = hook
-                        updated = true
+                let isClaudeIslandEntry = entryHooks.contains { hook in
+                    if let cmd = hook["command"] as? String {
+                        return cmd.contains("claude-island-state.py")
+                    }
+                    return false
+                }
+
+                if isClaudeIslandEntry {
+                    let matcherKey = (entry["matcher"] as? String) ?? ""
+
+                    if seenMatchers.contains(matcherKey) {
+                        // Duplicate entry with same matcher - mark for removal
+                        indicesToRemove.append(i)
+                    } else {
+                        // First occurrence - update command and track matcher
+                        seenMatchers.insert(matcherKey)
+                        for j in entryHooks.indices {
+                            var hook = entryHooks[j]
+                            if let cmd = hook["command"] as? String,
+                               cmd.contains("claude-island-state.py") {
+                                hook["command"] = command
+                                entryHooks[j] = hook
+                            }
+                        }
+                        entry["hooks"] = entryHooks
+                        existingEvent[i] = entry
                     }
                 }
-                entry["hooks"] = entryHooks
-                existingEvent[i] = entry
             }
         }
 
-        if !updated {
-            existingEvent.append(contentsOf: config)
+        // Remove duplicates in reverse order to preserve indices
+        if !indicesToRemove.isEmpty {
+            logger.info("Removed \(indicesToRemove.count) duplicate claude-island hook(s) from \(eventName)")
+            for index in indicesToRemove.reversed() {
+                existingEvent.remove(at: index)
+            }
         }
+
+        // Add any missing configurations (matchers not already present)
+        for configEntry in config {
+            let configMatcher = (configEntry["matcher"] as? String) ?? ""
+            if !seenMatchers.contains(configMatcher) {
+                existingEvent.append(configEntry)
+            }
+        }
+
         return existingEvent
     }
 
