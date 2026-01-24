@@ -6,7 +6,6 @@
 //
 
 import ApplicationServices
-import Combine
 import os
 import ServiceManagement
 @preconcurrency import Sparkle
@@ -471,10 +470,6 @@ struct AccessibilityRow: View {
                 .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
         )
         .onHover { self.isHovered = $0 }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // Re-check permission when app becomes active (user may have granted permission in System Settings)
-            self.accessibilityManager.checkPermission()
-        }
     }
 
     // MARK: Private

@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Combine
 import CoreGraphics
 import SwiftUI
 
@@ -119,6 +120,11 @@ struct NotchView: View {
                 // Permission granted, trigger normal visibility logic
                 self.handleProcessingChange()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Check accessibility permission when app becomes active
+            // Catches the case where user grants permission in System Settings
+            self.accessibilityManager.handleAppActivation()
         }
     }
 

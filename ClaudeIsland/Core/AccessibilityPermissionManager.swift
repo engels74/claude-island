@@ -33,19 +33,38 @@ final class AccessibilityPermissionManager {
 
     /// Check the current permission state
     func checkPermission() {
-        self.isAccessibilityEnabled = AXIsProcessTrusted()
-        logger.debug("Accessibility permission check: \(self.isAccessibilityEnabled)")
+        let previousState = self.isAccessibilityEnabled
+        let newState = AXIsProcessTrusted()
+        self.isAccessibilityEnabled = newState
+
+        // Always log at info level so it appears in Console
+        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState)")
+
+        // Log state changes prominently
+        if previousState != newState {
+            logger.warning("Accessibility permission CHANGED: \(previousState) -> \(newState)")
+        }
     }
 
     /// Start periodic monitoring until permission is granted
-    /// Checks every 2 seconds, stops when permission is granted
+    /// Uses adaptive polling: 0.5s for first 30s, then 2s thereafter
     func startPeriodicMonitoring() {
-        // Don't start if already monitoring or already enabled
-        guard self.checkTimer == nil else { return }
+        // Don't start if already monitoring
+        guard self.dispatchTimer == nil else { return }
 
-        logger.info("Starting periodic accessibility permission monitoring")
+        // If already enabled, no need to monitor
+        if self.isAccessibilityEnabled { return }
 
-        self.checkTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        logger.info("Starting periodic accessibility permission monitoring (fast mode)")
+
+        // Record start time for adaptive polling
+        self.monitoringStartTime = Date()
+        self.currentPollingInterval = self.fastPollingInterval
+
+        // Use DispatchSourceTimer for reliable firing regardless of run loop state
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(Int(self.fastPollingInterval * 1000)))
+        timer.setEventHandler { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.checkPermission()
@@ -53,15 +72,20 @@ final class AccessibilityPermissionManager {
                 if self.isAccessibilityEnabled {
                     logger.info("Accessibility permission granted, stopping monitoring")
                     self.stopPeriodicMonitoring()
+                } else {
+                    self.adjustPollingIntervalIfNeeded()
                 }
             }
         }
+        timer.resume()
+        self.dispatchTimer = timer
     }
 
     /// Stop periodic monitoring
     func stopPeriodicMonitoring() {
-        self.checkTimer?.invalidate()
-        self.checkTimer = nil
+        self.dispatchTimer?.cancel()
+        self.dispatchTimer = nil
+        self.monitoringStartTime = nil
     }
 
     /// Prompt for accessibility permission using system dialog
@@ -92,6 +116,12 @@ final class AccessibilityPermissionManager {
     /// Returns true if user clicked "Open Settings", false if they clicked "Later"
     @discardableResult
     func showPermissionAlert() -> Bool {
+        // CRITICAL: Before showing modal alert, hide the notch window
+        // The notch window sits at a high window level and visually blocks the alert
+        let notchWindow = NSApp.windows.first { $0 is NotchPanel }
+        let wasVisible = notchWindow?.isVisible ?? false
+        notchWindow?.orderOut(nil)
+
         let alert = NSAlert()
         alert.messageText = "Accessibility Permission Required"
         alert.informativeText = """
@@ -110,6 +140,11 @@ final class AccessibilityPermissionManager {
 
         let response = alert.runModal()
 
+        // Restore notch window visibility after alert dismissal
+        if wasVisible {
+            notchWindow?.orderFront(nil)
+        }
+
         if response == .alertFirstButtonReturn {
             self.openAccessibilitySettings()
             return true
@@ -118,7 +153,56 @@ final class AccessibilityPermissionManager {
         return false
     }
 
+    /// Handle app becoming active - check permission and restart fast polling if needed
+    func handleAppActivation() {
+        let previousState = self.isAccessibilityEnabled
+        self.checkPermission()
+
+        // If still not enabled and we were monitoring, restart fast polling
+        if !self.isAccessibilityEnabled && self.dispatchTimer != nil {
+            logger.info("App activated while monitoring - restarting fast polling")
+            self.stopPeriodicMonitoring()
+            self.startPeriodicMonitoring()
+        }
+
+        if previousState != self.isAccessibilityEnabled {
+            logger.warning("Permission detected on activation: \(previousState) -> \(self.isAccessibilityEnabled)")
+        }
+    }
+
     // MARK: Private
 
-    @ObservationIgnored private var checkTimer: Timer?
+    @ObservationIgnored private var dispatchTimer: DispatchSourceTimer?
+
+    /// Time when monitoring started (for adaptive polling)
+    @ObservationIgnored private var monitoringStartTime: Date?
+
+    /// Duration of fast polling after monitoring starts (30 seconds)
+    private let fastPollingDuration: TimeInterval = 30.0
+
+    /// Fast polling interval during initial monitoring
+    private let fastPollingInterval: TimeInterval = 0.5
+
+    /// Slow polling interval after initial period
+    private let slowPollingInterval: TimeInterval = 2.0
+
+    /// Current polling interval (tracks which mode we're in)
+    @ObservationIgnored private var currentPollingInterval: TimeInterval = 0.5
+
+    /// Adjust polling interval from fast to slow after the initial period
+    private func adjustPollingIntervalIfNeeded() {
+        guard let startTime = self.monitoringStartTime,
+              self.currentPollingInterval == self.fastPollingInterval
+        else { return }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        if elapsed >= self.fastPollingDuration {
+            logger.info("Switching to slow polling mode after \(Int(elapsed))s")
+            self.currentPollingInterval = self.slowPollingInterval
+            self.dispatchTimer?.schedule(
+                deadline: .now() + self.slowPollingInterval,
+                repeating: .seconds(Int(self.slowPollingInterval))
+            )
+        }
+    }
 }

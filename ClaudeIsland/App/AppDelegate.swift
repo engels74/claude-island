@@ -133,13 +133,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             logger.warning("Accessibility permission not granted on launch")
 
             // Start periodic monitoring so UI updates when permission is granted
-            // (whether via our alert, System Settings opened manually, or any other path)
             manager.startPeriodicMonitoring()
 
-            // Show alert after a brief delay to let the UI settle
+            // Trigger the official macOS accessibility prompt after a brief delay
+            // This shows the system dialog and adds the app to System Settings
             Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.5))
-                manager.showPermissionAlert()
+                try? await Task.sleep(for: .seconds(1.0))
+                manager.promptForPermission()
             }
         }
     }
