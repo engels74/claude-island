@@ -921,12 +921,12 @@ struct AnyCodable: Codable, @unchecked Sendable {
     // MARK: Lifecycle
 
     /// Initialize with any value
-    init(_ value: Any) {
+    nonisolated init(_ value: Any) {
         self.value = value
     }
 
     /// Decode from JSON
-    init(from decoder: Decoder) throws {
+    nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
 
         if container.decodeNil() {
@@ -956,7 +956,7 @@ struct AnyCodable: Codable, @unchecked Sendable {
     nonisolated(unsafe) let value: Any
 
     /// Encode to JSON
-    func encode(to encoder: Encoder) throws {
+    nonisolated func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
 
         switch value {
