@@ -37,9 +37,9 @@ final class AccessibilityPermissionManager {
         let newState = AXIsProcessTrusted()
         self.isAccessibilityEnabled = newState
 
-        // Log bundle path for debugging TCC issues
+        // Log bundle path for debugging TCC issues (use .public privacy for diagnostic visibility)
         let bundlePath = Bundle.main.bundlePath
-        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState), bundle: \(bundlePath)")
+        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState), bundle: \(bundlePath, privacy: .public)")
 
         // Log state changes prominently
         if previousState != newState {
@@ -103,9 +103,9 @@ final class AccessibilityPermissionManager {
     /// Returns true if user clicked "Open Settings", false if they clicked "Later"
     @discardableResult
     func showPermissionAlert() -> Bool {
-        // Log diagnostic info for debugging TCC issues
+        // Log diagnostic info for debugging TCC issues (use .public privacy for diagnostic visibility)
         let bundlePath = Bundle.main.bundlePath
-        logger.info("Showing permission alert. Bundle path: \(bundlePath)")
+        logger.info("Showing permission alert. Bundle path: \(bundlePath, privacy: .public)")
 
         // CRITICAL: Before showing modal alert, hide the notch window
         // The notch window sits at a high window level and visually blocks the alert
@@ -124,7 +124,7 @@ final class AccessibilityPermissionManager {
         To grant permission:
         1. Click "Open Settings" below
         2. Click the "+" button at the bottom of the list
-        3. Navigate to Applications and select "Claude Island"
+        3. Navigate to and select the Claude Island app bundle
         4. Enable the checkbox next to Claude Island
 
         Important: If Claude Island is already in the list but not working, \

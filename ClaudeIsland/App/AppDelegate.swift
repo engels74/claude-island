@@ -128,10 +128,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func checkAccessibilityPermission() {
         // Log diagnostic info for debugging TCC issues with ad-hoc signed apps
+        // Use .public privacy since these are needed for debugging and don't contain user data
         let bundlePath = Bundle.main.bundlePath
         let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
-        logger.info("App launched from: \(bundlePath)")
-        logger.info("Bundle ID: \(bundleID)")
+        logger.info("App launched from: \(bundlePath, privacy: .public)")
+        logger.info("Bundle ID: \(bundleID, privacy: .public)")
 
         let manager = AccessibilityPermissionManager.shared
 
