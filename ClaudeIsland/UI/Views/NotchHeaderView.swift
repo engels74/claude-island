@@ -311,10 +311,11 @@ struct SessionStateDots: View {
 
     // MARK: Private
 
-    /// Filter to only active/attention-needed sessions and sort by priority
+    /// Filter to exclude ended sessions and sort by priority
+    /// Idle sessions are included as they represent running Claude processes
     private var sortedActiveSessions: [SessionState] {
         self.sessions
-            .filter { $0.phase != .ended && $0.phase != .idle }
+            .filter { $0.phase != .ended }
             .sorted { self.priority(for: $0.phase) < self.priority(for: $1.phase) }
     }
 

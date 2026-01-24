@@ -183,9 +183,10 @@ struct NotchView: View {
         }
     }
 
-    /// Sessions that are active (not idle/ended) - used for dots display
+    /// Sessions that are active (not ended) - includes idle sessions as they
+    /// still represent running Claude processes
     private var activeSessions: [SessionState] {
-        self.sessionMonitor.instances.filter { $0.phase != .ended && $0.phase != .idle }
+        self.sessionMonitor.instances.filter { $0.phase != .ended }
     }
 
     /// Whether we have multiple active sessions to show dots for

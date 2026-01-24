@@ -161,8 +161,14 @@ extension HookEvent {
             ))
         }
 
-        if event == "Notification" && notificationType == "idle_prompt" {
-            return .idle
+        // Handle Notification events explicitly
+        if event == "Notification" {
+            if notificationType == "idle_prompt" {
+                // idle_prompt means Claude finished and is waiting for user input
+                return .waitingForInput
+            }
+            // Other notifications - session is still processing
+            return .processing
         }
 
         switch status {
@@ -172,11 +178,15 @@ extension HookEvent {
              "processing",
              "starting":
             return .processing
+        case "notification":
+            // Explicit notification status - session is still active
+            return .processing
         case "compacting":
             return .compacting
         case "ended":
             return .ended
         default:
+            // Unknown status - default to idle
             return .idle
         }
     }
