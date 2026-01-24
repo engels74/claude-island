@@ -127,6 +127,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func checkAccessibilityPermission() {
+        // Log diagnostic info for debugging TCC issues with ad-hoc signed apps
+        let bundlePath = Bundle.main.bundlePath
+        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
+        logger.info("App launched from: \(bundlePath)")
+        logger.info("Bundle ID: \(bundleID)")
+
         let manager = AccessibilityPermissionManager.shared
 
         if !manager.isAccessibilityEnabled {
@@ -136,7 +142,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             manager.startPeriodicMonitoring()
 
             // Show explanatory alert after a brief delay to explain why permission is needed
-            // The alert offers "Open Settings" to guide users to grant permission
+            // The alert guides users to manually add the app via "+" button in System Settings
+            // (this creates a more permissive TCC entry that works with ad-hoc signed apps)
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1.0))
                 manager.showPermissionAlert()

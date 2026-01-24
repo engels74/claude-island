@@ -37,8 +37,9 @@ final class AccessibilityPermissionManager {
         let newState = AXIsProcessTrusted()
         self.isAccessibilityEnabled = newState
 
-        // Always log at info level so it appears in Console
-        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState)")
+        // Log bundle path for debugging TCC issues
+        let bundlePath = Bundle.main.bundlePath
+        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState), bundle: \(bundlePath)")
 
         // Log state changes prominently
         if previousState != newState {
@@ -88,20 +89,6 @@ final class AccessibilityPermissionManager {
         self.monitoringStartTime = nil
     }
 
-    /// Prompt for accessibility permission using system dialog
-    /// This triggers the macOS "App would like to control this computer" dialog
-    func promptForPermission() {
-        logger.info("Prompting for accessibility permission")
-
-        // AXIsProcessTrustedWithOptions with prompt=true triggers the system dialog
-        // Use CFString literal directly to avoid concurrency issues with kAXTrustedCheckOptionPrompt
-        let options = ["AXTrustedCheckOptionPrompt" as CFString: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-
-        // Start monitoring after prompting so we detect when user grants permission
-        self.startPeriodicMonitoring()
-    }
-
     /// Open System Preferences directly to Accessibility settings
     func openAccessibilitySettings() {
         logger.info("Opening Accessibility settings")
@@ -116,6 +103,10 @@ final class AccessibilityPermissionManager {
     /// Returns true if user clicked "Open Settings", false if they clicked "Later"
     @discardableResult
     func showPermissionAlert() -> Bool {
+        // Log diagnostic info for debugging TCC issues
+        let bundlePath = Bundle.main.bundlePath
+        logger.info("Showing permission alert. Bundle path: \(bundlePath)")
+
         // CRITICAL: Before showing modal alert, hide the notch window
         // The notch window sits at a high window level and visually blocks the alert
         let notchWindow = NSApp.windows.first { $0 is NotchPanel }
@@ -130,9 +121,14 @@ final class AccessibilityPermissionManager {
         • Monitor mouse position to show/hide the notch
         • Pass clicks through to apps behind the notch
 
-        Without this permission, the app will have limited functionality.
+        To grant permission:
+        1. Click "Open Settings" below
+        2. Click the "+" button at the bottom of the list
+        3. Navigate to Applications and select "Claude Island"
+        4. Enable the checkbox next to Claude Island
 
-        If you previously granted permission but it stopped working after an update, you may need to remove and re-add the app in System Settings.
+        Important: If Claude Island is already in the list but not working, \
+        remove it first using the "-" button, then add it again using "+".
         """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open Settings")
