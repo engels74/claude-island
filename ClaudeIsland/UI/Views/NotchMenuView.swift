@@ -28,105 +28,108 @@ struct NotchMenuView: View {
     var viewModel: NotchViewModel
 
     var body: some View {
-        VStack(spacing: 4) {
-            // Back button
-            MenuRow(
-                icon: "chevron.left",
-                label: "Back"
-            ) {
-                self.viewModel.toggleMenu()
-            }
-
-            Divider()
-                .background(Color.white.opacity(0.08))
-                .padding(.vertical, 4)
-
-            // Appearance settings
-            ScreenPickerRow(screenSelector: self.screenSelector)
-            SoundPickerRow(soundSelector: self.soundSelector)
-            SuppressionPickerRow(suppressionSelector: self.suppressionSelector)
-
-            Divider()
-                .background(Color.white.opacity(0.08))
-                .padding(.vertical, 4)
-
-            // System settings
-            MenuToggleRow(
-                icon: "power",
-                label: "Launch at Login",
-                isOn: self.launchAtLogin
-            ) {
-                do {
-                    if self.launchAtLogin {
-                        try SMAppService.mainApp.unregister()
-                        self.launchAtLogin = false
-                    } else {
-                        try SMAppService.mainApp.register()
-                        self.launchAtLogin = true
-                    }
-                } catch {
-                    logger.error("Failed to toggle launch at login: \(error.localizedDescription)")
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 4) {
+                // Back button
+                MenuRow(
+                    icon: "chevron.left",
+                    label: "Back"
+                ) {
+                    self.viewModel.toggleMenu()
                 }
-            }
 
-            MenuToggleRow(
-                icon: "arrow.triangle.2.circlepath",
-                label: "Hooks",
-                isOn: self.hooksInstalled
-            ) {
-                // Cancel any in-flight installation tasks first (both local and AppDelegate's)
-                // This prevents race conditions where an app-launch install could re-write settings.json
-                // after uninstall completes
-                self.hookInstallTask?.cancel()
-                self.hookInstallTask = nil
-                AppDelegate.shared?.cancelHookInstallTask()
+                Divider()
+                    .background(Color.white.opacity(0.08))
+                    .padding(.vertical, 4)
 
-                if self.hooksInstalled {
-                    HookInstaller.uninstall()
-                    self.hooksInstalled = false
-                } else {
-                    self.hookInstallTask = Task { @MainActor in
-                        await HookInstaller.installIfNeeded()
-                        // Only update state if task wasn't cancelled
-                        if !Task.isCancelled {
-                            self.hooksInstalled = HookInstaller.isInstalled()
+                // Appearance settings
+                ScreenPickerRow(screenSelector: self.screenSelector)
+                SoundPickerRow(soundSelector: self.soundSelector)
+                SuppressionPickerRow(suppressionSelector: self.suppressionSelector)
+                ClawdPickerRow(clawdSelector: self.clawdSelector)
+
+                Divider()
+                    .background(Color.white.opacity(0.08))
+                    .padding(.vertical, 4)
+
+                // System settings
+                MenuToggleRow(
+                    icon: "power",
+                    label: "Launch at Login",
+                    isOn: self.launchAtLogin
+                ) {
+                    do {
+                        if self.launchAtLogin {
+                            try SMAppService.mainApp.unregister()
+                            self.launchAtLogin = false
+                        } else {
+                            try SMAppService.mainApp.register()
+                            self.launchAtLogin = true
+                        }
+                    } catch {
+                        logger.error("Failed to toggle launch at login: \(error.localizedDescription)")
+                    }
+                }
+
+                MenuToggleRow(
+                    icon: "arrow.triangle.2.circlepath",
+                    label: "Hooks",
+                    isOn: self.hooksInstalled
+                ) {
+                    // Cancel any in-flight installation tasks first (both local and AppDelegate's)
+                    // This prevents race conditions where an app-launch install could re-write settings.json
+                    // after uninstall completes
+                    self.hookInstallTask?.cancel()
+                    self.hookInstallTask = nil
+                    AppDelegate.shared?.cancelHookInstallTask()
+
+                    if self.hooksInstalled {
+                        HookInstaller.uninstall()
+                        self.hooksInstalled = false
+                    } else {
+                        self.hookInstallTask = Task { @MainActor in
+                            await HookInstaller.installIfNeeded()
+                            // Only update state if task wasn't cancelled
+                            if !Task.isCancelled {
+                                self.hooksInstalled = HookInstaller.isInstalled()
+                            }
                         }
                     }
                 }
-            }
 
-            AccessibilityRow(accessibilityManager: self.accessibilityManager)
+                AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
-            Divider()
-                .background(Color.white.opacity(0.08))
-                .padding(.vertical, 4)
+                Divider()
+                    .background(Color.white.opacity(0.08))
+                    .padding(.vertical, 4)
 
-            // About
-            UpdateRow(updateManager: self.updateManager)
+                // About
+                UpdateRow(updateManager: self.updateManager)
 
-            MenuRow(
-                icon: "star",
-                label: "Star on GitHub"
-            ) {
-                if let url = URL(string: "https://github.com/engels74/claude-island") {
-                    NSWorkspace.shared.open(url)
+                MenuRow(
+                    icon: "star",
+                    label: "Star on GitHub"
+                ) {
+                    if let url = URL(string: "https://github.com/engels74/claude-island") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+
+                Divider()
+                    .background(Color.white.opacity(0.08))
+                    .padding(.vertical, 4)
+
+                MenuRow(
+                    icon: "xmark.circle",
+                    label: "Quit",
+                    isDestructive: true
+                ) {
+                    NSApplication.shared.terminate(nil)
                 }
             }
-
-            Divider()
-                .background(Color.white.opacity(0.08))
-                .padding(.vertical, 4)
-
-            MenuRow(
-                icon: "xmark.circle",
-                label: "Quit",
-                isDestructive: true
-            ) {
-                NSApplication.shared.terminate(nil)
-            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
             self.refreshStates()
@@ -154,6 +157,7 @@ struct NotchMenuView: View {
     private var screenSelector = ScreenSelector.shared
     private var soundSelector = SoundSelector.shared
     private var suppressionSelector = SuppressionSelector.shared
+    private var clawdSelector = ClawdSelector.shared
     private var accessibilityManager = AccessibilityPermissionManager.shared
 
     private func refreshStates() {
