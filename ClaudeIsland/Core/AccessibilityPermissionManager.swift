@@ -28,8 +28,19 @@ final class AccessibilityPermissionManager {
 
     static let shared = AccessibilityPermissionManager()
 
-    /// Current accessibility permission state
+    /// Current accessibility permission state (actual AXIsProcessTrusted value)
     private(set) var isAccessibilityEnabled = false
+
+    /// Whether to show the permission warning in UI
+    /// Debug builds have different code signatures than release builds, so TCC permissions
+    /// granted to the installed app don't apply. Suppress the misleading warning during development.
+    var shouldShowPermissionWarning: Bool {
+        #if DEBUG
+        return false
+        #else
+        return !self.isAccessibilityEnabled
+        #endif
+    }
 
     /// Check the current permission state
     func checkPermission() {
@@ -37,11 +48,14 @@ final class AccessibilityPermissionManager {
         let newState = AXIsProcessTrusted()
         self.isAccessibilityEnabled = newState
 
-        // Log bundle path for debugging TCC issues (use .public privacy for diagnostic visibility)
+        #if DEBUG
+        let isDebugBuild = true
+        #else
+        let isDebugBuild = false
+        #endif
         let bundlePath = Bundle.main.bundlePath
-        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState), bundle: \(bundlePath, privacy: .public)")
+        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState), isDebugBuild = \(isDebugBuild), bundle: \(bundlePath, privacy: .public)")
 
-        // Log state changes prominently
         if previousState != newState {
             logger.warning("Accessibility permission CHANGED: \(previousState) -> \(newState)")
         }
@@ -154,9 +168,10 @@ final class AccessibilityPermissionManager {
         let previousState = self.isAccessibilityEnabled
         self.checkPermission()
 
-        // If still not enabled and we were monitoring, restart fast polling
-        if !self.isAccessibilityEnabled && self.dispatchTimer != nil {
-            logger.info("App activated while monitoring - restarting fast polling")
+        // If still not enabled, start or restart periodic monitoring
+        // This ensures we poll for permission changes even if monitoring wasn't running
+        if !self.isAccessibilityEnabled {
+            logger.info("App activated without accessibility - starting/restarting monitoring")
             self.stopPeriodicMonitoring()
             self.startPeriodicMonitoring()
         }

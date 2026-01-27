@@ -440,7 +440,7 @@ struct AccessibilityRow: View {
 
             Spacer()
 
-            if self.accessibilityManager.isAccessibilityEnabled {
+            if !self.accessibilityManager.shouldShowPermissionWarning {
                 Circle()
                     .fill(TerminalColors.green)
                     .frame(width: 6, height: 6)
@@ -477,7 +477,7 @@ struct AccessibilityRow: View {
     @State private var isHovered = false
 
     private var textColor: Color {
-        if !self.accessibilityManager.isAccessibilityEnabled {
+        if self.accessibilityManager.shouldShowPermissionWarning {
             return TerminalColors.amber.opacity(self.isHovered ? 1.0 : 0.8)
         }
         return .white.opacity(self.isHovered ? 1.0 : 0.7)

@@ -136,7 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let manager = AccessibilityPermissionManager.shared
 
-        if !manager.isAccessibilityEnabled {
+        if manager.shouldShowPermissionWarning {
             logger.warning("Accessibility permission not granted on launch")
 
             // Start periodic monitoring so UI updates when permission is granted
