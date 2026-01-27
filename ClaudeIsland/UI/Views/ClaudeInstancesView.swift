@@ -5,6 +5,7 @@
 //  Minimal instances list matching Dynamic Island aesthetic
 //
 
+import AppKit
 import Combine
 import SwiftUI
 
@@ -137,190 +138,74 @@ struct InstanceRow: View {
     let onReject: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            // State indicator on left
-            self.stateIndicator
-                .frame(width: 14)
+        VStack(spacing: 0) {
+            mainRow
 
-            // Text content
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(self.session.displayTitle)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    // Token usage badge
-                    if let usage = session.usage {
-                        Text(usage.formattedTotal)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.4))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(Capsule())
-                    }
-                }
-
-                // Show tool call when waiting for approval, otherwise last activity
-                if self.isWaitingForApproval, let toolName = session.pendingToolName {
-                    // Show tool name in amber + input on same line
-                    HStack(spacing: 4) {
-                        Text(MCPToolFormatter.formatToolName(toolName))
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(TerminalColors.amber.opacity(0.9))
-                        if self.isInteractiveTool {
-                            Text("Needs your input")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.5))
-                                .lineLimit(1)
-                        } else if let input = session.pendingToolInput {
-                            Text(input)
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.5))
-                                .lineLimit(1)
-                        }
-                    }
-                } else if let role = session.lastMessageRole {
-                    switch role {
-                    case "tool":
-                        // Tool call - show tool name + input
-                        HStack(spacing: 4) {
-                            if let toolName = session.lastToolName {
-                                Text(MCPToolFormatter.formatToolName(toolName))
-                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.5))
-                            }
-                            if let input = session.lastMessage {
-                                Text(input)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .lineLimit(1)
-                            }
-                        }
-                    case "user":
-                        // User message - prefix with "You:"
-                        HStack(spacing: 4) {
-                            Text("You:")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.white.opacity(0.5))
-                            if let msg = session.lastMessage {
-                                Text(msg)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .lineLimit(1)
-                            }
-                        }
-                    default:
-                        // Assistant message - just show text
-                        if let msg = session.lastMessage {
-                            Text(msg)
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.4))
-                                .lineLimit(1)
-                        }
-                    }
-                } else if let lastMsg = session.lastMessage {
-                    Text(lastMsg)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.4))
-                        .lineLimit(1)
-                } else {
-                    // Fallback: show phase-based status
-                    Text(self.phaseStatusText)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            // Action icons or approval buttons
-            if self.isWaitingForApproval && self.isInteractiveTool {
-                // Interactive tools like AskUserQuestion - show chat + terminal buttons
-                HStack(spacing: 8) {
-                    IconButton(icon: "bubble.left") {
-                        self.onChat()
-                    }
-
-                    // Go to Terminal button (show when session has PID)
-                    if self.session.pid != nil {
-                        TerminalButton(
-                            isEnabled: true
-                        ) { self.onFocus() }
-                    }
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else if self.isWaitingForApproval {
-                InlineApprovalButtons(
-                    onChat: self.onChat,
-                    onApprove: self.onApprove,
-                    onReject: self.onReject
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else {
-                HStack(spacing: 8) {
-                    // Chat icon - always show
-                    IconButton(icon: "bubble.left") {
-                        self.onChat()
-                    }
-
-                    // Terminal icon (show when session has PID)
-                    if self.session.pid != nil {
-                        IconButton(icon: "terminal") {
-                            self.onFocus()
-                        }
-                    }
-
-                    // Archive button - only for idle or completed sessions
-                    if self.session.phase == .idle || self.session.phase == .waitingForInput {
-                        IconButton(icon: "archivebox") {
-                            self.onArchive()
-                        }
-                    }
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            if isEditing {
+                SessionLabelEditor(sessionID: session.sessionID)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 14)
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            self.onChat()
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: self.isWaitingForApproval)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isEditing)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
+                .fill(isHovered ? Color.white.opacity(0.06) : Color.clear)
         )
-        .onHover { self.isHovered = $0 }
+        .onHover { isHovered = $0 }
+        .onRightClick {
+            withAnimation {
+                if !isEditing {
+                    editingName = displayTitle
+                }
+                isEditing.toggle()
+            }
+        }
+        .onChange(of: isEditing) { _, newValue in
+            if !newValue {
+                saveName()
+            }
+        }
     }
 
     // MARK: Private
 
     @State private var isHovered = false
+    @State private var isEditing = false
+    @State private var editingName = ""
     @State private var spinnerPhase = 0
+    @State private var spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    @FocusState private var isTitleFocused: Bool
 
+    private let metadataManager = SessionMetadataManager.shared
     private let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
     private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
-    /// @State ensures timer persists across view updates rather than being recreated
-    @State private var spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
-    /// Whether we're showing the approval UI
-    private var isWaitingForApproval: Bool {
-        self.session.phase.isWaitingForApproval
+    private var displayTitle: String {
+        metadataManager.name(for: session.sessionID) ?? session.displayTitle
     }
 
-    /// Whether the pending tool requires interactive input (not just approve/deny)
+    private func saveName() {
+        let trimmed = editingName.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed == session.displayTitle {
+            metadataManager.setName(nil, for: session.sessionID)
+        } else {
+            metadataManager.setName(trimmed, for: session.sessionID)
+        }
+    }
+
+    private var isWaitingForApproval: Bool {
+        session.phase.isWaitingForApproval
+    }
+
     private var isInteractiveTool: Bool {
         guard let toolName = session.pendingToolName else { return false }
         return toolName == "AskUserQuestion"
     }
 
-    /// Status text based on session phase (fallback when no message content)
     private var phaseStatusText: String {
-        switch self.session.phase {
+        switch session.phase {
         case .processing: "Processing..."
         case .compacting: "Compacting..."
         case .waitingForInput: "Ready"
@@ -330,29 +215,175 @@ struct InstanceRow: View {
         }
     }
 
-    @ViewBuilder private var stateIndicator: some View {
-        switch self.session.phase {
-        case .processing,
-             .compacting:
-            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
+    private var mainRow: some View {
+        HStack(spacing: 0) {
+            if let color = metadataManager.color(for: session.sessionID) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(color)
+                    .frame(width: 3)
+                    .padding(.vertical, 4)
+            }
+
+            HStack(alignment: .center, spacing: 10) {
+                stateIndicator
+                    .frame(width: 14)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        if isEditing {
+                            TextField("Session name", text: $editingName)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white)
+                                .focused($isTitleFocused)
+                                .onSubmit {
+                                    withAnimation { isEditing = false }
+                                }
+                                .onAppear { isTitleFocused = true }
+                        } else {
+                            Text(displayTitle)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
+
+                        if let usage = session.usage {
+                            Text(usage.formattedTotal)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.4))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.white.opacity(0.08))
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    if isWaitingForApproval, let toolName = session.pendingToolName {
+                        HStack(spacing: 4) {
+                            Text(MCPToolFormatter.formatToolName(toolName))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(TerminalColors.amber.opacity(0.9))
+                            if isInteractiveTool {
+                                Text("Needs your input")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .lineLimit(1)
+                            } else if let input = session.pendingToolInput {
+                                Text(input)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .lineLimit(1)
+                            }
+                        }
+                    } else if let role = session.lastMessageRole {
+                        switch role {
+                        case "tool":
+                            HStack(spacing: 4) {
+                                if let toolName = session.lastToolName {
+                                    Text(MCPToolFormatter.formatToolName(toolName))
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.5))
+                                }
+                                if let input = session.lastMessage {
+                                    Text(input)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .lineLimit(1)
+                                }
+                            }
+                        case "user":
+                            HStack(spacing: 4) {
+                                Text("You:")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.5))
+                                if let msg = session.lastMessage {
+                                    Text(msg)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .lineLimit(1)
+                                }
+                            }
+                        default:
+                            if let msg = session.lastMessage {
+                                Text(msg)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .lineLimit(1)
+                            }
+                        }
+                    } else if let lastMsg = session.lastMessage {
+                        Text(lastMsg)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.4))
+                            .lineLimit(1)
+                    } else {
+                        Text(phaseStatusText)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if isWaitingForApproval && isInteractiveTool {
+                    HStack(spacing: 8) {
+                        IconButton(icon: "bubble.left") { onChat() }
+                        if session.pid != nil {
+                            TerminalButton(isEnabled: true) { onFocus() }
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                } else if isWaitingForApproval {
+                    InlineApprovalButtons(
+                        onChat: onChat,
+                        onApprove: onApprove,
+                        onReject: onReject
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                } else {
+                    HStack(spacing: 8) {
+                        IconButton(icon: "bubble.left") { onChat() }
+                        if session.pid != nil {
+                            IconButton(icon: "terminal") { onFocus() }
+                        }
+                        if session.phase == .idle || session.phase == .waitingForInput {
+                            IconButton(icon: "archivebox") { onArchive() }
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .padding(.leading, metadataManager.color(for: session.sessionID) != nil ? 4 : 8)
+            .padding(.trailing, 14)
+            .padding(.vertical, 10)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onChat() }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWaitingForApproval)
+    }
+
+    @ViewBuilder
+    private var stateIndicator: some View {
+        switch session.phase {
+        case .processing, .compacting:
+            Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(self.claudeOrange)
-                .onReceive(self.spinnerTimer) { _ in
-                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
+                .foregroundColor(claudeOrange)
+                .onReceive(spinnerTimer) { _ in
+                    spinnerPhase = (spinnerPhase + 1) % spinnerSymbols.count
                 }
         case .waitingForApproval:
-            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
+            Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(TerminalColors.amber)
-                .onReceive(self.spinnerTimer) { _ in
-                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
+                .onReceive(spinnerTimer) { _ in
+                    spinnerPhase = (spinnerPhase + 1) % spinnerSymbols.count
                 }
         case .waitingForInput:
             Circle()
                 .fill(TerminalColors.green)
                 .frame(width: 6, height: 6)
-        case .idle,
-             .ended:
+        case .idle, .ended:
             Circle()
                 .fill(Color.white.opacity(0.2))
                 .frame(width: 6, height: 6)
@@ -512,5 +543,71 @@ struct TerminalButton: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Right Click Modifier
+
+extension View {
+    func onRightClick(perform action: @escaping () -> Void) -> some View {
+        overlay {
+            RightClickDetector(action: action)
+        }
+    }
+}
+
+struct RightClickDetector: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context _: Context) -> RightClickNSView {
+        RightClickNSView(action: action)
+    }
+
+    func updateNSView(_ nsView: RightClickNSView, context _: Context) {
+        nsView.action = action
+    }
+}
+
+final class RightClickNSView: NSView {
+    var action: () -> Void
+    private var monitor: Any?
+
+    init(action: @escaping () -> Void) {
+        self.action = action
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, monitor == nil else { return }
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+            guard let self else { return event }
+            let locationInWindow = event.locationInWindow
+            let locationInView = convert(locationInWindow, from: nil)
+
+            if bounds.contains(locationInView) {
+                action()
+                return nil
+            }
+            return event
+        }
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil, let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+    }
+
+    override func hitTest(_: NSPoint) -> NSView? {
+        nil
     }
 }
