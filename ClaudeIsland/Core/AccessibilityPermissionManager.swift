@@ -34,14 +34,16 @@ final class AccessibilityPermissionManager {
     /// Check the current permission state
     func checkPermission() {
         let previousState = self.isAccessibilityEnabled
-        let newState = AXIsProcessTrusted()
+
+        // Debug builds from Xcode have different code signatures than release builds
+        // TCC permissions granted to the installed app don't apply to debug builds
+        // Suppress the warning during development since it's misleading
+        let newState = self.isDebugBuild ? true : AXIsProcessTrusted()
         self.isAccessibilityEnabled = newState
 
-        // Log bundle path for debugging TCC issues (use .public privacy for diagnostic visibility)
         let bundlePath = Bundle.main.bundlePath
-        logger.info("Accessibility check: AXIsProcessTrusted() = \(newState), bundle: \(bundlePath, privacy: .public)")
+        logger.info("Accessibility check: AXIsProcessTrusted() = \(AXIsProcessTrusted()), effective = \(newState), isDebugBuild = \(self.isDebugBuild), bundle: \(bundlePath, privacy: .public)")
 
-        // Log state changes prominently
         if previousState != newState {
             logger.warning("Accessibility permission CHANGED: \(previousState) -> \(newState)")
         }
@@ -154,9 +156,10 @@ final class AccessibilityPermissionManager {
         let previousState = self.isAccessibilityEnabled
         self.checkPermission()
 
-        // If still not enabled and we were monitoring, restart fast polling
-        if !self.isAccessibilityEnabled && self.dispatchTimer != nil {
-            logger.info("App activated while monitoring - restarting fast polling")
+        // If still not enabled, start or restart periodic monitoring
+        // This ensures we poll for permission changes even if monitoring wasn't running
+        if !self.isAccessibilityEnabled {
+            logger.info("App activated without accessibility - starting/restarting monitoring")
             self.stopPeriodicMonitoring()
             self.startPeriodicMonitoring()
         }
@@ -184,6 +187,14 @@ final class AccessibilityPermissionManager {
 
     /// Current polling interval (tracks which mode we're in)
     @ObservationIgnored private var currentPollingInterval: TimeInterval = 0.5
+
+    /// Detect if running from Xcode's DerivedData (debug build)
+    /// Debug builds have different code signatures than release builds,
+    /// so TCC permissions granted to the installed app don't apply
+    private var isDebugBuild: Bool {
+        let bundlePath = Bundle.main.bundlePath
+        return bundlePath.contains("DerivedData") || bundlePath.contains("Build/Products/Debug")
+    }
 
     /// Adjust polling interval from fast to slow after the initial period
     private func adjustPollingIntervalIfNeeded() {
