@@ -120,6 +120,7 @@ struct ClawdPickerRow: View {
                     .onHover { self.isAlwaysVisibleHovered = $0 }
                 }
                 .padding(.leading, 28)
+                .padding(.trailing, 28)
                 .padding(.top, 4)
             }
         }

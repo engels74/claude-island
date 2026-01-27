@@ -8,6 +8,71 @@
 import Foundation
 import SwiftUI
 
+// MARK: - TokenTrackingMode
+
+enum TokenTrackingMode: String, CaseIterable {
+    case disabled = "Disabled"
+    case api = "API"
+
+    // MARK: Internal
+
+    var description: String {
+        switch self {
+        case .disabled:
+            "Token tracking is off"
+        case .api:
+            "Fetches real quota from Claude API"
+        }
+    }
+}
+
+// MARK: - RingPosition
+
+enum RingPosition: String, CaseIterable {
+    case left = "Left"
+    case right = "Right"
+
+    // MARK: Internal
+
+    var description: String {
+        switch self {
+        case .left:
+            "Show rings on left side"
+        case .right:
+            "Show rings on right side"
+        }
+    }
+}
+
+// MARK: - RingDisplay
+
+enum RingDisplay: String, CaseIterable {
+    case session = "Session"
+    case weekly = "Weekly"
+    case both = "Both"
+
+    // MARK: Internal
+
+    var showSession: Bool {
+        self == .session || self == .both
+    }
+
+    var showWeekly: Bool {
+        self == .weekly || self == .both
+    }
+
+    var description: String {
+        switch self {
+        case .session:
+            "Show 5-hour session usage only"
+        case .weekly:
+            "Show 7-day weekly usage only"
+        case .both:
+            "Show both session and weekly usage"
+        }
+    }
+}
+
 // MARK: - SoundSuppression
 
 /// Sound suppression modes for notification sounds
@@ -121,6 +186,70 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.clawdAlwaysVisible) }
     }
 
+    // MARK: - Token Tracking Mode
+
+    static var tokenTrackingMode: TokenTrackingMode {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.tokenTrackingMode),
+                  let mode = TokenTrackingMode(rawValue: rawValue)
+            else {
+                return .disabled
+            }
+            return mode
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.tokenTrackingMode)
+        }
+    }
+
+    // MARK: - Token Tracking API Settings
+
+    static var tokenApiSessionKey: String? {
+        get { defaults.string(forKey: Keys.tokenApiSessionKey) }
+        set { defaults.set(newValue, forKey: Keys.tokenApiSessionKey) }
+    }
+
+    static var tokenUseCliOAuth: Bool {
+        get { defaults.bool(forKey: Keys.tokenUseCliOAuth) }
+        set { defaults.set(newValue, forKey: Keys.tokenUseCliOAuth) }
+    }
+
+    // MARK: - Token Ring Display Settings
+
+    static var tokenShowRingsMinimized: Bool {
+        get { defaults.bool(forKey: Keys.tokenShowRingsMinimized) }
+        set { defaults.set(newValue, forKey: Keys.tokenShowRingsMinimized) }
+    }
+
+    static var tokenMinimizedRingPosition: RingPosition {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.tokenMinimizedRingPosition),
+                  let position = RingPosition(rawValue: rawValue)
+            else {
+                return .right
+            }
+            return position
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.tokenMinimizedRingPosition) }
+    }
+
+    static var tokenMinimizedRingDisplay: RingDisplay {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.tokenMinimizedRingDisplay),
+                  let display = RingDisplay(rawValue: rawValue)
+            else {
+                return .both
+            }
+            return display
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.tokenMinimizedRingDisplay) }
+    }
+
+    static var tokenShowResetTime: Bool {
+        get { defaults.bool(forKey: Keys.tokenShowResetTime) }
+        set { defaults.set(newValue, forKey: Keys.tokenShowResetTime) }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -130,6 +259,13 @@ enum AppSettings {
         static let soundSuppression = "soundSuppression"
         static let clawdColor = "clawdColor"
         static let clawdAlwaysVisible = "clawdAlwaysVisible"
+        static let tokenTrackingMode = "tokenTrackingMode"
+        static let tokenApiSessionKey = "tokenApiSessionKey"
+        static let tokenUseCliOAuth = "tokenUseCliOAuth"
+        static let tokenShowRingsMinimized = "tokenShowRingsMinimized"
+        static let tokenMinimizedRingPosition = "tokenMinimizedRingPosition"
+        static let tokenMinimizedRingDisplay = "tokenMinimizedRingDisplay"
+        static let tokenShowResetTime = "tokenShowResetTime"
     }
 
     private static let defaults = UserDefaults.standard

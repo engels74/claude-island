@@ -52,6 +52,13 @@ struct NotchMenuView: View {
                     .background(Color.white.opacity(0.08))
                     .padding(.vertical, 4)
 
+                // Token tracking
+                TokenTrackingRow(tokenTrackingManager: self.tokenTrackingManager)
+
+                Divider()
+                    .background(Color.white.opacity(0.08))
+                    .padding(.vertical, 4)
+
                 // System settings
                 MenuToggleRow(
                     icon: "power",
@@ -159,6 +166,7 @@ struct NotchMenuView: View {
     private var suppressionSelector = SuppressionSelector.shared
     private var clawdSelector = ClawdSelector.shared
     private var accessibilityManager = AccessibilityPermissionManager.shared
+    private var tokenTrackingManager = TokenTrackingManager.shared
 
     private func refreshStates() {
         self.hooksInstalled = HookInstaller.isInstalled()
@@ -588,5 +596,188 @@ struct MenuToggleRow: View {
 
     private var textColor: Color {
         .white.opacity(self.isHovered ? 1.0 : 0.7)
+    }
+}
+
+// MARK: - TokenTrackingRow
+
+struct TokenTrackingRow: View {
+    var tokenTrackingManager: TokenTrackingManager
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var tokenMode: TokenTrackingMode = AppSettings.tokenTrackingMode
+    @State private var showRingsMinimized: Bool = AppSettings.tokenShowRingsMinimized
+    @State private var ringDisplay: RingDisplay = AppSettings.tokenMinimizedRingDisplay
+    @State private var showResetTime: Bool = AppSettings.tokenShowResetTime
+    @State private var useCliOAuth: Bool = AppSettings.tokenUseCliOAuth
+    @State private var sessionKey: String = AppSettings.tokenApiSessionKey ?? ""
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    self.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "chart.pie")
+                        .font(.system(size: 12))
+                        .foregroundColor(self.textColor)
+                        .frame(width: 16)
+
+                    Text("Token Tracking")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(self.textColor)
+
+                    Spacer()
+
+                    if self.tokenMode != .disabled {
+                        HStack(spacing: 6) {
+                            TokenRingView(
+                                percentage: self.tokenTrackingManager.sessionPercentage,
+                                label: "S",
+                                size: 16,
+                                strokeWidth: 2
+                            )
+                            TokenRingView(
+                                percentage: self.tokenTrackingManager.weeklyPercentage,
+                                label: "W",
+                                size: 16,
+                                strokeWidth: 2
+                            )
+                        }
+                    }
+
+                    Image(systemName: self.isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { self.isHovered = $0 }
+
+            if self.isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    self.modeSelector
+                    if self.tokenMode == .api {
+                        self.apiSettings
+                        self.displaySettings
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 28)
+                .padding(.trailing, 28)
+                .padding(.vertical, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var textColor: Color {
+        .white.opacity(self.isHovered || self.isExpanded ? 1.0 : 0.7)
+    }
+
+    @ViewBuilder private var modeSelector: some View {
+        Picker("Mode", selection: self.$tokenMode) {
+            ForEach(TokenTrackingMode.allCases, id: \.self) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .onChange(of: self.tokenMode) { _, newValue in
+            AppSettings.tokenTrackingMode = newValue
+            Task {
+                await self.tokenTrackingManager.refresh()
+            }
+        }
+    }
+
+    @ViewBuilder private var apiSettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: self.$useCliOAuth) {
+                Text("Use CLI OAuth")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .onChange(of: self.useCliOAuth) { _, newValue in
+                AppSettings.tokenUseCliOAuth = newValue
+                Task {
+                    await self.tokenTrackingManager.refresh()
+                }
+            }
+
+            if !self.useCliOAuth {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Session Key")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+
+                    SecureField("Paste session key", text: self.$sessionKey)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                        .onSubmit {
+                            AppSettings.tokenApiSessionKey = self.sessionKey.isEmpty ? nil : self.sessionKey
+                            Task {
+                                await self.tokenTrackingManager.refresh()
+                            }
+                        }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var displaySettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Show when minimized", isOn: self.$showRingsMinimized)
+                    .font(.system(size: 12))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .onChange(of: self.showRingsMinimized) { _, newValue in
+                        AppSettings.tokenShowRingsMinimized = newValue
+                    }
+
+                if self.showRingsMinimized {
+                    Picker("Display", selection: self.$ringDisplay) {
+                        ForEach(RingDisplay.allCases, id: \.self) { display in
+                            Text(display.rawValue).tag(display)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(.leading, 20)
+                    .onChange(of: self.ringDisplay) { _, newValue in
+                        AppSettings.tokenMinimizedRingDisplay = newValue
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Show reset time", isOn: self.$showResetTime)
+                    .font(.system(size: 12))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .onChange(of: self.showResetTime) { _, newValue in
+                        AppSettings.tokenShowResetTime = newValue
+                    }
+
+                if self.showResetTime, let resetTime = self.tokenTrackingManager.sessionResetTime {
+                    Text("Resets \(resetTime.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 10))
+                        .foregroundColor(TerminalColors.green)
+                        .padding(.leading, 20)
+                }
+            }
+        }
     }
 }
