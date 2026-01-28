@@ -128,7 +128,8 @@ struct NotchView: View {
             // Catches the case where user grants permission in System Settings
             self.accessibilityManager.handleAppActivation()
         }
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: DispatchQueue.main)) { _ in
             self.clawdColor = AppSettings.clawdColor
             self.clawdAlwaysVisible = AppSettings.clawdAlwaysVisible
         }

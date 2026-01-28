@@ -69,7 +69,9 @@ struct InlineColorPicker: View {
     private func updateColorFromHSB() {
         self.isUpdatingFromColor = true
         self.selectedColor = Color(hue: self.hue, saturation: self.saturation, brightness: self.brightness)
-        self.isUpdatingFromColor = false
+        Task { @MainActor in
+            self.isUpdatingFromColor = false
+        }
     }
 }
 
@@ -181,16 +183,22 @@ struct SaturationBrightnessPlane: View {
     }
 
     private func thumbPosition(for size: CGSize) -> CGPoint {
-        let x = self.saturation * size.width
-        let y = (1 - self.brightness) * size.height
+        let thumbRadius: CGFloat = 8
+        let insetWidth = size.width - thumbRadius * 2
+        let insetHeight = size.height - thumbRadius * 2
+        let x = thumbRadius + self.saturation * insetWidth
+        let y = thumbRadius + (1 - self.brightness) * insetHeight
         return CGPoint(x: x, y: y)
     }
 
     private func updateSaturationBrightness(from location: CGPoint, size: CGSize) {
-        let clampedX = max(0, min(location.x, size.width))
-        let clampedY = max(0, min(location.y, size.height))
+        let thumbRadius: CGFloat = 8
+        let insetWidth = size.width - thumbRadius * 2
+        let insetHeight = size.height - thumbRadius * 2
+        let clampedX = max(0, min(location.x - thumbRadius, insetWidth))
+        let clampedY = max(0, min(location.y - thumbRadius, insetHeight))
 
-        self.saturation = clampedX / size.width
-        self.brightness = 1 - (clampedY / size.height)
+        self.saturation = clampedX / insetWidth
+        self.brightness = 1 - (clampedY / insetHeight)
     }
 }
