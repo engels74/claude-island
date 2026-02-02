@@ -78,9 +78,16 @@ struct SoundPickerRow: View {
                 .padding(.leading, 28)
                 .padding(.top, 4)
             }
+
+            // Sound trigger picker (only show if sound is not None)
+            if self.selectedSound != .none {
+                SoundTriggerPicker(selectedTrigger: self.$selectedTrigger)
+                    .padding(.top, 8)
+            }
         }
         .onAppear {
             self.selectedSound = AppSettings.notificationSound
+            self.selectedTrigger = AppSettings.soundTrigger
         }
     }
 
@@ -88,6 +95,7 @@ struct SoundPickerRow: View {
 
     @State private var isHovered = false
     @State private var selectedSound: NotificationSound = AppSettings.notificationSound
+    @State private var selectedTrigger: SoundTrigger = AppSettings.soundTrigger
 
     private var isExpanded: Bool {
         self.soundSelector.isPickerExpanded
@@ -99,6 +107,47 @@ struct SoundPickerRow: View {
 
     private func setExpanded(_ value: Bool) {
         self.soundSelector.isPickerExpanded = value
+    }
+}
+
+// MARK: - SoundTriggerPicker
+
+private struct SoundTriggerPicker: View {
+    // MARK: Internal
+
+    @Binding var selectedTrigger: SoundTrigger
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Play for")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.5))
+                .padding(.leading, 12)
+
+            Picker("", selection: self.$selectedTrigger) {
+                ForEach(SoundTrigger.allCases, id: \.self) { trigger in
+                    Text(self.shortLabel(for: trigger)).tag(trigger)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+            .onChange(of: self.selectedTrigger) { _, newValue in
+                AppSettings.soundTrigger = newValue
+            }
+        }
+    }
+
+    // MARK: Private
+
+    private func shortLabel(for trigger: SoundTrigger) -> String {
+        switch trigger {
+        case .inputOnly:
+            "Input"
+        case .permissionOnly:
+            "Permissions"
+        case .both:
+            "Both"
+        }
     }
 }
 

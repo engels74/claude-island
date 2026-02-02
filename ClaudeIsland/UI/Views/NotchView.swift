@@ -569,10 +569,25 @@ struct NotchView: View {
         let currentIDs = Set(sessions.map(\.stableID))
         let newPendingIDs = currentIDs.subtracting(self.previousPendingIDs)
 
-        if !newPendingIDs.isEmpty &&
-            self.viewModel.status == .closed &&
-            !TerminalVisibilityDetector.isTerminalVisibleOnCurrentSpace() {
-            self.viewModel.notchOpen(reason: .notification)
+        if !newPendingIDs.isEmpty {
+            if self.viewModel.status == .closed &&
+                !TerminalVisibilityDetector.isTerminalVisibleOnCurrentSpace() {
+                self.viewModel.notchOpen(reason: .notification)
+            }
+
+            // Play notification sound for permission prompts if trigger allows
+            if let soundName = AppSettings.notificationSound.soundName,
+               AppSettings.soundTrigger.playsForPermission {
+                let newPendingSessions = sessions.filter { newPendingIDs.contains($0.stableID) }
+                Task {
+                    let shouldPlaySound = await shouldPlayNotificationSound(for: newPendingSessions)
+                    if shouldPlaySound {
+                        _ = await MainActor.run {
+                            NSSound(named: soundName)?.play()
+                        }
+                    }
+                }
+            }
         }
 
         self.previousPendingIDs = currentIDs
@@ -616,9 +631,9 @@ struct NotchView: View {
                 return
             }
 
-            // Play notification sound if the session is not actively focused
-            if let soundName = AppSettings.notificationSound.soundName {
-                // Check if we should play sound (async check for tmux pane focus)
+            // Play notification sound if the session is not actively focused and trigger allows input sounds
+            if let soundName = AppSettings.notificationSound.soundName,
+               AppSettings.soundTrigger.playsForInput {
                 Task {
                     let shouldPlaySound = await shouldPlayNotificationSound(for: newlyWaitingSessions)
                     if shouldPlaySound {

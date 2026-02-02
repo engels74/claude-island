@@ -8,6 +8,24 @@
 import Foundation
 import SwiftUI
 
+// MARK: - SoundTrigger
+
+enum SoundTrigger: String, CaseIterable {
+    case inputOnly = "Input Only"
+    case permissionOnly = "Permissions Only"
+    case both = "Both"
+
+    // MARK: Internal
+
+    var playsForInput: Bool {
+        self == .inputOnly || self == .both
+    }
+
+    var playsForPermission: Bool {
+        self == .permissionOnly || self == .both
+    }
+}
+
 // MARK: - SoundSuppression
 
 /// Sound suppression modes for notification sounds
@@ -81,6 +99,22 @@ enum AppSettings {
         }
     }
 
+    // MARK: - Sound Trigger
+
+    static var soundTrigger: SoundTrigger {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.soundTrigger),
+                  let trigger = SoundTrigger(rawValue: rawValue)
+            else {
+                return .both
+            }
+            return trigger
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.soundTrigger)
+        }
+    }
+
     // MARK: - Sound Suppression
 
     /// When to suppress notification sounds
@@ -127,6 +161,7 @@ enum AppSettings {
 
     private enum Keys {
         static let notificationSound = "notificationSound"
+        static let soundTrigger = "soundTrigger"
         static let soundSuppression = "soundSuppression"
         static let clawdColor = "clawdColor"
         static let clawdAlwaysVisible = "clawdAlwaysVisible"
