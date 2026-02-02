@@ -11,11 +11,19 @@ import SwiftUI
 // MARK: - SoundTrigger
 
 enum SoundTrigger: String, CaseIterable {
-    case inputOnly = "Input Only"
-    case permissionOnly = "Permissions Only"
-    case both = "Both"
+    case inputOnly
+    case permissionOnly
+    case both
 
     // MARK: Internal
+
+    var displayName: String {
+        switch self {
+        case .inputOnly: "Input Only"
+        case .permissionOnly: "Permissions Only"
+        case .both: "Both"
+        }
+    }
 
     var playsForInput: Bool {
         self == .inputOnly || self == .both
