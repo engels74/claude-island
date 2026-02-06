@@ -103,32 +103,47 @@ final class TokenTrackingManager {
 
     // MARK: - Keychain Helpers for Session Key
 
-    func saveSessionKey(_ key: String?) {
+    @discardableResult
+    func saveSessionKey(_ key: String?) -> Bool {
         let service = "com.engels74.ClaudeIsland"
         let account = "token-api-session-key"
 
-        // Delete existing entry first
-        let deleteQuery: [String: Any] = [
+        let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
 
-        // If key is nil or empty, we're done (just deleted)
-        guard let key, !key.isEmpty else { return }
-
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: Data(key.utf8),
-        ]
-
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        if status != errSecSuccess {
-            logger.error("Failed to save session key to Keychain: \(status)")
+        // If key is nil or empty, just delete
+        guard let key, !key.isEmpty else {
+            SecItemDelete(baseQuery as CFDictionary)
+            return true
         }
+
+        let valueData = Data(key.utf8)
+
+        // Try to update existing item first to avoid deleting before a successful write
+        let updateAttributes: [String: Any] = [kSecValueData as String: valueData]
+        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
+
+        if updateStatus == errSecSuccess {
+            return true
+        }
+
+        if updateStatus == errSecItemNotFound {
+            // Item doesn't exist yet, add new
+            var addQuery = baseQuery
+            addQuery[kSecValueData as String] = valueData
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus == errSecSuccess {
+                return true
+            }
+            logger.error("Failed to save session key to Keychain: \(addStatus)")
+            return false
+        }
+
+        logger.error("Failed to update session key in Keychain: \(updateStatus)")
+        return false
     }
 
     func loadSessionKey() -> String? {
@@ -183,9 +198,12 @@ final class TokenTrackingManager {
         let defaults = UserDefaults.standard
         let legacyKey = "tokenApiSessionKey"
         if let existingKey = defaults.string(forKey: legacyKey), !existingKey.isEmpty {
-            self.saveSessionKey(existingKey)
-            defaults.removeObject(forKey: legacyKey)
-            logger.info("Migrated session key from UserDefaults to Keychain")
+            if self.saveSessionKey(existingKey) {
+                defaults.removeObject(forKey: legacyKey)
+                logger.info("Migrated session key from UserDefaults to Keychain")
+            } else {
+                logger.error("Failed to migrate session key to Keychain, keeping UserDefaults entry")
+            }
         }
     }
 

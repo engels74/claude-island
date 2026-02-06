@@ -51,7 +51,7 @@ final class AccessibilityPermissionManager {
         let bundlePath = Bundle.main.bundlePath
         logger
             .info(
-                "Accessibility check: AXIsProcessTrusted() = \(newState), isDebugBuild = \(self.isDebugBuild), bundle: \(bundlePath, privacy: .public)"
+                "Accessibility check: AXIsProcessTrusted() = \(newState), isDebugBuild = \(self.isDebugBuild), bundle: \(bundlePath, privacy: .private)"
             )
 
         if previousState != newState {
