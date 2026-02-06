@@ -42,7 +42,7 @@ enum UpdateState: Equatable {
 /// Observable update manager that bridges Sparkle to SwiftUI
 @MainActor
 @Observable
-class UpdateManager {
+final class UpdateManager {
     // MARK: Internal
 
     static let shared = UpdateManager()
