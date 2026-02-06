@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct TokenRingView: View {
+    // MARK: Internal
+
     let percentage: Double
     let label: String
     let size: CGFloat
@@ -29,6 +31,8 @@ struct TokenRingView: View {
         }
         .frame(width: self.size, height: self.size)
     }
+
+    // MARK: Private
 
     private var ringColor: Color {
         switch self.percentage {

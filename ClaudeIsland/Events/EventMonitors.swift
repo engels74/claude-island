@@ -7,20 +7,11 @@
 
 import AppKit
 import ApplicationServices
-import Combine
-
-// MARK: - SendableEvent
-
-/// Wrapper to safely pass NSEvent across MainActor boundaries.
-/// Safe because NSEvent monitor handlers are documented to run on main thread.
-private struct SendableEvent: @unchecked Sendable {
-    nonisolated(unsafe) let event: NSEvent
-}
 
 // MARK: - EventMonitors
 
 /// Singleton that aggregates all event monitors.
-/// @MainActor ensures thread-safe access to mutable state and Combine publishers
+/// @MainActor ensures thread-safe access to mutable state and AsyncStream continuations
 /// since NSEvent monitors dispatch handlers on the main thread.
 @MainActor
 final class EventMonitors {
@@ -32,8 +23,22 @@ final class EventMonitors {
 
     static let shared = EventMonitors()
 
-    let mouseLocation = CurrentValueSubject<CGPoint, Never>(.zero)
-    let mouseDown = PassthroughSubject<NSEvent, Never>()
+    /// Current mouse location (synchronous access for direct reads)
+    private(set) var currentMouseLocation: CGPoint = .zero
+
+    /// Create a stream of mouse location updates (buffers newest only for throttling)
+    func makeMouseLocationStream() -> AsyncStream<CGPoint> {
+        let (stream, continuation) = AsyncStream.makeStream(of: CGPoint.self, bufferingPolicy: .bufferingNewest(1))
+        self.mouseLocationContinuation = continuation
+        return stream
+    }
+
+    /// Create a stream of mouse down events (yields Void — consumer reads NSEvent.mouseLocation directly)
+    func makeMouseDownStream() -> AsyncStream<Void> {
+        let (stream, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        self.mouseDownContinuation = continuation
+        return stream
+    }
 
     /// Start event monitors only if accessibility permission is already granted.
     /// Must be called after the user grants Accessibility permission (or on launch if already granted).
@@ -47,6 +52,12 @@ final class EventMonitors {
 
     // MARK: Private
 
+    /// Continuation for mouse location stream
+    private var mouseLocationContinuation: AsyncStream<CGPoint>.Continuation?
+
+    /// Continuation for mouse down stream
+    private var mouseDownContinuation: AsyncStream<Void>.Continuation?
+
     private var monitorsStarted = false
     private var mouseMoveMonitor: EventMonitor?
     private var mouseDownMonitor: EventMonitor?
@@ -58,22 +69,25 @@ final class EventMonitors {
         // when passing NSEvent across isolation boundaries.
         self.mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.mouseLocation.send(NSEvent.mouseLocation)
+                let location = NSEvent.mouseLocation
+                self?.currentMouseLocation = location
+                self?.mouseLocationContinuation?.yield(location)
             }
         }
         self.mouseMoveMonitor?.start()
 
-        self.mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
-            let wrapper = SendableEvent(event: event)
+        self.mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.mouseDown.send(wrapper.event)
+                _ = self?.mouseDownContinuation?.yield(())
             }
         }
         self.mouseDownMonitor?.start()
 
         self.mouseDraggedMonitor = EventMonitor(mask: .leftMouseDragged) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.mouseLocation.send(NSEvent.mouseLocation)
+                let location = NSEvent.mouseLocation
+                self?.currentMouseLocation = location
+                self?.mouseLocationContinuation?.yield(location)
             }
         }
         self.mouseDraggedMonitor?.start()

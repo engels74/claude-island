@@ -93,7 +93,9 @@ struct ScreenPickerRow: View {
     @State private var isHovered = false
     @State private var collapseTask: Task<Void, Never>?
 
-    private var isExpanded: Bool { self.screenSelector.isPickerExpanded }
+    private var isExpanded: Bool {
+        self.screenSelector.isPickerExpanded
+    }
 
     private var currentSelectionLabel: String {
         switch self.screenSelector.selectionMode {

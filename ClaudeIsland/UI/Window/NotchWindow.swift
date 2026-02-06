@@ -65,8 +65,13 @@ class NotchPanel: NSPanel {
 
     // MARK: Internal
 
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
 
     // MARK: - Click-through for areas outside the panel content
 

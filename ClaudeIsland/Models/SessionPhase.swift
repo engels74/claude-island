@@ -93,6 +93,7 @@ struct PermissionContext: Sendable {
 
 // MARK: Equatable
 
+// swiftformat:disable all
 extension PermissionContext: Equatable {
     nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
         // Compare by identity fields and serialized input
@@ -102,6 +103,7 @@ extension PermissionContext: Equatable {
             lhs.receivedAt == rhs.receivedAt
     }
 }
+// swiftformat:enable all
 
 // MARK: - SessionPhase
 

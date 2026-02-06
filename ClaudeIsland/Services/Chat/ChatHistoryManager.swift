@@ -3,7 +3,6 @@
 //  ClaudeIsland
 //
 
-import Combine
 import Foundation
 import Observation
 
@@ -17,12 +16,12 @@ final class ChatHistoryManager {
     // MARK: Lifecycle
 
     private init() {
-        SessionStore.shared.sessionsPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] sessions in
+        self.sessionsTask = Task { [weak self] in
+            let stream = await SessionStore.shared.sessionsStream()
+            for await sessions in stream {
                 self?.updateFromSessions(sessions)
             }
-            .store(in: &self.cancellables)
+        }
     }
 
     // MARK: Internal
@@ -82,8 +81,8 @@ final class ChatHistoryManager {
 
     /// Tracks which sessions have been loaded - ignored by Observation since it's internal state
     @ObservationIgnored private var loadedSessions: Set<String> = []
-    /// Combine subscriptions - ignored by Observation since these don't affect UI state
-    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+    /// Task for sessions stream subscription
+    @ObservationIgnored private var sessionsTask: Task<Void, Never>?
 
     // MARK: - State Updates
 
@@ -185,16 +184,6 @@ struct ToolCallItem: Equatable, Sendable {
             return ToolStatusDisplay(text: "Interrupted", isRunning: false)
         }
         return ToolStatusDisplay.completed(for: self.name, result: self.structuredResult)
-    }
-
-    /// Custom Equatable implementation to handle structuredResult
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.name == rhs.name &&
-            lhs.input == rhs.input &&
-            lhs.status == rhs.status &&
-            lhs.result == rhs.result &&
-            lhs.structuredResult == rhs.structuredResult &&
-            lhs.subagentTools == rhs.subagentTools
     }
 }
 

@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import Combine
 import SwiftUI
 
 class NotchWindowController: NSWindowController {
@@ -62,9 +61,9 @@ class NotchWindowController: NSWindowController {
         // Dynamically toggle mouse event handling based on notch state:
         // - Closed: ignoresMouseEvents = true (clicks pass through to menu bar/apps)
         // - Opened: ignoresMouseEvents = false (buttons inside panel work)
-        self.viewModel.statusPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak notchWindow, weak viewModel] (status: NotchStatus) in
+        let statusStream = self.viewModel.makeStatusStream()
+        self.statusTask = Task { @MainActor [weak notchWindow, weak viewModel] in
+            for await status in statusStream {
                 switch status {
                 case .opened:
                     // Accept mouse events when opened so buttons work
@@ -80,7 +79,7 @@ class NotchWindowController: NSWindowController {
                     notchWindow?.ignoresMouseEvents = true
                 }
             }
-            .store(in: &self.cancellables)
+        }
 
         // Start with ignoring mouse events (closed state)
         notchWindow.ignoresMouseEvents = true
@@ -107,6 +106,6 @@ class NotchWindowController: NSWindowController {
     // MARK: Private
 
     private let screen: NSScreen
-    private var cancellables = Set<AnyCancellable>()
+    private var statusTask: Task<Void, Never>?
     private var bootAnimationTask: Task<Void, Never>?
 }

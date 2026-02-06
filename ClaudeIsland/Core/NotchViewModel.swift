@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import Combine
 import Observation
 import SwiftUI
 
@@ -88,18 +87,21 @@ final class NotchViewModel {
 
     var status: NotchStatus = .closed {
         didSet {
-            self.statusSubject.send(self.status)
+            self.statusContinuation?.yield(self.status)
         }
     }
 
-    /// Combine publisher for status changes (for use in non-SwiftUI contexts like window controllers)
-    var statusPublisher: AnyPublisher<NotchStatus, Never> {
-        self.statusSubject.eraseToAnyPublisher()
+    var deviceNotchRect: CGRect {
+        self.geometry.deviceNotchRect
     }
 
-    var deviceNotchRect: CGRect { self.geometry.deviceNotchRect }
-    var screenRect: CGRect { self.geometry.screenRect }
-    var windowHeight: CGFloat { self.geometry.windowHeight }
+    var screenRect: CGRect {
+        self.geometry.screenRect
+    }
+
+    var windowHeight: CGFloat {
+        self.geometry.windowHeight
+    }
 
     /// Dynamic opened size based on content type
     /// Note: References selectorUpdateToken to ensure views re-compute when pickers expand/collapse
@@ -133,6 +135,16 @@ final class NotchViewModel {
 
     var animation: Animation {
         .easeOut(duration: 0.25)
+    }
+
+    /// Create a stream of status changes for use in non-SwiftUI contexts (e.g., window controllers).
+    /// Yields the current status immediately.
+    func makeStatusStream() -> AsyncStream<NotchStatus> {
+        let (stream, continuation) = AsyncStream.makeStream(of: NotchStatus.self, bufferingPolicy: .bufferingNewest(1))
+        self.statusContinuation = continuation
+        // Yield current status immediately
+        continuation.yield(self.status)
+        return stream
     }
 
     func notchOpen(reason: NotchOpenReason = .unknown) {
@@ -205,7 +217,7 @@ final class NotchViewModel {
 
     // MARK: Private
 
-    private let statusSubject = CurrentValueSubject<NotchStatus, Never>(.closed)
+    private var statusContinuation: AsyncStream<NotchStatus>.Continuation?
 
     // MARK: - Dependencies
 
@@ -214,7 +226,10 @@ final class NotchViewModel {
     private let suppressionSelector = SuppressionSelector.shared
     private let clawdSelector = ClawdSelector.shared
 
-    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+    /// Task for mouse location stream
+    @ObservationIgnored private var mouseLocationTask: Task<Void, Never>?
+    /// Task for mouse down stream
+    @ObservationIgnored private var mouseDownTask: Task<Void, Never>?
     private let events = EventMonitors.shared
 
     /// Task for hover delay before opening notch
@@ -267,19 +282,26 @@ final class NotchViewModel {
     // MARK: - Event Handling
 
     private func setupEventHandlers() {
-        self.events.mouseLocation
-            .throttle(for: .milliseconds(50), scheduler: DispatchQueue.main, latest: true)
-            .sink { [weak self] location in
+        // Mouse location stream with manual 50ms throttle
+        let locationStream = self.events.makeMouseLocationStream()
+        self.mouseLocationTask = Task { [weak self] in
+            let clock = ContinuousClock()
+            var lastProcessed: ContinuousClock.Instant = .now - .milliseconds(50)
+            for await location in locationStream {
+                let now = clock.now
+                guard now - lastProcessed >= .milliseconds(50) else { continue }
+                lastProcessed = now
                 self?.handleMouseMove(location)
             }
-            .store(in: &self.cancellables)
+        }
 
-        self.events.mouseDown
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+        // Mouse down stream
+        let mouseDownStream = self.events.makeMouseDownStream()
+        self.mouseDownTask = Task { [weak self] in
+            for await _ in mouseDownStream {
                 self?.handleMouseDown()
             }
-            .store(in: &self.cancellables)
+        }
     }
 
     private func handleMouseMove(_ location: CGPoint) {

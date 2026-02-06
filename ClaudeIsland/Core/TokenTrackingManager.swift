@@ -355,7 +355,7 @@ final class TokenTrackingManager {
 
 // MARK: - TokenTrackingError
 
-enum TokenTrackingError: Error, LocalizedError {
+enum TokenTrackingError: Error, LocalizedError, Sendable {
     case noCredentials
     case apiError(String)
 

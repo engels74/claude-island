@@ -8,7 +8,6 @@
 
 // swiftlint:disable file_length
 
-import Combine
 import Foundation
 import os.log
 
@@ -45,9 +44,15 @@ actor SessionStore {
     var statusCheckTask: Task<Void, Never>?
     let statusCheckIntervalNs: UInt64 = 3_000_000_000
 
-    /// Public publisher for UI subscription
-    nonisolated var sessionsPublisher: AnyPublisher<[SessionState], Never> {
-        self.sessionsSubject.eraseToAnyPublisher()
+    /// Create a new stream of session state changes.
+    /// Yields the current sessions immediately, then yields on every subsequent state change.
+    /// Multiple subscribers are supported — each call returns an independent stream.
+    nonisolated func sessionsStream() -> AsyncStream<[SessionState]> {
+        AsyncStream { continuation in
+            Task {
+                await self.registerContinuation(continuation)
+            }
+        }
     }
 
     // MARK: - Event Processing
@@ -203,6 +208,9 @@ actor SessionStore {
         let sessionID: String?
     }
 
+    /// Registry of continuations for multi-subscriber AsyncStream support
+    private var sessionsContinuations: [UUID: AsyncStream<[SessionState]>.Continuation] = [:]
+
     /// Pending file syncs (debounced)
     private var pendingSyncs: [String: Task<Void, Never>] = [:]
 
@@ -215,16 +223,24 @@ actor SessionStore {
     private var eventAuditTrail: [AuditEntry] = []
     private let maxAuditEntries = 100
 
-    // MARK: - Published State (for UI)
+    /// Register a continuation and yield the current state
+    private func registerContinuation(_ continuation: AsyncStream<[SessionState]>.Continuation) {
+        let id = UUID()
+        self.sessionsContinuations[id] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeContinuation(id: id) }
+        }
+        // Yield current state immediately (replaces CurrentValueSubject's initial value behavior)
+        let currentSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
+        continuation.yield(currentSessions)
+    }
 
-    /// Publisher for session state changes
-    ///
-    /// `nonisolated(unsafe)` is safe here because:
-    /// 1. `CurrentValueSubject` is thread-safe by design (uses internal locking)
-    /// 2. Writes only happen from within the actor's `publishState()` method
-    /// 3. Reads via `sessionsPublisher` are safe from any thread due to Combine's thread-safety
-    /// 4. The subject is immutable after initialization (only `send()` is called, never reassigned)
-    private nonisolated(unsafe) let sessionsSubject = CurrentValueSubject<[SessionState], Never>([])
+    /// Remove a continuation when the stream terminates
+    private func removeContinuation(id: UUID) {
+        self.sessionsContinuations.removeValue(forKey: id)
+    }
+
+    // MARK: - Published State (for UI)
 
     /// Record an event to the audit trail
     private func recordAuditEntry(event: SessionEvent) {
@@ -919,6 +935,8 @@ actor SessionStore {
 
     private func publishState() {
         let sortedSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
-        self.sessionsSubject.send(sortedSessions)
+        for (_, continuation) in self.sessionsContinuations {
+            continuation.yield(sortedSessions)
+        }
     }
 }

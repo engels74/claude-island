@@ -14,11 +14,11 @@ import System
 // MARK: - ProcessExecutorError
 
 /// Errors that can occur during process execution
-enum ProcessExecutorError: Error, LocalizedError {
+enum ProcessExecutorError: Error, LocalizedError, Sendable {
     case executionFailed(command: String, exitCode: Int32, stderr: String?)
     case invalidOutput(command: String)
     case commandNotFound(String)
-    case launchFailed(command: String, underlying: Error)
+    case launchFailed(command: String, underlying: String)
 
     // MARK: Internal
 
@@ -32,7 +32,7 @@ enum ProcessExecutorError: Error, LocalizedError {
         case let .commandNotFound(command):
             return "Command not found: \(command)"
         case let .launchFailed(command, underlying):
-            return "Failed to launch '\(command)': \(underlying.localizedDescription)"
+            return "Failed to launch '\(command)': \(underlying)"
         }
     }
 }
@@ -45,14 +45,16 @@ struct ProcessResult: Sendable {
     let exitCode: Int32
     let stderr: String?
 
-    nonisolated var isSuccess: Bool { self.exitCode == 0 }
+    nonisolated var isSuccess: Bool {
+        self.exitCode == 0
+    }
 }
 
 // MARK: - ProcessExecuting
 
 /// Protocol for executing shell commands (enables testing)
 protocol ProcessExecuting: Sendable {
-    func run(_ executable: String, arguments: [String]) async throws -> String
+    func run(_ executable: String, arguments: [String]) async throws(ProcessExecutorError) -> String
     func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError>
     func runSync(_ executable: String, arguments: [String]) -> Result<String, ProcessExecutorError>
 }
@@ -79,7 +81,7 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
     /// Marked @concurrent to explicitly run on the cooperative thread pool,
     /// enabling parallel subprocess execution without blocking the caller's executor.
     @concurrent
-    nonisolated func run(_ executable: String, arguments: [String]) async throws -> String {
+    nonisolated func run(_ executable: String, arguments: [String]) async throws(ProcessExecutorError) -> String {
         let result = await runWithResult(executable, arguments: arguments)
         switch result {
         case let .success(processResult):
@@ -139,7 +141,7 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
                 return .failure(.commandNotFound(executable))
             }
             Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-            return .failure(.launchFailed(command: executable, underlying: error))
+            return .failure(.launchFailed(command: executable, underlying: error.localizedDescription))
         }
     }
 
@@ -184,11 +186,11 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
                 return .failure(.commandNotFound(executable))
             } else {
                 Self.logger.error("Sync command launch failed: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-                return .failure(.launchFailed(command: executable, underlying: error))
+                return .failure(.launchFailed(command: executable, underlying: error.localizedDescription))
             }
         } catch {
             Self.logger.error("Sync command launch failed: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-            return .failure(.launchFailed(command: executable, underlying: error))
+            return .failure(.launchFailed(command: executable, underlying: error.localizedDescription))
         }
     }
 }

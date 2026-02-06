@@ -343,7 +343,22 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         return encoder
     }()
 
-    /// nonisolated(unsafe) properties: Thread safety is managed via the private serial queue
+    /// Thread-safety model: This class uses a two-tier synchronization strategy.
+    ///
+    /// **Queue-protected state** (`nonisolated(unsafe)` properties below):
+    /// `serverSocket`, `acceptSource`, `eventHandler`, `permissionFailureHandler`, and `isStopped`
+    /// are accessed exclusively from the serial `queue`. These are coupled to DispatchSource-based
+    /// I/O, which inherently requires a DispatchQueue. Using Mutex here would create pointless
+    /// double-locking (Mutex inside serialized queue callbacks).
+    ///
+    /// **Mutex-protected state** (`permissionsState`, `cacheState`):
+    /// These use `Mutex` because they are accessed from multiple contexts — both the serial queue
+    /// and nonisolated call sites (e.g., `hasPendingPermission`, `getPendingPermission`). Mutex
+    /// provides proper Sendable conformance for cross-context access without requiring queue hops.
+    ///
+    /// This hybrid approach is intentional: each synchronization primitive is used where it is
+    /// the natural fit, avoiding unnecessary overhead in either direction. The `@unchecked Sendable`
+    /// conformance is justified because all mutable state is protected by one of these two mechanisms.
     private nonisolated(unsafe) var serverSocket: Int32 = -1
     private nonisolated(unsafe) var acceptSource: DispatchSourceRead?
     private nonisolated(unsafe) var eventHandler: HookEventHandler?

@@ -140,7 +140,10 @@ struct HueSlider: View {
 // MARK: - SaturationBrightnessPlane
 
 struct SaturationBrightnessPlane: View {
+    // MARK: Internal
+
     let hue: Double
+
     @Binding var saturation: Double
     @Binding var brightness: Double
 
@@ -178,6 +181,8 @@ struct SaturationBrightnessPlane: View {
             )
         }
     }
+
+    // MARK: Private
 
     private func thumbPosition(for size: CGSize) -> CGPoint {
         let thumbRadius: CGFloat = 8

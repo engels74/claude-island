@@ -7,7 +7,6 @@
 //
 
 import AppKit
-import Combine
 import Foundation
 import Observation
 import Synchronization
@@ -22,12 +21,12 @@ final class ClaudeSessionMonitor {
     // MARK: Lifecycle
 
     init() {
-        SessionStore.shared.sessionsPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] sessions in
+        self.sessionsTask = Task { [weak self] in
+            let stream = await SessionStore.shared.sessionsStream()
+            for await sessions in stream {
                 self?.updateFromSessions(sessions)
             }
-            .store(in: &self.cancellables)
+        }
 
         InterruptWatcherManager.shared.delegate = self
     }
@@ -62,6 +61,8 @@ final class ClaudeSessionMonitor {
     }
 
     func stopMonitoring() {
+        self.sessionsTask?.cancel()
+        self.sessionsTask = nil
         self.cancelAllTasks()
         HookSocketServer.shared.stop()
 
@@ -130,8 +131,8 @@ final class ClaudeSessionMonitor {
 
     // MARK: Private
 
-    /// Combine subscriptions - ignored by Observation since these don't affect UI state
-    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+    /// Task for sessions stream subscription
+    @ObservationIgnored private var sessionsTask: Task<Void, Never>?
 
     /// Active tasks that should be cancelled when monitoring stops
     /// Uses Mutex for thread-safe access per Swift 6 patterns

@@ -108,7 +108,9 @@ struct SessionState: Equatable, Identifiable, Sendable {
 
     // MARK: - Identifiable
 
-    var id: String { self.sessionID }
+    var id: String {
+        self.sessionID
+    }
 
     // MARK: - Derived Properties
 
