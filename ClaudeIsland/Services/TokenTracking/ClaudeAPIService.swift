@@ -8,8 +8,6 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
-
 // MARK: - APIUsageResponse
 
 struct APIUsageResponse: Sendable {
@@ -56,7 +54,7 @@ actor ClaudeAPIService {
         }
 
         guard httpResponse.statusCode == 200 else {
-            logger.error("OAuth usage request failed with status \(httpResponse.statusCode)")
+            Self.logger.error("OAuth usage request failed with status \(httpResponse.statusCode)")
             throw APIServiceError.httpError(statusCode: httpResponse.statusCode)
         }
 
@@ -64,6 +62,8 @@ actor ClaudeAPIService {
     }
 
     // MARK: Private
+
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
 
     private let baseURL = "https://claude.ai/api"
     private let oauthUsageURL = "https://api.anthropic.com/api/oauth/usage"
@@ -85,15 +85,15 @@ actor ClaudeAPIService {
             throw APIServiceError.invalidResponse
         }
 
-        logger.debug("Organizations response status: \(httpResponse.statusCode)")
+        Self.logger.debug("Organizations response status: \(httpResponse.statusCode)")
 
         guard httpResponse.statusCode == 200 else {
-            logger.error("Organizations request failed with status \(httpResponse.statusCode)")
+            Self.logger.error("Organizations request failed with status \(httpResponse.statusCode)")
             throw APIServiceError.httpError(statusCode: httpResponse.statusCode)
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            logger.error("Failed to parse organizations JSON")
+            Self.logger.error("Failed to parse organizations JSON")
             throw APIServiceError.parsingFailed
         }
 
@@ -109,16 +109,16 @@ actor ClaudeAPIService {
         guard let selectedOrg = chatOrg ?? json.first,
               let uuid = selectedOrg["uuid"] as? String
         else {
-            logger.error("No valid organization found")
+            Self.logger.error("No valid organization found")
             throw APIServiceError.parsingFailed
         }
 
-        logger.debug("Selected organization: \(uuid, privacy: .private)")
+        Self.logger.debug("Selected organization: \(uuid, privacy: .private)")
         return uuid
     }
 
     private func fetchUsageData(sessionKey: String, orgID: String) async throws -> APIUsageResponse {
-        logger.debug("Fetching usage data for org: \(orgID, privacy: .private)")
+        Self.logger.debug("Fetching usage data for org: \(orgID, privacy: .private)")
         guard let url = URL(string: "\(self.baseURL)/organizations/\(orgID)/usage") else {
             throw APIServiceError.invalidURL
         }
@@ -138,10 +138,10 @@ actor ClaudeAPIService {
             throw APIServiceError.invalidResponse
         }
 
-        logger.debug("Usage response status: \(httpResponse.statusCode)")
+        Self.logger.debug("Usage response status: \(httpResponse.statusCode)")
 
         guard httpResponse.statusCode == 200 else {
-            logger.error("Usage request failed with status \(httpResponse.statusCode)")
+            Self.logger.error("Usage request failed with status \(httpResponse.statusCode)")
             throw APIServiceError.httpError(statusCode: httpResponse.statusCode)
         }
 
@@ -150,7 +150,7 @@ actor ClaudeAPIService {
 
     private func parseUsageResponse(_ data: Data) throws -> APIUsageResponse {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logger.error("Failed to parse JSON from usage response")
+            Self.logger.error("Failed to parse JSON from usage response")
             throw APIServiceError.parsingFailed
         }
 
@@ -177,7 +177,7 @@ actor ClaudeAPIService {
             }
         }
 
-        logger.debug("Parsed usage - session: \(sessionPercentage)%, weekly: \(weeklyPercentage)%")
+        Self.logger.debug("Parsed usage - session: \(sessionPercentage)%, weekly: \(weeklyPercentage)%")
 
         return APIUsageResponse(
             fiveHour: UsageWindow(utilization: sessionPercentage, resetsAt: sessionResetTime),
