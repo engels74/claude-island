@@ -8,15 +8,22 @@
 import SwiftUI
 
 struct TokenRingsOverlay: View {
+    // MARK: Internal
+
     let sessionPercentage: Double
     let weeklyPercentage: Double
-    let position: RingPosition
     let showSession: Bool
     let showWeekly: Bool
     let size: CGFloat
     var strokeWidth: CGFloat = 2
-    var showResetTime: Bool = false
-    var sessionResetTime: Date? = nil
+    var showResetTime = false
+    var sessionResetTime: Date?
+
+    var totalWidth: CGFloat {
+        let ringCount = (self.showSession ? 1 : 0) + (self.showWeekly ? 1 : 0)
+        guard ringCount > 0 else { return 0 }
+        return CGFloat(ringCount) * self.size + CGFloat(ringCount - 1) * 4
+    }
 
     var body: some View {
         VStack(spacing: 2) {
@@ -46,16 +53,12 @@ struct TokenRingsOverlay: View {
         }
     }
 
+    // MARK: Private
+
     private func formatResetTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
-    }
-
-    var totalWidth: CGFloat {
-        let ringCount = (self.showSession ? 1 : 0) + (self.showWeekly ? 1 : 0)
-        guard ringCount > 0 else { return 0 }
-        return CGFloat(ringCount) * self.size + CGFloat(ringCount - 1) * 4
     }
 }
 
@@ -63,7 +66,6 @@ struct TokenRingsOverlay: View {
     TokenRingsOverlay(
         sessionPercentage: 45,
         weeklyPercentage: 72,
-        position: .right,
         showSession: true,
         showWeekly: true,
         size: 16
@@ -76,7 +78,6 @@ struct TokenRingsOverlay: View {
     TokenRingsOverlay(
         sessionPercentage: 25,
         weeklyPercentage: 0,
-        position: .right,
         showSession: true,
         showWeekly: false,
         size: 16
@@ -89,7 +90,6 @@ struct TokenRingsOverlay: View {
     TokenRingsOverlay(
         sessionPercentage: 0,
         weeklyPercentage: 88,
-        position: .left,
         showSession: false,
         showWeekly: true,
         size: 16

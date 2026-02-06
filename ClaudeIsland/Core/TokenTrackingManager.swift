@@ -10,18 +10,31 @@ import os.log
 
 private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
 
+// MARK: - UsageMetric
+
 struct UsageMetric: Equatable, Sendable {
+    static let zero = Self(used: 0, limit: 0, percentage: 0, resetTime: nil)
+
     let used: Int
     let limit: Int
     let percentage: Double
     let resetTime: Date?
-
-    static let zero = UsageMetric(used: 0, limit: 0, percentage: 0, resetTime: nil)
 }
+
+// MARK: - TokenTrackingManager
 
 @Observable
 @MainActor
 final class TokenTrackingManager {
+    // MARK: Lifecycle
+
+    private init() {
+        self.migrateSessionKeyFromDefaults()
+        self.startPeriodicRefresh()
+    }
+
+    // MARK: Internal
+
     static let shared = TokenTrackingManager()
 
     private(set) var sessionUsage: UsageMetric = .zero
@@ -29,27 +42,31 @@ final class TokenTrackingManager {
     private(set) var lastError: String?
     private(set) var isRefreshing = false
 
-    var sessionPercentage: Double { self.sessionUsage.percentage }
-    var weeklyPercentage: Double { self.weeklyUsage.percentage }
-    var sessionResetTime: Date? { self.sessionUsage.resetTime }
-    var weeklyResetTime: Date? { self.weeklyUsage.resetTime }
+    var sessionPercentage: Double {
+        self.sessionUsage.percentage
+    }
+
+    var weeklyPercentage: Double {
+        self.weeklyUsage.percentage
+    }
+
+    var sessionResetTime: Date? {
+        self.sessionUsage.resetTime
+    }
+
+    var weeklyResetTime: Date? {
+        self.weeklyUsage.resetTime
+    }
 
     var isEnabled: Bool {
         AppSettings.tokenTrackingMode != .disabled
     }
 
-    private var refreshTask: Task<Void, Never>?
-    private var periodicRefreshTask: Task<Void, Never>?
-
-    private init() {
-        self.startPeriodicRefresh()
-    }
-
     func refresh() async {
-        logger.warning("[DEBUG] refresh() called, isEnabled: \(self.isEnabled), mode: \(String(describing: AppSettings.tokenTrackingMode))")
+        logger.debug("refresh() called, isEnabled: \(self.isEnabled), mode: \(String(describing: AppSettings.tokenTrackingMode))")
 
         guard self.isEnabled else {
-            logger.warning("[DEBUG] Token tracking disabled, returning zero")
+            logger.debug("Token tracking disabled, returning zero")
             self.sessionUsage = .zero
             self.weeklyUsage = .zero
             self.lastError = nil
@@ -66,13 +83,13 @@ final class TokenTrackingManager {
                 self.weeklyUsage = .zero
 
             case .api:
-                logger.warning("[DEBUG] Using API mode for refresh")
+                logger.debug("Using API mode for refresh")
                 try await self.refreshFromAPI()
             }
             self.lastError = nil
-            logger.warning("[DEBUG] Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
+            logger.debug("Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
         } catch {
-            logger.error("[DEBUG] Token tracking refresh FAILED: \(error.localizedDescription)")
+            logger.error("Token tracking refresh failed: \(error.localizedDescription)")
             self.lastError = error.localizedDescription
         }
     }
@@ -83,6 +100,67 @@ final class TokenTrackingManager {
         self.refreshTask?.cancel()
         self.refreshTask = nil
     }
+
+    // MARK: - Keychain Helpers for Session Key
+
+    func saveSessionKey(_ key: String?) {
+        let service = "com.engels74.ClaudeIsland"
+        let account = "token-api-session-key"
+
+        // Delete existing entry first
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        // If key is nil or empty, we're done (just deleted)
+        guard let key, !key.isEmpty else { return }
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: Data(key.utf8),
+        ]
+
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status != errSecSuccess {
+            logger.error("Failed to save session key to Keychain: \(status)")
+        }
+    }
+
+    func loadSessionKey() -> String? {
+        let service = "com.engels74.ClaudeIsland"
+        let account = "token-api-session-key"
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let key = String(data: data, encoding: .utf8),
+              !key.isEmpty
+        else {
+            return nil
+        }
+
+        return key
+    }
+
+    // MARK: Private
+
+    private var refreshTask: Task<Void, Never>?
+    private var periodicRefreshTask: Task<Void, Never>?
 
     private func startPeriodicRefresh() {
         self.periodicRefreshTask?.cancel()
@@ -96,35 +174,48 @@ final class TokenTrackingManager {
         }
     }
 
+    /// Migrate session key from UserDefaults to Keychain (one-time migration)
+    private func migrateSessionKeyFromDefaults() {
+        // If Keychain already has a value, skip migration
+        if self.loadSessionKey() != nil { return }
+
+        // Check if UserDefaults has a value to migrate
+        let defaults = UserDefaults.standard
+        let legacyKey = "tokenApiSessionKey"
+        if let existingKey = defaults.string(forKey: legacyKey), !existingKey.isEmpty {
+            self.saveSessionKey(existingKey)
+            defaults.removeObject(forKey: legacyKey)
+            logger.info("Migrated session key from UserDefaults to Keychain")
+        }
+    }
+
     private func refreshFromAPI() async throws {
-        logger.warning("[DEBUG] refreshFromAPI called, mode: \(String(describing: AppSettings.tokenTrackingMode))")
+        logger.debug("refreshFromAPI called")
         let apiService = ClaudeAPIService.shared
 
-        if AppSettings.tokenUseCliOAuth {
-            logger.warning("[DEBUG] CLI OAuth mode enabled, checking for token...")
-            if let oauthToken = self.getCliOAuthToken() {
-                logger.warning("[DEBUG] Found OAuth token, fetching usage...")
+        if AppSettings.tokenUseCLIOAuth {
+            logger.debug("CLI OAuth mode enabled, checking for token...")
+            if let oauthToken = self.getCLIOAuthToken() {
+                logger.debug("Found OAuth token, fetching usage...")
                 let response = try await apiService.fetchUsage(oauthToken: oauthToken)
                 self.updateFromAPIResponse(response)
                 return
             } else {
-                logger.warning("[DEBUG] CLI OAuth enabled but no token found, falling back to session key")
+                logger.debug("CLI OAuth enabled but no token found, falling back to session key")
             }
         }
 
-        guard let sessionKey = AppSettings.tokenApiSessionKey, !sessionKey.isEmpty else {
-            logger.error("[DEBUG] No session key configured")
+        guard let sessionKey = self.loadSessionKey(), !sessionKey.isEmpty else {
+            logger.error("No session key configured")
             throw TokenTrackingError.noCredentials
         }
 
-        let keyPrefix = String(sessionKey.prefix(20))
-        logger.warning("[DEBUG] Using session key starting with: \(keyPrefix)...")
         let response = try await apiService.fetchUsage(sessionKey: sessionKey)
         self.updateFromAPIResponse(response)
     }
 
     private func updateFromAPIResponse(_ response: APIUsageResponse) {
-        logger.warning("[DEBUG] Updating from API response - session: \(response.fiveHour.utilization)%, weekly: \(response.sevenDay.utilization)%")
+        logger.debug("Updating from API response - session: \(response.fiveHour.utilization)%, weekly: \(response.sevenDay.utilization)%")
 
         self.sessionUsage = UsageMetric(
             used: 0,
@@ -139,11 +230,9 @@ final class TokenTrackingManager {
             percentage: response.sevenDay.utilization,
             resetTime: response.sevenDay.resetsAt
         )
-
-        logger.warning("[DEBUG] After update - sessionUsage.percentage: \(self.sessionUsage.percentage), weeklyUsage.percentage: \(self.weeklyUsage.percentage)")
     }
 
-    private func getCliOAuthToken() -> String? {
+    private func getCLIOAuthToken() -> String? {
         let keychainQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "claude-cli",
@@ -176,9 +265,13 @@ final class TokenTrackingManager {
     }
 }
 
+// MARK: - TokenTrackingError
+
 enum TokenTrackingError: Error, LocalizedError {
     case noCredentials
     case apiError(String)
+
+    // MARK: Internal
 
     var errorDescription: String? {
         switch self {

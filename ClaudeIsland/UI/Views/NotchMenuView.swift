@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 //
 //  NotchMenuView.swift
 //  ClaudeIsland
@@ -682,7 +683,7 @@ struct TokenTrackingRow: View {
     @State private var ringDisplay: RingDisplay = AppSettings.tokenMinimizedRingDisplay
     @State private var showResetTime: Bool = AppSettings.tokenShowResetTime
     @State private var useCLIOAuth: Bool = AppSettings.tokenUseCLIOAuth
-    @State private var sessionKey: String = AppSettings.tokenAPISessionKey ?? ""
+    @State private var sessionKey: String = TokenTrackingManager.shared.loadSessionKey() ?? ""
 
     private var textColor: Color {
         .white.opacity(self.isHovered || self.isExpanded ? 1.0 : 0.7)
@@ -730,7 +731,7 @@ struct TokenTrackingRow: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                         .onSubmit {
-                            AppSettings.tokenAPISessionKey = self.sessionKey.isEmpty ? nil : self.sessionKey
+                            self.tokenTrackingManager.saveSessionKey(self.sessionKey.isEmpty ? nil : self.sessionKey)
                             Task {
                                 await self.tokenTrackingManager.refresh()
                             }

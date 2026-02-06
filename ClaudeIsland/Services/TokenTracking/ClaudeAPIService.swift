@@ -8,28 +8,34 @@
 import Foundation
 import os.log
 
-// swiftlint:disable:next nonisolated_static_on_actor
+/// Logger needs nonisolated(unsafe) because this file-scope let would be inferred as @MainActor,
+/// but ClaudeAPIService is a non-MainActor actor that needs to access it from its own isolation context.
 private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
+
+// MARK: - APIUsageResponse
 
 struct APIUsageResponse: Sendable {
     let fiveHour: UsageWindow
     let sevenDay: UsageWindow
 }
 
+// MARK: - UsageWindow
+
 struct UsageWindow: Sendable {
     let utilization: Double
-    let resetsAt: Date
+    let resetsAt: Date?
 }
 
-actor ClaudeAPIService {
-    static let shared = ClaudeAPIService()
+// MARK: - ClaudeAPIService
 
-    private let baseURL = "https://claude.ai/api"
-    private let oauthUsageURL = "https://api.anthropic.com/api/oauth/usage"
+actor ClaudeAPIService {
+    // MARK: Internal
+
+    static let shared = ClaudeAPIService()
 
     func fetchUsage(sessionKey: String) async throws -> APIUsageResponse {
         let orgID = try await fetchOrganizationID(sessionKey: sessionKey)
-        return try await fetchUsageData(sessionKey: sessionKey, orgID: orgID)
+        return try await self.fetchUsageData(sessionKey: sessionKey, orgID: orgID)
     }
 
     func fetchUsage(oauthToken: String) async throws -> APIUsageResponse {
@@ -59,8 +65,12 @@ actor ClaudeAPIService {
         return try self.parseUsageResponse(data)
     }
 
+    // MARK: Private
+
+    private let baseURL = "https://claude.ai/api"
+    private let oauthUsageURL = "https://api.anthropic.com/api/oauth/usage"
+
     private func fetchOrganizationID(sessionKey: String) async throws -> String {
-        logger.warning("[DEBUG] Fetching organization ID...")
         guard let url = URL(string: "\(self.baseURL)/organizations") else {
             throw APIServiceError.invalidURL
         }
@@ -77,19 +87,15 @@ actor ClaudeAPIService {
             throw APIServiceError.invalidResponse
         }
 
-        logger.warning("[DEBUG] Organizations response status: \(httpResponse.statusCode)")
+        logger.debug("Organizations response status: \(httpResponse.statusCode)")
 
         guard httpResponse.statusCode == 200 else {
-            let body = String(data: data, encoding: .utf8) ?? "<no body>"
-            logger.error("[DEBUG] Organizations request failed. Status: \(httpResponse.statusCode), Body: \(body)")
+            logger.error("Organizations request failed with status \(httpResponse.statusCode)")
             throw APIServiceError.httpError(statusCode: httpResponse.statusCode)
         }
 
-        let rawResponse = String(data: data, encoding: .utf8) ?? "<failed to decode>"
-        logger.warning("[DEBUG] Organizations raw response: \(rawResponse)")
-
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            logger.error("[DEBUG] Failed to parse organizations JSON")
+            logger.error("Failed to parse organizations JSON")
             throw APIServiceError.parsingFailed
         }
 
@@ -105,19 +111,16 @@ actor ClaudeAPIService {
         guard let selectedOrg = chatOrg ?? json.first,
               let uuid = selectedOrg["uuid"] as? String
         else {
-            logger.error("[DEBUG] No valid organization found")
+            logger.error("No valid organization found")
             throw APIServiceError.parsingFailed
         }
 
-        let orgName = selectedOrg["name"] as? String ?? "unknown"
-        let capabilities = selectedOrg["capabilities"] as? [String] ?? []
-        logger.warning("[DEBUG] Selected organization: \(orgName) (capabilities: \(capabilities))")
-        logger.warning("[DEBUG] Organization ID: \(uuid)")
+        logger.debug("Selected organization: \(uuid, privacy: .private)")
         return uuid
     }
 
     private func fetchUsageData(sessionKey: String, orgID: String) async throws -> APIUsageResponse {
-        logger.warning("[DEBUG] Fetching usage data for org: \(orgID)")
+        logger.debug("Fetching usage data for org: \(orgID, privacy: .private)")
         guard let url = URL(string: "\(self.baseURL)/organizations/\(orgID)/usage") else {
             throw APIServiceError.invalidURL
         }
@@ -137,11 +140,10 @@ actor ClaudeAPIService {
             throw APIServiceError.invalidResponse
         }
 
-        logger.warning("[DEBUG] Usage response status: \(httpResponse.statusCode)")
+        logger.debug("Usage response status: \(httpResponse.statusCode)")
 
         guard httpResponse.statusCode == 200 else {
-            let body = String(data: data, encoding: .utf8) ?? "<no body>"
-            logger.error("[DEBUG] Usage request failed. Status: \(httpResponse.statusCode), Body: \(body)")
+            logger.error("Usage request failed with status \(httpResponse.statusCode)")
             throw APIServiceError.httpError(statusCode: httpResponse.statusCode)
         }
 
@@ -149,53 +151,35 @@ actor ClaudeAPIService {
     }
 
     private func parseUsageResponse(_ data: Data) throws -> APIUsageResponse {
-        let rawJSON = String(data: data, encoding: .utf8) ?? "<failed to decode>"
-        logger.warning("[DEBUG] Raw API response: \(rawJSON)")
-
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logger.error("[DEBUG] Failed to parse JSON from response")
+            logger.error("Failed to parse JSON from usage response")
             throw APIServiceError.parsingFailed
         }
-
-        let topLevelKeys = Array(json.keys).joined(separator: ", ")
-        logger.warning("[DEBUG] Top-level JSON keys: \(topLevelKeys)")
 
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         var sessionPercentage = 0.0
-        var sessionResetTime = Date().addingTimeInterval(5 * 3600)
+        var sessionResetTime: Date?
         if let fiveHour = json["five_hour"] as? [String: Any] {
-            let fiveHourKeys = Array(fiveHour.keys).joined(separator: ", ")
-            logger.warning("[DEBUG] five_hour keys: \(fiveHourKeys)")
-            logger.warning("[DEBUG] five_hour.utilization raw value: \(String(describing: fiveHour["utilization"]))")
             sessionPercentage = self.parseUtilization(fiveHour["utilization"])
-            logger.warning("[DEBUG] five_hour parsed utilization: \(sessionPercentage)")
             if let resetsAt = fiveHour["resets_at"] as? String,
                let date = formatter.date(from: resetsAt) {
                 sessionResetTime = date
             }
-        } else {
-            logger.warning("[DEBUG] five_hour key MISSING from response")
         }
 
         var weeklyPercentage = 0.0
-        var weeklyResetTime = Date().addingTimeInterval(7 * 24 * 3600)
+        var weeklyResetTime: Date?
         if let sevenDay = json["seven_day"] as? [String: Any] {
-            let sevenDayKeys = Array(sevenDay.keys).joined(separator: ", ")
-            logger.warning("[DEBUG] seven_day keys: \(sevenDayKeys)")
-            logger.warning("[DEBUG] seven_day.utilization raw value: \(String(describing: sevenDay["utilization"]))")
             weeklyPercentage = self.parseUtilization(sevenDay["utilization"])
-            logger.warning("[DEBUG] seven_day parsed utilization: \(weeklyPercentage)")
             if let resetsAt = sevenDay["resets_at"] as? String,
                let date = formatter.date(from: resetsAt) {
                 weeklyResetTime = date
             }
-        } else {
-            logger.warning("[DEBUG] seven_day key MISSING from response")
         }
 
-        logger.warning("[DEBUG] Final parsed values - session: \(sessionPercentage)%, weekly: \(weeklyPercentage)%")
+        logger.debug("Parsed usage - session: \(sessionPercentage)%, weekly: \(weeklyPercentage)%")
 
         return APIUsageResponse(
             fiveHour: UsageWindow(utilization: sessionPercentage, resetsAt: sessionResetTime),
@@ -220,12 +204,16 @@ actor ClaudeAPIService {
     }
 }
 
+// MARK: - APIServiceError
+
 enum APIServiceError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
     case httpError(statusCode: Int)
     case parsingFailed
     case unauthorized
+
+    // MARK: Internal
 
     var errorDescription: String? {
         switch self {

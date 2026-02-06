@@ -45,17 +45,13 @@ final class AccessibilityPermissionManager {
     /// Check the current permission state
     func checkPermission() {
         let previousState = self.isAccessibilityEnabled
-
-        // Debug builds from Xcode have different code signatures than release builds
-        // TCC permissions granted to the installed app don't apply to debug builds
-        // Suppress the warning during development since it's misleading
-        let newState = self.isDebugBuild ? true : AXIsProcessTrusted()
+        let newState = AXIsProcessTrusted()
         self.isAccessibilityEnabled = newState
 
         let bundlePath = Bundle.main.bundlePath
         logger
             .info(
-                "Accessibility check: AXIsProcessTrusted() = \(AXIsProcessTrusted()), effective = \(newState), isDebugBuild = \(self.isDebugBuild), bundle: \(bundlePath, privacy: .public)"
+                "Accessibility check: AXIsProcessTrusted() = \(newState), isDebugBuild = \(self.isDebugBuild), bundle: \(bundlePath, privacy: .public)"
             )
 
         if previousState != newState {

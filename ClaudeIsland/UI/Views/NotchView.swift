@@ -379,7 +379,6 @@ struct NotchView: View {
         TokenRingsOverlay(
             sessionPercentage: self.tokenTrackingManager.sessionPercentage,
             weeklyPercentage: self.tokenTrackingManager.weeklyPercentage,
-            position: AppSettings.tokenMinimizedRingPosition,
             showSession: display.showSession,
             showWeekly: display.showWeekly,
             size: 16,

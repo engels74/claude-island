@@ -26,24 +26,6 @@ enum TokenTrackingMode: String, CaseIterable {
     }
 }
 
-// MARK: - RingPosition
-
-enum RingPosition: String, CaseIterable {
-    case left = "Left"
-    case right = "Right"
-
-    // MARK: Internal
-
-    var description: String {
-        switch self {
-        case .left:
-            "Show rings on left side"
-        case .right:
-            "Show rings on right side"
-        }
-    }
-}
-
 // MARK: - RingDisplay
 
 enum RingDisplay: String, CaseIterable {
@@ -204,14 +186,9 @@ enum AppSettings {
 
     // MARK: - Token Tracking API Settings
 
-    static var tokenApiSessionKey: String? {
-        get { defaults.string(forKey: Keys.tokenApiSessionKey) }
-        set { defaults.set(newValue, forKey: Keys.tokenApiSessionKey) }
-    }
-
-    static var tokenUseCliOAuth: Bool {
-        get { defaults.bool(forKey: Keys.tokenUseCliOAuth) }
-        set { defaults.set(newValue, forKey: Keys.tokenUseCliOAuth) }
+    static var tokenUseCLIOAuth: Bool {
+        get { defaults.bool(forKey: Keys.tokenUseCLIOAuth) }
+        set { defaults.set(newValue, forKey: Keys.tokenUseCLIOAuth) }
     }
 
     // MARK: - Token Ring Display Settings
@@ -219,18 +196,6 @@ enum AppSettings {
     static var tokenShowRingsMinimized: Bool {
         get { defaults.bool(forKey: Keys.tokenShowRingsMinimized) }
         set { defaults.set(newValue, forKey: Keys.tokenShowRingsMinimized) }
-    }
-
-    static var tokenMinimizedRingPosition: RingPosition {
-        get {
-            guard let rawValue = defaults.string(forKey: Keys.tokenMinimizedRingPosition),
-                  let position = RingPosition(rawValue: rawValue)
-            else {
-                return .right
-            }
-            return position
-        }
-        set { defaults.set(newValue.rawValue, forKey: Keys.tokenMinimizedRingPosition) }
     }
 
     static var tokenMinimizedRingDisplay: RingDisplay {
@@ -260,10 +225,8 @@ enum AppSettings {
         static let clawdColor = "clawdColor"
         static let clawdAlwaysVisible = "clawdAlwaysVisible"
         static let tokenTrackingMode = "tokenTrackingMode"
-        static let tokenApiSessionKey = "tokenApiSessionKey"
-        static let tokenUseCliOAuth = "tokenUseCliOAuth"
+        static let tokenUseCLIOAuth = "tokenUseCliOAuth"
         static let tokenShowRingsMinimized = "tokenShowRingsMinimized"
-        static let tokenMinimizedRingPosition = "tokenMinimizedRingPosition"
         static let tokenMinimizedRingDisplay = "tokenMinimizedRingDisplay"
         static let tokenShowResetTime = "tokenShowResetTime"
     }
