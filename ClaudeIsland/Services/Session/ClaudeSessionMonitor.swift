@@ -27,7 +27,12 @@ final class ClaudeSessionMonitor {
             }
         }
 
-        InterruptWatcherManager.shared.delegate = self
+        InterruptWatcherManager.shared.onInterrupt = { sessionID in
+            Task(name: "interrupt-detected") { @MainActor in
+                await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
+                InterruptWatcherManager.shared.stopWatching(sessionID: sessionID)
+            }
+        }
     }
 
     // MARK: Internal
@@ -207,17 +212,5 @@ final class ClaudeSessionMonitor {
     private func updateFromSessions(_ sessions: [SessionState]) {
         self.instances = sessions
         self.pendingInstances = sessions.filter(\.needsAttention)
-    }
-}
-
-// MARK: JSONLInterruptWatcherDelegate
-
-extension ClaudeSessionMonitor: JSONLInterruptWatcherDelegate {
-    nonisolated func didDetectInterrupt(sessionID: String) {
-        // Combined task for interrupt handling - both actions should complete together
-        Task(name: "interrupt-detected") { @MainActor in
-            await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
-            InterruptWatcherManager.shared.stopWatching(sessionID: sessionID)
-        }
     }
 }

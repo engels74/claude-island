@@ -5,28 +5,22 @@
 //  Animated symbol spinner for processing state
 //
 
-import Combine
 import SwiftUI
 
 struct ProcessingSpinner: View {
     // MARK: Internal
 
     var body: some View {
-        Text(self.symbols[self.phase % self.symbols.count])
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(self.color)
-            .frame(width: 12, alignment: .center)
-            .onReceive(self.timer) { _ in
-                self.phase = (self.phase + 1) % self.symbols.count
-            }
+        TimelineView(.periodic(from: .now, by: 0.15)) { context in
+            let phase = Int(context.date.timeIntervalSinceReferenceDate / 0.15) % self.symbols.count
+            Text(self.symbols[phase])
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(self.color)
+                .frame(width: 12, alignment: .center)
+        }
     }
 
     // MARK: Private
-
-    @State private var phase = 0
-
-    /// @State ensures timer persists across view updates rather than being recreated
-    @State private var timer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
     private let symbols = ["·", "✢", "✳", "∗", "✻", "✽"]
     private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange

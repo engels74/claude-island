@@ -9,23 +9,16 @@
 import Foundation
 import os.log
 
-// MARK: - JSONLInterruptWatcherDelegate
-
-protocol JSONLInterruptWatcherDelegate: AnyObject {
-    func didDetectInterrupt(sessionID: String)
-}
-
 // MARK: - JSONLInterruptWatcher
 
-/// Watches a session's JSONL file for interrupt patterns in real-time
-/// Uses DispatchSource for immediate detection when new lines are written
-/// Uses its own DispatchQueue for serialization, not MainActor
-/// `@unchecked Sendable` because thread safety is managed via the private serial queue
-final class JSONLInterruptWatcher: @unchecked Sendable {
+/// Watches a session's JSONL file for interrupt patterns in real-time.
+/// Actor provides thread-safe access to mutable state without manual queue synchronization.
+actor JSONLInterruptWatcher {
     // MARK: Lifecycle
 
-    nonisolated init(sessionID: String, cwd: String) {
+    init(sessionID: String, cwd: String, onInterrupt: @escaping @Sendable (String) -> Void) {
         self.sessionID = sessionID
+        self.onInterrupt = onInterrupt
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
         self.directoryPath = NSHomeDirectory() + "/.claude/projects/" + projectDir
@@ -33,7 +26,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
     }
 
     deinit {
-        // Cancel the sources - the cancel handlers will close the file handles
+        // Cancel the sources — cancel handlers will close the file handles
         if let source {
             source.cancel()
         }
@@ -44,20 +37,14 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
 
     // MARK: Internal
 
-    weak var delegate: JSONLInterruptWatcherDelegate?
-
     /// Start watching the JSONL file for interrupts
-    nonisolated func start() {
-        self.queue.async { [weak self] in
-            self?.startWatching()
-        }
+    func start() {
+        self.startWatching()
     }
 
     /// Stop watching
-    nonisolated func stop() {
-        self.queue.async { [weak self] in
-            self?.stopInternal()
-        }
+    func stop() {
+        self.stopInternal()
     }
 
     // MARK: Private
@@ -74,18 +61,19 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         "[Request interrupted by user",
     ]
 
-    /// nonisolated(unsafe) properties: Thread safety managed via the private serial queue
-    private nonisolated(unsafe) var fileHandle: FileHandle?
-    private nonisolated(unsafe) var source: DispatchSourceFileSystemObject?
-    private nonisolated(unsafe) var directorySource: DispatchSourceFileSystemObject?
-    private nonisolated(unsafe) var directoryHandle: FileHandle?
-    private nonisolated(unsafe) var lastOffset: UInt64 = 0
+    private var fileHandle: FileHandle?
+    private var source: DispatchSourceFileSystemObject?
+    private var directorySource: DispatchSourceFileSystemObject?
+    private var directoryHandle: FileHandle?
+    private var lastOffset: UInt64 = 0
     private let sessionID: String
     private let filePath: String
     private let directoryPath: String
-    private let queue = DispatchQueue(label: "com.claudeisland.interruptwatcher", qos: .userInteractive)
 
-    private nonisolated func startWatching() {
+    /// Callback for interrupt detection (replaces delegate pattern)
+    private let onInterrupt: @Sendable (String) -> Void
+
+    private func startWatching() {
         self.stopInternal()
 
         // Try to watch the file directly
@@ -97,7 +85,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         }
     }
 
-    private nonisolated func startFileWatcher() {
+    private func startFileWatcher() {
         guard let handle = FileHandle(forReadingAtPath: filePath) else {
             Self.logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
             return
@@ -113,19 +101,21 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         }
 
         let fd = handle.fileDescriptor
+        // DispatchSource uses its own queue for I/O — re-enter actor via Task
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
-            queue: self.queue
+            queue: .global(qos: .userInteractive)
         )
 
         newSource.setEventHandler { [weak self] in
-            self?.checkForInterrupt()
+            guard let self else { return }
+            Task { await self.checkForInterrupt() }
         }
 
         newSource.setCancelHandler { [weak self] in
-            try? self?.fileHandle?.close()
-            self?.fileHandle = nil
+            guard let self else { return }
+            Task { await self.cleanupFileHandle() }
         }
 
         self.source = newSource
@@ -134,7 +124,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         Self.logger.debug("Started watching file: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
-    private nonisolated func startDirectoryWatcher() {
+    private func startDirectoryWatcher() {
         // Ensure the directory exists
         guard FileManager.default.fileExists(atPath: self.directoryPath) else {
             Self.logger.warning("Directory doesn't exist: \(self.directoryPath, privacy: .public)")
@@ -152,16 +142,17 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write],
-            queue: self.queue
+            queue: .global(qos: .userInteractive)
         )
 
         newSource.setEventHandler { [weak self] in
-            self?.checkForFileAppearance()
+            guard let self else { return }
+            Task { await self.checkForFileAppearance() }
         }
 
         newSource.setCancelHandler { [weak self] in
-            try? self?.directoryHandle?.close()
-            self?.directoryHandle = nil
+            guard let self else { return }
+            Task { await self.cleanupDirectoryHandle() }
         }
 
         self.directorySource = newSource
@@ -170,7 +161,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         Self.logger.debug("Started watching directory for file appearance: \(self.sessionID.prefix(8), privacy: .public)...")
     }
 
-    private nonisolated func checkForFileAppearance() {
+    private func checkForFileAppearance() {
         // Check if the file now exists
         guard FileManager.default.fileExists(atPath: self.filePath) else {
             return
@@ -188,7 +179,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         self.startFileWatcher()
     }
 
-    private nonisolated func checkForInterrupt() {
+    private func checkForInterrupt() {
         guard let handle = fileHandle else { return }
 
         let currentSize: UInt64
@@ -218,10 +209,10 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         for line in newContent.split(separator: "\n", omittingEmptySubsequences: true)
             where self.isInterruptLine(line) {
             Self.logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
-            // Use explicit MainActor isolation for Swift 6 compliance
-            Task(name: "interrupt-notify") { @MainActor [weak self] in
-                guard let self else { return }
-                self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
+            let sessionID = self.sessionID
+            let callback = self.onInterrupt
+            Task(name: "interrupt-notify") { @MainActor in
+                callback(sessionID)
             }
             return
         }
@@ -248,7 +239,17 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
         return false
     }
 
-    private nonisolated func stopInternal() {
+    private func cleanupFileHandle() {
+        try? self.fileHandle?.close()
+        self.fileHandle = nil
+    }
+
+    private func cleanupDirectoryHandle() {
+        try? self.directoryHandle?.close()
+        self.directoryHandle = nil
+    }
+
+    private func stopInternal() {
         // Stop file watcher
         if let existingSource = source {
             existingSource.cancel()
@@ -277,27 +278,31 @@ class InterruptWatcherManager {
 
     static let shared = InterruptWatcherManager()
 
-    weak var delegate: JSONLInterruptWatcherDelegate?
+    /// Callback for interrupt detection — set by ClaudeSessionMonitor
+    var onInterrupt: (@Sendable (String) -> Void)?
 
     func startWatching(sessionID: String, cwd: String) {
         guard self.watchers[sessionID] == nil else { return }
 
-        let watcher = JSONLInterruptWatcher(sessionID: sessionID, cwd: cwd)
-        watcher.delegate = self.delegate
-        watcher.start()
+        guard let callback = self.onInterrupt else { return }
+
+        let watcher = JSONLInterruptWatcher(sessionID: sessionID, cwd: cwd, onInterrupt: callback)
+        Task { await watcher.start() }
         self.watchers[sessionID] = watcher
     }
 
     /// Stop watching a specific session
     func stopWatching(sessionID: String) {
-        self.watchers[sessionID]?.stop()
+        if let watcher = self.watchers[sessionID] {
+            Task { await watcher.stop() }
+        }
         self.watchers.removeValue(forKey: sessionID)
     }
 
     /// Stop all watchers
     func stopAll() {
         for (_, watcher) in self.watchers {
-            watcher.stop()
+            Task { await watcher.stop() }
         }
         self.watchers.removeAll()
     }

@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import Combine
 import os
 import SwiftUI
 
@@ -818,35 +817,26 @@ struct ProcessingIndicatorView: View {
     // MARK: Internal
 
     var body: some View {
-        HStack(alignment: .center, spacing: 6) {
-            ProcessingSpinner()
-                .frame(width: 6)
+        TimelineView(.periodic(from: .now, by: 0.4)) { context in
+            let dotCount = (Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 3) + 1
+            HStack(alignment: .center, spacing: 6) {
+                ProcessingSpinner()
+                    .frame(width: 6)
 
-            Text(self.baseText + self.dots)
-                .font(.system(size: 13))
-                .foregroundColor(self.color)
+                Text(self.baseText + String(repeating: ".", count: dotCount))
+                    .font(.system(size: 13))
+                    .foregroundColor(self.color)
 
-            Spacer()
-        }
-        .onReceive(self.timer) { _ in
-            self.dotCount = (self.dotCount % 3) + 1
+                Spacer()
+            }
         }
     }
 
     // MARK: Private
 
-    @State private var dotCount = 1
-
-    /// @State ensures timer persists across view updates rather than being recreated
-    @State private var timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-
     private let baseTexts = ["Processing", "Working"]
     private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
     private let baseText: String
-
-    private var dots: String {
-        String(repeating: ".", count: self.dotCount)
-    }
 }
 
 // MARK: - ToolCallView

@@ -5,7 +5,6 @@
 //  Header bar for the dynamic island
 //
 
-import Combine
 import SwiftUI
 
 // MARK: - ClaudeCrabIcon
@@ -26,64 +25,64 @@ struct ClaudeCrabIcon: View {
     var animateLegs = false
 
     var body: some View {
-        Canvas { context, canvasSize in
-            let scale = self.size / 52.0 // Original viewBox height is 52
-            let xOffset = (canvasSize.width - 66 * scale) / 2
+        TimelineView(.periodic(from: .now, by: 0.15)) { context in
+            Canvas { drawContext, canvasSize in
+                let scale = self.size / 52.0 // Original viewBox height is 52
+                let xOffset = (canvasSize.width - 66 * scale) / 2
 
-            // Left antenna
-            let leftAntenna = Path { path in
-                path.addRect(CGRect(x: 0, y: 13, width: 6, height: 13))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(leftAntenna, with: .color(self.color))
-
-            // Right antenna
-            let rightAntenna = Path { path in
-                path.addRect(CGRect(x: 60, y: 13, width: 6, height: 13))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(rightAntenna, with: .color(self.color))
-
-            // Animated legs - alternating up/down pattern for walking effect
-            // Legs stay attached to body (y=39), only height changes
-            let baseLegHeight: CGFloat = 13
-
-            // Use static arrays to avoid allocation per frame
-            let currentHeightOffsets = self.animateLegs
-                ? Self.legHeightOffsets[self.legPhase % 4]
-                : Self.neutralOffsets
-
-            for index in 0 ..< 4 {
-                let xPos = Self.baseLegPositions[index]
-                let heightOffset = currentHeightOffsets[index]
-                let legHeight = baseLegHeight + heightOffset
-                let leg = Path { path in
-                    path.addRect(CGRect(x: xPos, y: 39, width: 6, height: legHeight))
+                // Left antenna
+                let leftAntenna = Path { path in
+                    path.addRect(CGRect(x: 0, y: 13, width: 6, height: 13))
                 }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-                context.fill(leg, with: .color(self.color))
+                drawContext.fill(leftAntenna, with: .color(self.color))
+
+                // Right antenna
+                let rightAntenna = Path { path in
+                    path.addRect(CGRect(x: 60, y: 13, width: 6, height: 13))
+                }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
+                drawContext.fill(rightAntenna, with: .color(self.color))
+
+                // Animated legs - alternating up/down pattern for walking effect
+                // Legs stay attached to body (y=39), only height changes
+                let baseLegHeight: CGFloat = 13
+
+                // Use static arrays to avoid allocation per frame
+                let legPhase = self.animateLegs
+                    ? Int(context.date.timeIntervalSinceReferenceDate / 0.15) % 4
+                    : 0
+                let currentHeightOffsets = self.animateLegs
+                    ? Self.legHeightOffsets[legPhase]
+                    : Self.neutralOffsets
+
+                for index in 0 ..< 4 {
+                    let xPos = Self.baseLegPositions[index]
+                    let heightOffset = currentHeightOffsets[index]
+                    let legHeight = baseLegHeight + heightOffset
+                    let leg = Path { path in
+                        path.addRect(CGRect(x: xPos, y: 39, width: 6, height: legHeight))
+                    }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
+                    drawContext.fill(leg, with: .color(self.color))
+                }
+
+                // Main body
+                let body = Path { path in
+                    path.addRect(CGRect(x: 6, y: 0, width: 54, height: 39))
+                }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
+                drawContext.fill(body, with: .color(self.color))
+
+                // Left eye
+                let leftEye = Path { path in
+                    path.addRect(CGRect(x: 12, y: 13, width: 6, height: 6.5))
+                }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
+                drawContext.fill(leftEye, with: .color(.black))
+
+                // Right eye
+                let rightEye = Path { path in
+                    path.addRect(CGRect(x: 48, y: 13, width: 6, height: 6.5))
+                }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
+                drawContext.fill(rightEye, with: .color(.black))
             }
-
-            // Main body
-            let body = Path { path in
-                path.addRect(CGRect(x: 6, y: 0, width: 54, height: 39))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(body, with: .color(self.color))
-
-            // Left eye
-            let leftEye = Path { path in
-                path.addRect(CGRect(x: 12, y: 13, width: 6, height: 6.5))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(leftEye, with: .color(.black))
-
-            // Right eye
-            let rightEye = Path { path in
-                path.addRect(CGRect(x: 48, y: 13, width: 6, height: 6.5))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(rightEye, with: .color(.black))
-        }
-        .frame(width: self.size * (66.0 / 52.0), height: self.size)
-        .onReceive(self.legTimer) { _ in
-            if self.animateLegs {
-                self.legPhase = (self.legPhase + 1) % 4
-            }
+            .frame(width: self.size * (66.0 / 52.0), height: self.size)
         }
     }
 
@@ -105,11 +104,6 @@ struct ClaudeCrabIcon: View {
 
     /// Neutral height offsets (no animation)
     private static let neutralOffsets: [CGFloat] = [0, 0, 0, 0]
-
-    @State private var legPhase = 0
-
-    /// Timer for leg animation - @State ensures persistence across view updates
-    @State private var legTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 }
 
 // MARK: - PermissionIndicatorIcon

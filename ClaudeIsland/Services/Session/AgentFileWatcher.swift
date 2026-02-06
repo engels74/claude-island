@@ -9,26 +9,25 @@
 import Foundation
 import os.log
 
-// MARK: - AgentFileWatcherDelegate
-
-/// Protocol for receiving agent file update notifications
-protocol AgentFileWatcherDelegate: AnyObject {
-    func didUpdateAgentTools(sessionID: String, taskToolID: String, tools: [SubagentToolInfo])
-}
-
 // MARK: - AgentFileWatcher
 
-/// Watches a single agent JSONL file for tool updates
-/// Uses its own DispatchQueue for serialization, not MainActor
-/// `@unchecked Sendable` because thread safety is managed via the private serial queue
-final class AgentFileWatcher: @unchecked Sendable {
+/// Watches a single agent JSONL file for tool updates.
+/// Actor provides thread-safe access to mutable state without manual queue synchronization.
+actor AgentFileWatcher {
     // MARK: Lifecycle
 
-    nonisolated init(sessionID: String, taskToolID: String, agentID: String, cwd: String) {
+    init(
+        sessionID: String,
+        taskToolID: String,
+        agentID: String,
+        cwd: String,
+        onToolsUpdate: @escaping @Sendable (String, String, [SubagentToolInfo]) -> Void
+    ) {
         self.sessionID = sessionID
         self.taskToolID = taskToolID
         self.agentID = agentID
         self.cwd = cwd
+        self.onToolsUpdate = onToolsUpdate
 
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
@@ -36,8 +35,7 @@ final class AgentFileWatcher: @unchecked Sendable {
     }
 
     deinit {
-        // Suspend before cancel ensures cancel handler executes properly
-        // if the source was in a suspended state
+        // Cancel dispatch sources — cancel handlers will close file handles
         if let source {
             source.cancel()
         }
@@ -48,39 +46,34 @@ final class AgentFileWatcher: @unchecked Sendable {
     /// Logger for agent file watcher
     nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AgentFileWatcher")
 
-    weak var delegate: AgentFileWatcherDelegate?
-
     /// Start watching the agent file
-    nonisolated func start() {
-        self.queue.async { [weak self] in
-            self?.startWatching()
-        }
+    func start() {
+        self.startWatching()
     }
 
     /// Stop watching
-    nonisolated func stop() {
-        self.queue.async { [weak self] in
-            self?.stopInternal()
-        }
+    func stop() {
+        self.stopInternal()
     }
 
     // MARK: Private
 
-    /// nonisolated(unsafe) properties: Thread safety managed via the private serial queue
-    private nonisolated(unsafe) var fileHandle: FileHandle?
-    private nonisolated(unsafe) var source: DispatchSourceFileSystemObject?
-    private nonisolated(unsafe) var lastOffset: UInt64 = 0
+    private var fileHandle: FileHandle?
+    private var source: DispatchSourceFileSystemObject?
+    private var lastOffset: UInt64 = 0
     private let sessionID: String
     private let taskToolID: String
     private let agentID: String
     private let cwd: String
     private let filePath: String
-    private let queue = DispatchQueue(label: "com.claudeisland.agentfilewatcher", qos: .userInitiated)
 
-    /// Track seen tool IDs to avoid duplicates (protected by queue)
-    private nonisolated(unsafe) var seenToolIDs: Set<String> = []
+    /// Callback for tool updates (replaces delegate pattern)
+    private let onToolsUpdate: @Sendable (String, String, [SubagentToolInfo]) -> Void
 
-    private nonisolated func startWatching() {
+    /// Track seen tool IDs to avoid duplicates
+    private var seenToolIDs: Set<String> = []
+
+    private func startWatching() {
         self.stopInternal()
 
         guard FileManager.default.fileExists(atPath: self.filePath),
@@ -102,19 +95,21 @@ final class AgentFileWatcher: @unchecked Sendable {
         }
 
         let fd = handle.fileDescriptor
+        // DispatchSource uses its own queue for I/O — re-enter actor via Task
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
-            queue: self.queue
+            queue: .global(qos: .userInitiated)
         )
 
         newSource.setEventHandler { [weak self] in
-            self?.parseTools()
+            guard let self else { return }
+            Task { await self.parseTools() }
         }
 
         newSource.setCancelHandler { [weak self] in
-            try? self?.fileHandle?.close()
-            self?.fileHandle = nil
+            guard let self else { return }
+            Task { await self.cleanupFileHandle() }
         }
 
         self.source = newSource
@@ -126,7 +121,7 @@ final class AgentFileWatcher: @unchecked Sendable {
             )
     }
 
-    private nonisolated func parseTools() {
+    private func parseTools() {
         let tools = ConversationParser.parseSubagentToolsSync(agentID: self.agentID, cwd: self.cwd)
 
         let newTools = tools.filter { !self.seenToolIDs.contains($0.id) }
@@ -135,18 +130,20 @@ final class AgentFileWatcher: @unchecked Sendable {
         self.seenToolIDs = Set(tools.map(\.id))
         Self.logger.debug("Agent \(self.agentID.prefix(8), privacy: .public) has \(tools.count) tools")
 
-        // Use explicit MainActor isolation for Swift 6 compliance
-        Task(name: "agent-tools-update") { @MainActor [weak self] in
-            guard let self else { return }
-            self.delegate?.didUpdateAgentTools(
-                sessionID: self.sessionID,
-                taskToolID: self.taskToolID,
-                tools: tools
-            )
+        let sessionID = self.sessionID
+        let taskToolID = self.taskToolID
+        let callback = self.onToolsUpdate
+        Task(name: "agent-tools-update") { @MainActor in
+            callback(sessionID, taskToolID, tools)
         }
     }
 
-    private nonisolated func stopInternal() {
+    private func cleanupFileHandle() {
+        try? self.fileHandle?.close()
+        self.fileHandle = nil
+    }
+
+    private func stopInternal() {
         guard let existingSource = source else { return }
         Self.logger.debug("Stopped watching agent file: \(self.agentID.prefix(8), privacy: .public)")
         existingSource.cancel()
@@ -167,20 +164,26 @@ class AgentFileWatcherManager {
 
     static let shared = AgentFileWatcherManager()
 
-    weak var delegate: AgentFileWatcherDelegate?
+    /// Callback for tool updates — set by AgentFileWatcherBridge
+    var onToolsUpdate: (@Sendable (String, String, [SubagentToolInfo]) -> Void)?
 
     func startWatching(sessionID: String, taskToolID: String, agentID: String, cwd: String) {
         let key = "\(sessionID)-\(taskToolID)"
         guard self.watchers[key] == nil else { return }
 
+        guard let callback = self.onToolsUpdate else {
+            AgentFileWatcher.logger.warning("No onToolsUpdate callback set — cannot start watcher")
+            return
+        }
+
         let watcher = AgentFileWatcher(
             sessionID: sessionID,
             taskToolID: taskToolID,
             agentID: agentID,
-            cwd: cwd
+            cwd: cwd,
+            onToolsUpdate: callback
         )
-        watcher.delegate = self.delegate
-        watcher.start()
+        Task { await watcher.start() }
         self.watchers[key] = watcher
 
         AgentFileWatcher.logger.info("Started agent watcher for task \(taskToolID.prefix(12), privacy: .public)")
@@ -189,7 +192,9 @@ class AgentFileWatcherManager {
     /// Stop watching a specific Task's agent file
     func stopWatching(sessionID: String, taskToolID: String) {
         let key = "\(sessionID)-\(taskToolID)"
-        self.watchers[key]?.stop()
+        if let watcher = self.watchers[key] {
+            Task { await watcher.stop() }
+        }
         self.watchers.removeValue(forKey: key)
     }
 
@@ -197,7 +202,9 @@ class AgentFileWatcherManager {
     func stopWatchingSession(sessionID: String) {
         let keysToRemove = self.watchers.keys.filter { $0.hasPrefix(sessionID) }
         for key in keysToRemove {
-            self.watchers[key]?.stop()
+            if let watcher = self.watchers[key] {
+                Task { await watcher.stop() }
+            }
             self.watchers.removeValue(forKey: key)
         }
     }
@@ -205,7 +212,7 @@ class AgentFileWatcherManager {
     /// Stop all watchers
     func stopAll() {
         for (_, watcher) in self.watchers {
-            watcher.stop()
+            Task { await watcher.stop() }
         }
         self.watchers.removeAll()
     }
@@ -225,9 +232,9 @@ class AgentFileWatcherManager {
 // MARK: - AgentFileWatcherBridge
 
 /// Bridge between AgentFileWatcherManager and SessionStore.
-/// Converts delegate callbacks into SessionEvent processing.
+/// Converts tool update callbacks into SessionEvent processing.
 /// Implicitly MainActor-isolated (SE-0466 default) — all access is MainActor-local.
-class AgentFileWatcherBridge: AgentFileWatcherDelegate {
+class AgentFileWatcherBridge {
     // MARK: Lifecycle
 
     private init() {}
@@ -236,11 +243,13 @@ class AgentFileWatcherBridge: AgentFileWatcherDelegate {
 
     static let shared = AgentFileWatcherBridge()
 
-    func didUpdateAgentTools(sessionID: String, taskToolID: String, tools: [SubagentToolInfo]) {
-        Task(name: "agent-file-update") {
-            await SessionStore.shared.process(
-                .agentFileUpdated(sessionID: sessionID, taskToolID: taskToolID, tools: tools)
-            )
+    func setup() {
+        AgentFileWatcherManager.shared.onToolsUpdate = { sessionID, taskToolID, tools in
+            Task(name: "agent-file-update") {
+                await SessionStore.shared.process(
+                    .agentFileUpdated(sessionID: sessionID, taskToolID: taskToolID, tools: tools)
+                )
+            }
         }
     }
 }

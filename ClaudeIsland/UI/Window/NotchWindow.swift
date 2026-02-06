@@ -91,7 +91,7 @@ class NotchPanel: NSPanel {
                 ignoresMouseEvents = true
 
                 // Re-post the event after a tiny delay
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     self?.repostMouseEvent(event, at: screenLocation)
                 }
                 return

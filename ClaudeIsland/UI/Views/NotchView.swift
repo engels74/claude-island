@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import Combine
 import CoreGraphics
 import SwiftUI
 
@@ -123,14 +122,18 @@ struct NotchView: View {
                 self.handleProcessingChange()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // Check accessibility permission when app becomes active
-            // Catches the case where user grants permission in System Settings
-            self.accessibilityManager.handleAppActivation()
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
+                // Check accessibility permission when app becomes active
+                // Catches the case where user grants permission in System Settings
+                self.accessibilityManager.handleAppActivation()
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
-            self.clawdColor = AppSettings.clawdColor
-            self.clawdAlwaysVisible = AppSettings.clawdAlwaysVisible
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: UserDefaults.didChangeNotification) {
+                self.clawdColor = AppSettings.clawdColor
+                self.clawdAlwaysVisible = AppSettings.clawdAlwaysVisible
+            }
         }
         .onChange(of: self.clawdAlwaysVisible) { _, newValue in
             if newValue {

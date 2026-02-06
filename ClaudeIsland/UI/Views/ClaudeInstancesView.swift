@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import Combine
 import SwiftUI
 
 // MARK: - ClaudeInstancesView
@@ -174,9 +173,6 @@ struct InstanceRow: View {
     @State private var isHovered = false
     @State private var isEditing = false
     @State private var editingName = ""
-    @State private var spinnerPhase = 0
-    /// @State ensures timer persists across view updates rather than being recreated
-    @State private var spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
     @FocusState private var isTitleFocused: Bool
 
     private let metadataManager = SessionMetadataManager.shared
@@ -360,19 +356,19 @@ struct InstanceRow: View {
         switch self.session.phase {
         case .processing,
              .compacting:
-            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(self.claudeOrange)
-                .onReceive(self.spinnerTimer) { _ in
-                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
-                }
+            TimelineView(.periodic(from: .now, by: 0.15)) { context in
+                let phase = Int(context.date.timeIntervalSinceReferenceDate / 0.15) % self.spinnerSymbols.count
+                Text(self.spinnerSymbols[phase])
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(self.claudeOrange)
+            }
         case .waitingForApproval:
-            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(TerminalColors.amber)
-                .onReceive(self.spinnerTimer) { _ in
-                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
-                }
+            TimelineView(.periodic(from: .now, by: 0.15)) { context in
+                let phase = Int(context.date.timeIntervalSinceReferenceDate / 0.15) % self.spinnerSymbols.count
+                Text(self.spinnerSymbols[phase])
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(TerminalColors.amber)
+            }
         case .waitingForInput:
             Circle()
                 .fill(TerminalColors.green)
