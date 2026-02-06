@@ -8,9 +8,7 @@
 import Foundation
 import os.log
 
-/// Logger needs nonisolated(unsafe) because this file-scope let would be inferred as @MainActor,
-/// but ClaudeAPIService is a non-MainActor actor that needs to access it from its own isolation context.
-private nonisolated(unsafe) let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
+private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
 
 // MARK: - APIUsageResponse
 
