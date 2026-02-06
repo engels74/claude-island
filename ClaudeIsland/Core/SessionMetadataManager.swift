@@ -10,18 +10,18 @@ import SwiftUI
 @Observable
 @MainActor
 final class SessionMetadataManager {
+    // MARK: Lifecycle
+
+    private init() {
+        self.loadFromDefaults()
+    }
+
+    // MARK: Internal
+
     static let shared = SessionMetadataManager()
 
     private(set) var sessionColors: [String: String] = [:]
     private(set) var sessionNames: [String: String] = [:]
-
-    private let defaults = UserDefaults.standard
-    private let colorsKey = "sessionColors"
-    private let namesKey = "sessionNames"
-
-    private init() {
-        loadFromDefaults()
-    }
 
     func color(for sessionID: String) -> Color? {
         guard let hex = sessionColors[sessionID] else { return nil }
@@ -29,57 +29,54 @@ final class SessionMetadataManager {
     }
 
     func name(for sessionID: String) -> String? {
-        sessionNames[sessionID]
+        self.sessionNames[sessionID]
     }
 
     func setColor(_ hex: String?, for sessionID: String) {
         if let hex {
-            sessionColors[sessionID] = hex
+            self.sessionColors[sessionID] = hex
         } else {
-            sessionColors.removeValue(forKey: sessionID)
+            self.sessionColors.removeValue(forKey: sessionID)
         }
-        saveColors()
+        self.saveColors()
     }
 
     func setName(_ name: String?, for sessionID: String) {
         if let name, !name.trimmingCharacters(in: .whitespaces).isEmpty {
-            sessionNames[sessionID] = name
+            self.sessionNames[sessionID] = name
         } else {
-            sessionNames.removeValue(forKey: sessionID)
+            self.sessionNames.removeValue(forKey: sessionID)
         }
-        saveNames()
+        self.saveNames()
     }
 
-    func clearMetadata(for sessionID: String) {
-        sessionColors.removeValue(forKey: sessionID)
-        sessionNames.removeValue(forKey: sessionID)
-        saveColors()
-        saveNames()
-    }
+    // MARK: Private
+
+    private let defaults = UserDefaults.standard
+    private let colorsKey = "sessionColors"
+    private let namesKey = "sessionNames"
 
     private func loadFromDefaults() {
         if let colorsData = defaults.data(forKey: colorsKey),
-           let colors = try? JSONDecoder().decode([String: String].self, from: colorsData)
-        {
-            sessionColors = colors
+           let colors = try? JSONDecoder().decode([String: String].self, from: colorsData) {
+            self.sessionColors = colors
         }
 
         if let namesData = defaults.data(forKey: namesKey),
-           let names = try? JSONDecoder().decode([String: String].self, from: namesData)
-        {
-            sessionNames = names
+           let names = try? JSONDecoder().decode([String: String].self, from: namesData) {
+            self.sessionNames = names
         }
     }
 
     private func saveColors() {
         if let data = try? JSONEncoder().encode(sessionColors) {
-            defaults.set(data, forKey: colorsKey)
+            self.defaults.set(data, forKey: self.colorsKey)
         }
     }
 
     private func saveNames() {
         if let data = try? JSONEncoder().encode(sessionNames) {
-            defaults.set(data, forKey: namesKey)
+            self.defaults.set(data, forKey: self.namesKey)
         }
     }
 }

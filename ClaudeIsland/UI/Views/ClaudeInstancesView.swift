@@ -139,32 +139,32 @@ struct InstanceRow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            mainRow
+            self.mainRow
 
-            if isEditing {
-                SessionLabelEditor(sessionID: session.sessionID)
+            if self.isEditing {
+                SessionLabelEditor(sessionID: self.session.sessionID)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isEditing)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.isEditing)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(isHovered ? Color.white.opacity(0.06) : Color.clear)
+                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
         )
-        .onHover { isHovered = $0 }
+        .onHover { self.isHovered = $0 }
         .onRightClick {
             withAnimation {
-                if !isEditing {
-                    editingName = displayTitle
+                if !self.isEditing {
+                    self.editingName = self.displayTitle
                 }
-                isEditing.toggle()
+                self.isEditing.toggle()
             }
         }
-        .onChange(of: isEditing) { _, newValue in
+        .onChange(of: self.isEditing) { _, newValue in
             if !newValue {
-                saveName()
+                self.saveName()
             }
         }
     }
@@ -175,6 +175,7 @@ struct InstanceRow: View {
     @State private var isEditing = false
     @State private var editingName = ""
     @State private var spinnerPhase = 0
+    /// @State ensures timer persists across view updates rather than being recreated
     @State private var spinnerTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
     @FocusState private var isTitleFocused: Bool
 
@@ -183,29 +184,23 @@ struct InstanceRow: View {
     private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
 
     private var displayTitle: String {
-        metadataManager.name(for: session.sessionID) ?? session.displayTitle
+        self.metadataManager.name(for: self.session.sessionID) ?? self.session.displayTitle
     }
 
-    private func saveName() {
-        let trimmed = editingName.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty || trimmed == session.displayTitle {
-            metadataManager.setName(nil, for: session.sessionID)
-        } else {
-            metadataManager.setName(trimmed, for: session.sessionID)
-        }
-    }
-
+    /// Whether we're showing the approval UI
     private var isWaitingForApproval: Bool {
-        session.phase.isWaitingForApproval
+        self.session.phase.isWaitingForApproval
     }
 
+    /// Whether the pending tool requires interactive input (not just approve/deny)
     private var isInteractiveTool: Bool {
         guard let toolName = session.pendingToolName else { return false }
         return toolName == "AskUserQuestion"
     }
 
+    /// Status text based on session phase (fallback when no message content)
     private var phaseStatusText: String {
-        switch session.phase {
+        switch self.session.phase {
         case .processing: "Processing..."
         case .compacting: "Compacting..."
         case .waitingForInput: "Ready"
@@ -225,23 +220,23 @@ struct InstanceRow: View {
             }
 
             HStack(alignment: .center, spacing: 10) {
-                stateIndicator
+                self.stateIndicator
                     .frame(width: 14)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        if isEditing {
-                            TextField("Session name", text: $editingName)
+                        if self.isEditing {
+                            TextField("Session name", text: self.$editingName)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white)
-                                .focused($isTitleFocused)
+                                .focused(self.$isTitleFocused)
                                 .onSubmit {
-                                    withAnimation { isEditing = false }
+                                    withAnimation { self.isEditing = false }
                                 }
-                                .onAppear { isTitleFocused = true }
+                                .onAppear { self.isTitleFocused = true }
                         } else {
-                            Text(displayTitle)
+                            Text(self.displayTitle)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
@@ -258,12 +253,12 @@ struct InstanceRow: View {
                         }
                     }
 
-                    if isWaitingForApproval, let toolName = session.pendingToolName {
+                    if self.isWaitingForApproval, let toolName = session.pendingToolName {
                         HStack(spacing: 4) {
                             Text(MCPToolFormatter.formatToolName(toolName))
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundColor(TerminalColors.amber.opacity(0.9))
-                            if isInteractiveTool {
+                            if self.isInteractiveTool {
                                 Text("Needs your input")
                                     .font(.system(size: 11))
                                     .foregroundColor(.white.opacity(0.5))
@@ -317,7 +312,7 @@ struct InstanceRow: View {
                             .foregroundColor(.white.opacity(0.4))
                             .lineLimit(1)
                     } else {
-                        Text(phaseStatusText)
+                        Text(self.phaseStatusText)
                             .font(.system(size: 11))
                             .foregroundColor(.white.opacity(0.4))
                     }
@@ -325,70 +320,80 @@ struct InstanceRow: View {
 
                 Spacer(minLength: 0)
 
-                if isWaitingForApproval && isInteractiveTool {
+                if self.isWaitingForApproval && self.isInteractiveTool {
                     HStack(spacing: 8) {
-                        IconButton(icon: "bubble.left") { onChat() }
-                        if session.pid != nil {
-                            TerminalButton(isEnabled: true) { onFocus() }
+                        IconButton(icon: "bubble.left") { self.onChat() }
+                        if self.session.pid != nil {
+                            TerminalButton(isEnabled: true) { self.onFocus() }
                         }
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                } else if isWaitingForApproval {
+                } else if self.isWaitingForApproval {
                     InlineApprovalButtons(
-                        onChat: onChat,
-                        onApprove: onApprove,
-                        onReject: onReject
+                        onChat: self.onChat,
+                        onApprove: self.onApprove,
+                        onReject: self.onReject
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {
                     HStack(spacing: 8) {
-                        IconButton(icon: "bubble.left") { onChat() }
-                        if session.pid != nil {
-                            IconButton(icon: "terminal") { onFocus() }
+                        IconButton(icon: "bubble.left") { self.onChat() }
+                        if self.session.pid != nil {
+                            IconButton(icon: "terminal") { self.onFocus() }
                         }
-                        if session.phase == .idle || session.phase == .waitingForInput {
-                            IconButton(icon: "archivebox") { onArchive() }
+                        if self.session.phase == .idle || self.session.phase == .waitingForInput {
+                            IconButton(icon: "archivebox") { self.onArchive() }
                         }
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
             }
-            .padding(.leading, metadataManager.color(for: session.sessionID) != nil ? 4 : 8)
+            .padding(.leading, self.metadataManager.color(for: self.session.sessionID) != nil ? 4 : 8)
             .padding(.trailing, 14)
             .padding(.vertical, 10)
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if !isEditing { onChat() }
+            if !self.isEditing { self.onChat() }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWaitingForApproval)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: self.isWaitingForApproval)
     }
 
-    @ViewBuilder
-    private var stateIndicator: some View {
-        switch session.phase {
-        case .processing, .compacting:
-            Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
+    @ViewBuilder private var stateIndicator: some View {
+        switch self.session.phase {
+        case .processing,
+             .compacting:
+            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(claudeOrange)
-                .onReceive(spinnerTimer) { _ in
-                    spinnerPhase = (spinnerPhase + 1) % spinnerSymbols.count
+                .foregroundColor(self.claudeOrange)
+                .onReceive(self.spinnerTimer) { _ in
+                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
                 }
         case .waitingForApproval:
-            Text(spinnerSymbols[spinnerPhase % spinnerSymbols.count])
+            Text(self.spinnerSymbols[self.spinnerPhase % self.spinnerSymbols.count])
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(TerminalColors.amber)
-                .onReceive(spinnerTimer) { _ in
-                    spinnerPhase = (spinnerPhase + 1) % spinnerSymbols.count
+                .onReceive(self.spinnerTimer) { _ in
+                    self.spinnerPhase = (self.spinnerPhase + 1) % self.spinnerSymbols.count
                 }
         case .waitingForInput:
             Circle()
                 .fill(TerminalColors.green)
                 .frame(width: 6, height: 6)
-        case .idle, .ended:
+        case .idle,
+             .ended:
             Circle()
                 .fill(Color.white.opacity(0.2))
                 .frame(width: 6, height: 6)
+        }
+    }
+
+    private func saveName() {
+        let trimmed = self.editingName.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed == self.session.displayTitle {
+            self.metadataManager.setName(nil, for: self.session.sessionID)
+        } else {
+            self.metadataManager.setName(trimmed, for: self.session.sessionID)
         }
     }
 }
@@ -558,21 +563,24 @@ extension View {
     }
 }
 
+// MARK: - RightClickDetector
+
 struct RightClickDetector: NSViewRepresentable {
     let action: () -> Void
 
     func makeNSView(context _: Context) -> RightClickNSView {
-        RightClickNSView(action: action)
+        RightClickNSView(action: self.action)
     }
 
     func updateNSView(_ nsView: RightClickNSView, context _: Context) {
-        nsView.action = action
+        nsView.action = self.action
     }
 }
 
+// MARK: - RightClickNSView
+
 final class RightClickNSView: NSView {
-    var action: () -> Void
-    private var monitor: Any?
+    // MARK: Lifecycle
 
     init(action: @escaping () -> Void) {
         self.action = action
@@ -581,19 +589,23 @@ final class RightClickNSView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError()
+        fatalError("init(coder:) is not supported")
     }
+
+    // MARK: Internal
+
+    var action: () -> Void
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard window != nil, monitor == nil else { return }
+        guard window != nil, self.monitor == nil else { return }
 
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+        self.monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
             guard let self, event.window == self.window else { return event }
             let locationInView = convert(event.locationInWindow, from: nil)
 
             if bounds.contains(locationInView) {
-                action()
+                self.action()
                 return nil
             }
             return event
@@ -611,4 +623,8 @@ final class RightClickNSView: NSView {
     override func hitTest(_: NSPoint) -> NSView? {
         nil
     }
+
+    // MARK: Private
+
+    private var monitor: Any?
 }
