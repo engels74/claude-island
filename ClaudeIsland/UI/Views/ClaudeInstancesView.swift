@@ -358,7 +358,9 @@ struct InstanceRow: View {
             .padding(.vertical, 10)
         }
         .contentShape(Rectangle())
-        .onTapGesture { onChat() }
+        .onTapGesture {
+            if !isEditing { onChat() }
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWaitingForApproval)
     }
 
@@ -587,9 +589,8 @@ final class RightClickNSView: NSView {
         guard window != nil, monitor == nil else { return }
 
         monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
-            guard let self else { return event }
-            let locationInWindow = event.locationInWindow
-            let locationInView = convert(locationInWindow, from: nil)
+            guard let self, event.window == self.window else { return event }
+            let locationInView = convert(event.locationInWindow, from: nil)
 
             if bounds.contains(locationInView) {
                 action()
