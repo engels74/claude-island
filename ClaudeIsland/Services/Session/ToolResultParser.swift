@@ -48,14 +48,20 @@ enum ToolResultParser {
         let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
         let serverName = !parts.isEmpty ? String(parts[0]) : "unknown"
         let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
-        return .mcp(MCPResult(serverName: serverName, toolName: mcpToolName, rawResult: data))
+        let jsonString: String = if let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                                    let string = String(data: jsonData, encoding: .utf8) {
+            string
+        } else {
+            "{}"
+        }
+        return .mcp(MCPResult(serverName: serverName, toolName: mcpToolName, rawResultJSON: jsonString))
     }
 
     private nonisolated static func parseGenericResult(_ data: [String: Any]) -> ToolResultData {
         let content = data["content"] as? String ??
             data["stdout"] as? String ??
             data["result"] as? String
-        return .generic(GenericResult(rawContent: content, rawData: data))
+        return .generic(GenericResult(rawContent: content))
     }
 
     // MARK: - Individual Tool Result Parsers

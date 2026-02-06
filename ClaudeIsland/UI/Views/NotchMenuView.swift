@@ -155,11 +155,11 @@ struct NotchMenuView: View {
 
     // MARK: Private
 
-    /// UpdateManager inherits from NSObject for Sparkle integration - intentional exception to @Observable pattern
-    @ObservedObject private var updateManager = UpdateManager.shared
     @State private var hooksInstalled = false
     @State private var launchAtLogin = false
     @State private var hookInstallTask: Task<Void, Never>?
+
+    private var updateManager = UpdateManager.shared
 
     /// Singletons are @Observable, so SwiftUI automatically tracks property access
     private var screenSelector = ScreenSelector.shared
@@ -181,8 +181,7 @@ struct NotchMenuView: View {
 struct UpdateRow: View {
     // MARK: Internal
 
-    /// UpdateManager inherits from NSObject for Sparkle integration - intentional exception to @Observable pattern
-    @ObservedObject var updateManager: UpdateManager
+    var updateManager: UpdateManager
 
     var body: some View {
         Button {

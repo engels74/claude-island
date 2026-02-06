@@ -244,29 +244,27 @@ struct ExitPlanModeResult: Equatable, Sendable {
 
 // MARK: - MCPResult
 
-struct MCPResult: Equatable, @unchecked Sendable {
+struct MCPResult: Equatable, Sendable {
     let serverName: String
     let toolName: String
-    /// nonisolated(unsafe) because [String: Any] isn't Sendable but we need cross-context access
-    nonisolated(unsafe) let rawResult: [String: Any]
+    /// JSON-serialized result data for Sendable safety
+    let rawResultJSON: String
 
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.serverName == rhs.serverName &&
-            lhs.toolName == rhs.toolName &&
-            NSDictionary(dictionary: lhs.rawResult).isEqual(to: rhs.rawResult)
+    /// Deserialize the raw result for display purposes
+    var rawResultEntries: [(key: String, value: String)] {
+        guard let data = rawResultJSON.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return []
+        }
+        return dict.map { (key: $0.key, value: String(describing: $0.value)) }
     }
 }
 
 // MARK: - GenericResult
 
-struct GenericResult: Equatable, @unchecked Sendable {
+struct GenericResult: Equatable, Sendable {
     let rawContent: String?
-    /// nonisolated(unsafe) because [String: Any] isn't Sendable but we need cross-context access
-    nonisolated(unsafe) let rawData: [String: Any]?
-
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.rawContent == rhs.rawContent
-    }
 }
 
 // MARK: - ToolStatusDisplay

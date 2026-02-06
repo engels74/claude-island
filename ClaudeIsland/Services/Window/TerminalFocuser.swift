@@ -30,21 +30,18 @@ struct TerminalFocuser: Sendable {
     /// - Parameter claudePID: The process ID of the Claude instance
     /// - Returns: true if the terminal was successfully focused
     func focusTerminal(forClaudePID claudePID: Int) async -> Bool {
-        // Run blocking process tree operations on background thread
-        let result: (terminalPID: Int, command: String)? = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let tree = ProcessTreeBuilder.shared.buildTree()
+        // Run blocking process tree operations off the main thread via detached task
+        let result: (terminalPID: Int, command: String)? = await Task.detached(priority: .userInitiated) {
+            let tree = ProcessTreeBuilder.shared.buildTree()
 
-                guard let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: claudePID, tree: tree),
-                      let terminalInfo = tree[terminalPID]
-                else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
-                continuation.resume(returning: (terminalPID, terminalInfo.command))
+            guard let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: claudePID, tree: tree),
+                  let terminalInfo = tree[terminalPID]
+            else {
+                return nil
             }
-        }
+
+            return (terminalPID, terminalInfo.command)
+        }.value
 
         guard let result else {
             Self.logger.debug("No terminal found for Claude PID \(claudePID)")
@@ -60,28 +57,25 @@ struct TerminalFocuser: Sendable {
     /// - Parameter workingDirectory: The current working directory to match
     /// - Returns: true if a terminal was successfully focused
     func focusTerminal(forWorkingDirectory workingDirectory: String) async -> Bool {
-        // Run blocking process tree operations on background thread
-        let result: (terminalPID: Int, command: String)? = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let tree = ProcessTreeBuilder.shared.buildTree()
+        // Run blocking process tree operations off the main thread via detached task
+        let result: (terminalPID: Int, command: String)? = await Task.detached(priority: .userInitiated) {
+            let tree = ProcessTreeBuilder.shared.buildTree()
 
-                // Find Claude processes with matching cwd
-                for (pid, info) in tree {
-                    guard info.command.lowercased().contains("claude") else { continue }
-                    guard let cwd = ProcessTreeBuilder.shared.getWorkingDirectory(forPID: pid) else { continue }
-                    guard cwd == workingDirectory else { continue }
+            // Find Claude processes with matching cwd
+            for (pid, info) in tree {
+                guard info.command.lowercased().contains("claude") else { continue }
+                guard let cwd = ProcessTreeBuilder.shared.getWorkingDirectory(forPID: pid) else { continue }
+                guard cwd == workingDirectory else { continue }
 
-                    // Found a Claude with matching cwd, find its terminal
-                    if let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: pid, tree: tree),
-                       let terminalInfo = tree[terminalPID] {
-                        continuation.resume(returning: (terminalPID, terminalInfo.command))
-                        return
-                    }
+                // Found a Claude with matching cwd, find its terminal
+                if let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: pid, tree: tree),
+                   let terminalInfo = tree[terminalPID] {
+                    return (terminalPID, terminalInfo.command)
                 }
-
-                continuation.resume(returning: nil)
             }
-        }
+
+            return nil
+        }.value
 
         guard let result else {
             Self.logger.debug("No terminal found for working directory \(workingDirectory)")

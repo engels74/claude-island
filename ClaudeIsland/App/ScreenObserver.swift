@@ -7,9 +7,10 @@
 
 import AppKit
 
-/// `@unchecked Sendable` because thread safety is managed via main thread
-/// notification delivery and debounced DispatchWorkItem execution
-final class ScreenObserver: @unchecked Sendable {
+/// Monitors screen configuration changes.
+/// All access is isolated to @MainActor since notifications are observed on the main queue.
+@MainActor
+final class ScreenObserver {
     // MARK: Lifecycle
 
     init(onScreenChange: @escaping () -> Void) {
@@ -18,22 +19,22 @@ final class ScreenObserver: @unchecked Sendable {
     }
 
     deinit {
-        stopObserving()
+        debounceTask?.cancel()
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     // MARK: Private
 
-    /// nonisolated(unsafe) is safe here because:
-    /// 1. These are only written in startObserving() which runs on init (implicitly @MainActor)
-    /// 2. They are read in stopObserving() which is either called from @MainActor or from deinit
-    ///    when there are no other references
+    /// nonisolated(unsafe) allows deinit cleanup — safe because deinit has exclusive access
     private nonisolated(unsafe) var observer: Any?
-    private nonisolated(unsafe) let onScreenChange: () -> Void
-    private nonisolated(unsafe) var pendingWork: DispatchWorkItem?
+    private let onScreenChange: () -> Void
+    private var debounceTask: Task<Void, Never>?
 
     /// Debounce interval to coalesce rapid screen change notifications
     /// (e.g., when waking from sleep, displays reconnect in stages)
-    private let debounceInterval: TimeInterval = 0.5
+    private let debounceInterval: Duration = .milliseconds(500)
 
     private func startObserving() {
         self.observer = NotificationCenter.default.addObserver(
@@ -48,23 +49,12 @@ final class ScreenObserver: @unchecked Sendable {
     }
 
     private func scheduleScreenChange() {
-        self.pendingWork?.cancel()
+        self.debounceTask?.cancel()
 
-        let work = DispatchWorkItem { [weak self] in
+        self.debounceTask = Task { [weak self] in
+            try? await Task.sleep(for: self?.debounceInterval ?? .milliseconds(500))
+            guard !Task.isCancelled else { return }
             self?.onScreenChange()
-        }
-        self.pendingWork = work
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + self.debounceInterval,
-            execute: work
-        )
-    }
-
-    private nonisolated func stopObserving() {
-        self.pendingWork?.cancel()
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
         }
     }
 }

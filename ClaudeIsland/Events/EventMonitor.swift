@@ -8,10 +8,9 @@
 import AppKit
 
 /// Wraps NSEvent monitoring with proper lifecycle management.
-/// Thread-safety: This class should be used from the main thread since NSEvent
-/// monitors deliver their handlers on the main thread. The monitor tokens are
-/// stored as instance state that should not be accessed concurrently.
-final class EventMonitor: @unchecked Sendable {
+/// All access is isolated to @MainActor since NSEvent monitors deliver on the main thread.
+@MainActor
+final class EventMonitor {
     // MARK: Lifecycle
 
     init(mask: NSEvent.EventTypeMask, handler: @escaping @Sendable (NSEvent) -> Void) {
@@ -20,13 +19,17 @@ final class EventMonitor: @unchecked Sendable {
     }
 
     deinit {
-        stopInternal()
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     // MARK: Internal
 
-    /// Start monitoring events. Must be called on the main thread.
-    @MainActor
+    /// Start monitoring events.
     func start() {
         // Global monitor for events outside our app
         self.globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: self.mask) { [weak self] event in
@@ -40,26 +43,8 @@ final class EventMonitor: @unchecked Sendable {
         }
     }
 
-    /// Stop monitoring events. Must be called on the main thread.
-    @MainActor
+    /// Stop monitoring events.
     func stop() {
-        self.stopInternal()
-    }
-
-    // MARK: Private
-
-    /// nonisolated(unsafe) is safe here because:
-    /// 1. These are only written in start() which runs on @MainActor
-    /// 2. They are read in stopInternal() which is either called from stop() (@MainActor)
-    ///    or from deinit when there are no other references
-    /// 3. The values themselves (opaque monitor tokens) are immutable once created
-    private nonisolated(unsafe) var globalMonitor: Any?
-    private nonisolated(unsafe) var localMonitor: Any?
-    private let mask: NSEvent.EventTypeMask
-    private let handler: @Sendable (NSEvent) -> Void
-
-    /// Internal stop that can be called from deinit
-    private nonisolated func stopInternal() {
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)
             self.globalMonitor = nil
@@ -69,4 +54,12 @@ final class EventMonitor: @unchecked Sendable {
             self.localMonitor = nil
         }
     }
+
+    // MARK: Private
+
+    /// nonisolated(unsafe) allows deinit cleanup — safe because deinit has exclusive access
+    private nonisolated(unsafe) var globalMonitor: Any?
+    private nonisolated(unsafe) var localMonitor: Any?
+    private let mask: NSEvent.EventTypeMask
+    private let handler: @Sendable (NSEvent) -> Void
 }

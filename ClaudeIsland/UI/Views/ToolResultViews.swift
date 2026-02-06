@@ -609,12 +609,12 @@ struct MCPResultContent: View {
             .foregroundColor(.purple.opacity(0.7))
 
             // Raw result (formatted as key-value pairs)
-            ForEach(Array(self.result.rawResult.prefix(5)), id: \.key) { key, value in
+            ForEach(Array(self.result.rawResultEntries.prefix(5)), id: \.key) { key, value in
                 HStack(alignment: .top, spacing: 4) {
                     Text("\(key):")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.4))
-                    Text("\(String(describing: value).prefix(100))")
+                    Text("\(value.prefix(100))")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.6))
                         .lineLimit(2)

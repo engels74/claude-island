@@ -7,35 +7,33 @@
 
 @preconcurrency import Markdown
 import SwiftUI
+import Synchronization
 
 // MARK: - DocumentCache
 
 /// Caches parsed markdown documents to avoid re-parsing
-private final class DocumentCache: @unchecked Sendable {
+private final class DocumentCache: Sendable {
     // MARK: Internal
 
     static let shared = DocumentCache()
 
     func document(for text: String) -> Document {
-        self.lock.lock()
-        defer { lock.unlock() }
-
-        if let cached = cache[text] {
-            return cached
+        self.storage.withLock { cache in
+            if let cached = cache[text] {
+                return cached
+            }
+            let doc = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
+            if cache.count >= self.maxSize {
+                cache.removeAll()
+            }
+            cache[text] = doc
+            return doc
         }
-        // Enable strikethrough and other extended syntax
-        let doc = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
-        if self.cache.count >= self.maxSize {
-            self.cache.removeAll()
-        }
-        self.cache[text] = doc
-        return doc
     }
 
     // MARK: Private
 
-    private var cache: [String: Document] = [:]
-    private let lock = NSLock()
+    private let storage = Mutex<[String: Document]>([:])
     private let maxSize = 100
 }
 
@@ -128,7 +126,6 @@ private struct BlockRenderer: View {
         }
     }
 
-    @ViewBuilder
     private func blockQuoteView(_ blockQuote: BlockQuote) -> some View {
         HStack(spacing: 8) {
             Rectangle()
@@ -148,7 +145,6 @@ private struct BlockRenderer: View {
         .padding(.vertical, 2)
     }
 
-    @ViewBuilder
     private func unorderedListView(_ list: UnorderedList) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(list.listItems.enumerated()), id: \.offset) { _, item in
@@ -172,7 +168,6 @@ private struct BlockRenderer: View {
         }
     }
 
-    @ViewBuilder
     private func orderedListView(_ list: OrderedList) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(list.listItems.enumerated()), id: \.offset) { index, item in

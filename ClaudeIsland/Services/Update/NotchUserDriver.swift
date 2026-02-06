@@ -5,8 +5,8 @@
 //  Custom Sparkle user driver for in-notch update UI
 //
 
-import Combine
 import Foundation
+import Observation
 @preconcurrency import Sparkle
 
 // MARK: - UpdateState
@@ -41,19 +41,14 @@ enum UpdateState: Equatable {
 
 /// Observable update manager that bridges Sparkle to SwiftUI
 @MainActor
-class UpdateManager: NSObject, ObservableObject {
-    // MARK: Lifecycle
-
-    override init() {
-        super.init()
-    }
-
+@Observable
+class UpdateManager {
     // MARK: Internal
 
     static let shared = UpdateManager()
 
-    @Published var state: UpdateState = .idle
-    @Published var hasUnseenUpdate = false
+    var state: UpdateState = .idle
+    var hasUnseenUpdate = false
 
     // MARK: - Public API
 
@@ -194,7 +189,9 @@ class UpdateManager: NSObject, ObservableObject {
 
 /// Custom Sparkle user driver that routes all UI to NotchUpdateManager
 class NotchUserDriver: NSObject, SPUUserDriver {
-    var canCheckForUpdates: Bool { true }
+    var canCheckForUpdates: Bool {
+        true
+    }
 
     // MARK: - Update Found
 

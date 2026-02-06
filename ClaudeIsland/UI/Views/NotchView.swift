@@ -147,8 +147,6 @@ struct NotchView: View {
 
     /// Session monitor is @Observable, so we use @State for ownership
     @State private var sessionMonitor = ClaudeSessionMonitor()
-    /// UpdateManager inherits from NSObject for Sparkle integration - intentional exception to @Observable pattern
-    @ObservedObject private var updateManager = UpdateManager.shared
     @State private var previousPendingIDs: Set<String> = []
     @State private var previousWaitingForInputIDs: Set<String> = []
     @State private var waitingForInputTimestamps: [String: Date] = [:] // sessionID -> when it entered waitingForInput
@@ -161,6 +159,8 @@ struct NotchView: View {
     @State private var clawdColor: Color = AppSettings.clawdColor
     @State private var clawdAlwaysVisible: Bool = AppSettings.clawdAlwaysVisible
     @Namespace private var activityNamespace
+
+    private var updateManager = UpdateManager.shared
 
     /// Singleton is @Observable, so SwiftUI automatically tracks property access
     private var activityCoordinator = NotchActivityCoordinator.shared
