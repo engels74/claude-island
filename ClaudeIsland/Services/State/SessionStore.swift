@@ -48,11 +48,17 @@ actor SessionStore {
     /// Yields the current sessions immediately, then yields on every subsequent state change.
     /// Multiple subscribers are supported — each call returns an independent stream.
     nonisolated func sessionsStream() -> AsyncStream<[SessionState]> {
-        AsyncStream { continuation in
-            Task {
-                await self.registerContinuation(continuation)
-            }
+        let id = UUID()
+        let (stream, continuation) = AsyncStream.makeStream(of: [SessionState].self, bufferingPolicy: .bufferingNewest(1))
+        // Set onTermination synchronously (before any Task) to avoid a race where
+        // the stream terminates before registerContinuation installs the handler.
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeContinuation(id: id) }
         }
+        Task {
+            await self.registerContinuation(continuation, id: id)
+        }
+        return stream
     }
 
     // MARK: - Event Processing
@@ -223,13 +229,11 @@ actor SessionStore {
     private var eventAuditTrail: [AuditEntry] = []
     private let maxAuditEntries = 100
 
-    /// Register a continuation and yield the current state
-    private func registerContinuation(_ continuation: AsyncStream<[SessionState]>.Continuation) {
-        let id = UUID()
+    /// Register a continuation and yield the current state.
+    /// The `id` and `onTermination` are set by `sessionsStream()` before calling this method
+    /// to avoid a race between stream termination and registration.
+    private func registerContinuation(_ continuation: AsyncStream<[SessionState]>.Continuation, id: UUID) {
         self.sessionsContinuations[id] = continuation
-        continuation.onTermination = { [weak self] _ in
-            Task { await self?.removeContinuation(id: id) }
-        }
         // Yield current state immediately (replaces CurrentValueSubject's initial value behavior)
         let currentSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
         continuation.yield(currentSessions)

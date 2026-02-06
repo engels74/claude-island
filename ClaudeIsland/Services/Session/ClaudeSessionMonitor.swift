@@ -14,7 +14,7 @@ import Synchronization
 // MARK: - ClaudeSessionMonitor
 
 /// Session monitor using modern @Observable macro for efficient SwiftUI updates.
-/// Subscribes to SessionStore's Combine publisher to receive session state changes.
+/// Subscribes to SessionStore's AsyncStream to receive session state changes.
 @Observable
 @MainActor
 final class ClaudeSessionMonitor {

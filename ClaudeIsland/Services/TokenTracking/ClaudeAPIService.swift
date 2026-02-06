@@ -51,6 +51,8 @@ actor ClaudeAPIService {
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw APIServiceError.cancelled
         } catch {
             throw APIServiceError.invalidResponse
         }
@@ -89,6 +91,8 @@ actor ClaudeAPIService {
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw APIServiceError.cancelled
         } catch {
             throw APIServiceError.invalidResponse
         }
@@ -148,6 +152,8 @@ actor ClaudeAPIService {
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw APIServiceError.cancelled
         } catch {
             throw APIServiceError.invalidResponse
         }
@@ -228,6 +234,7 @@ enum APIServiceError: Error, LocalizedError, Sendable {
     case httpError(statusCode: Int)
     case parsingFailed
     case unauthorized
+    case cancelled
 
     // MARK: Internal
 
@@ -243,6 +250,8 @@ enum APIServiceError: Error, LocalizedError, Sendable {
             "Failed to parse response"
         case .unauthorized:
             "Unauthorized - session key may be expired"
+        case .cancelled:
+            "Request was cancelled"
         }
     }
 }

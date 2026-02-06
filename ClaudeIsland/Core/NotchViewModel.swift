@@ -138,10 +138,19 @@ final class NotchViewModel {
     }
 
     /// Create a stream of status changes for use in non-SwiftUI contexts (e.g., window controllers).
+    /// Single-consumer: calling again finishes the previous stream.
     /// Yields the current status immediately.
     func makeStatusStream() -> AsyncStream<NotchStatus> {
+        // Finish any previous stream so its consumer doesn't hang
+        self.statusContinuation?.finish()
+
         let (stream, continuation) = AsyncStream.makeStream(of: NotchStatus.self, bufferingPolicy: .bufferingNewest(1))
         self.statusContinuation = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.statusContinuation = nil
+            }
+        }
         // Yield current status immediately
         continuation.yield(self.status)
         return stream

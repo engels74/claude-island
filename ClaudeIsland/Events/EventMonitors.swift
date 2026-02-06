@@ -26,17 +26,33 @@ final class EventMonitors {
     /// Current mouse location (synchronous access for direct reads)
     private(set) var currentMouseLocation: CGPoint = .zero
 
-    /// Create a stream of mouse location updates (buffers newest only for throttling)
+    /// Create a stream of mouse location updates (buffers newest only for throttling).
+    /// Single-consumer: calling again finishes the previous stream.
     func makeMouseLocationStream() -> AsyncStream<CGPoint> {
+        self.mouseLocationContinuation?.finish()
+
         let (stream, continuation) = AsyncStream.makeStream(of: CGPoint.self, bufferingPolicy: .bufferingNewest(1))
         self.mouseLocationContinuation = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.mouseLocationContinuation = nil
+            }
+        }
         return stream
     }
 
-    /// Create a stream of mouse down events (yields Void — consumer reads NSEvent.mouseLocation directly)
+    /// Create a stream of mouse down events (yields Void — consumer reads NSEvent.mouseLocation directly).
+    /// Single-consumer: calling again finishes the previous stream.
     func makeMouseDownStream() -> AsyncStream<Void> {
+        self.mouseDownContinuation?.finish()
+
         let (stream, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
         self.mouseDownContinuation = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.mouseDownContinuation = nil
+            }
+        }
         return stream
     }
 
