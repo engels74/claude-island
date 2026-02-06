@@ -48,7 +48,7 @@ enum ToolResultParser {
         let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
         let serverName = !parts.isEmpty ? String(parts[0]) : "unknown"
         let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
-        let jsonString: String = if let jsonData = try? JSONSerialization.data(withJSONObject: data),
+        let jsonString: String = if let jsonData = try? JSONSerialization.data(withJSONObject: data, options: .sortedKeys),
                                     let string = String(data: jsonData, encoding: .utf8) {
             string
         } else {
