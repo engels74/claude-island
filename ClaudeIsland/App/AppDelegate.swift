@@ -3,9 +3,6 @@ import os
 @preconcurrency import Sparkle
 import SwiftUI
 
-/// Logger for app delegate
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
-
 // MARK: - AppDelegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -25,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try updater.start()
         } catch {
-            logger.error("Failed to start Sparkle updater: \(error.localizedDescription)")
+            Self.logger.error("Failed to start Sparkle updater: \(error.localizedDescription)")
         }
     }
 
@@ -71,10 +68,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             updater.checkForUpdates()
         }
 
-        self.updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-            Task(name: "update-check") { @MainActor [weak self] in
-                guard let updater = self?.updater, updater.canCheckForUpdates else { return }
-                updater.checkForUpdates()
+        self.updateCheckTask = Task(name: "periodic-update-check") {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+                guard !Task.isCancelled else { break }
+                guard self.updater.canCheckForUpdates else { continue }
+                self.updater.checkForUpdates()
             }
         }
     }
@@ -92,15 +91,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Stop accessibility permission monitoring
         AccessibilityPermissionManager.shared.stopPeriodicMonitoring()
 
-        self.updateCheckTimer?.invalidate()
+        self.updateCheckTask?.cancel()
         self.screenObserver = nil
     }
 
     // MARK: Private
 
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
+
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
-    private var updateCheckTimer: Timer?
+    private var updateCheckTask: Task<Void, Never>?
     private var hookInstallTask: Task<Void, Never>?
 
     private let userDriver: NotchUserDriver
@@ -130,13 +131,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Use .public privacy since these are needed for debugging and don't contain user data
         let bundlePath = Bundle.main.bundlePath
         let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
-        logger.info("App launched from: \(bundlePath, privacy: .public)")
-        logger.info("Bundle ID: \(bundleID, privacy: .public)")
+        Self.logger.info("App launched from: \(bundlePath, privacy: .public)")
+        Self.logger.info("Bundle ID: \(bundleID, privacy: .public)")
 
         let manager = AccessibilityPermissionManager.shared
 
         if manager.shouldShowPermissionWarning {
-            logger.warning("Accessibility permission not granted on launch")
+            Self.logger.warning("Accessibility permission not granted on launch")
 
             // Start periodic monitoring so UI updates when permission is granted
             manager.startPeriodicMonitoring()

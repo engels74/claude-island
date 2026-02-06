@@ -8,9 +8,6 @@
 import AppKit
 import os.log
 
-/// Logger for window management
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Window")
-
 // MARK: - WindowManager
 
 /// Manages the notch window lifecycle.
@@ -27,7 +24,7 @@ final class WindowManager {
         screenSelector.refreshScreens()
 
         guard let screen = screenSelector.selectedScreen else {
-            logger.warning("No screen found")
+            Self.logger.warning("No screen found")
             return nil
         }
 
@@ -37,7 +34,7 @@ final class WindowManager {
            let existingFrame = currentScreenFrame,
            existingFrame == screen.frame,
            currentDisplayID == screenDisplayID {
-            logger.debug("Screen unchanged, skipping window recreation")
+            Self.logger.debug("Screen unchanged, skipping window recreation")
             return existingController
         }
 
@@ -60,6 +57,8 @@ final class WindowManager {
     }
 
     // MARK: Private
+
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Window")
 
     private var isInitialLaunch = true
     private var currentScreenFrame: NSRect?

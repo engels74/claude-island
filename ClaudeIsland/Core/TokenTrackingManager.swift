@@ -8,8 +8,6 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
-
 // MARK: - UsageMetric
 
 struct UsageMetric: Equatable, Sendable {
@@ -62,10 +60,10 @@ final class TokenTrackingManager {
     }
 
     func refresh() async {
-        logger.debug("refresh() called, isEnabled: \(self.isEnabled), mode: \(String(describing: AppSettings.tokenTrackingMode))")
+        Self.logger.debug("refresh() called, isEnabled: \(self.isEnabled), mode: \(String(describing: AppSettings.tokenTrackingMode))")
 
         guard self.isEnabled else {
-            logger.debug("Token tracking disabled, returning zero")
+            Self.logger.debug("Token tracking disabled, returning zero")
             self.sessionUsage = .zero
             self.weeklyUsage = .zero
             self.lastError = nil
@@ -82,13 +80,13 @@ final class TokenTrackingManager {
                 self.weeklyUsage = .zero
 
             case .api:
-                logger.debug("Using API mode for refresh")
+                Self.logger.debug("Using API mode for refresh")
                 try await self.refreshFromAPI()
             }
             self.lastError = nil
-            logger.debug("Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
+            Self.logger.debug("Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
         } catch {
-            logger.error("Token tracking refresh failed: \(error.localizedDescription)")
+            Self.logger.error("Token tracking refresh failed: \(error.localizedDescription)")
             self.lastError = error.localizedDescription
         }
     }
@@ -137,11 +135,11 @@ final class TokenTrackingManager {
             if addStatus == errSecSuccess {
                 return true
             }
-            logger.error("Failed to save session key to Keychain: \(addStatus)")
+            Self.logger.error("Failed to save session key to Keychain: \(addStatus)")
             return false
         }
 
-        logger.error("Failed to update session key in Keychain: \(updateStatus)")
+        Self.logger.error("Failed to update session key in Keychain: \(updateStatus)")
         return false
     }
 
@@ -173,6 +171,8 @@ final class TokenTrackingManager {
 
     // MARK: Private
 
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
+
     private var refreshTask: Task<Void, Never>?
     private var periodicRefreshTask: Task<Void, Never>?
 
@@ -199,31 +199,31 @@ final class TokenTrackingManager {
         if let existingKey = defaults.string(forKey: legacyKey), !existingKey.isEmpty {
             if self.saveSessionKey(existingKey) {
                 defaults.removeObject(forKey: legacyKey)
-                logger.info("Migrated session key from UserDefaults to Keychain")
+                Self.logger.info("Migrated session key from UserDefaults to Keychain")
             } else {
-                logger.error("Failed to migrate session key to Keychain, keeping UserDefaults entry")
+                Self.logger.error("Failed to migrate session key to Keychain, keeping UserDefaults entry")
             }
         }
     }
 
     private func refreshFromAPI() async throws {
-        logger.debug("refreshFromAPI called")
+        Self.logger.debug("refreshFromAPI called")
         let apiService = ClaudeAPIService.shared
 
         if AppSettings.tokenUseCLIOAuth {
-            logger.debug("CLI OAuth mode enabled, checking for token...")
+            Self.logger.debug("CLI OAuth mode enabled, checking for token...")
             if let oauthToken = self.getCLIOAuthToken() {
-                logger.debug("Found OAuth token, fetching usage...")
+                Self.logger.debug("Found OAuth token, fetching usage...")
                 let response = try await apiService.fetchUsage(oauthToken: oauthToken)
                 self.updateFromAPIResponse(response)
                 return
             } else {
-                logger.debug("CLI OAuth enabled but no token found, falling back to session key")
+                Self.logger.debug("CLI OAuth enabled but no token found, falling back to session key")
             }
         }
 
         guard let sessionKey = self.loadSessionKey(), !sessionKey.isEmpty else {
-            logger.error("No session key configured")
+            Self.logger.error("No session key configured")
             throw TokenTrackingError.noCredentials
         }
 
@@ -232,7 +232,7 @@ final class TokenTrackingManager {
     }
 
     private func updateFromAPIResponse(_ response: APIUsageResponse) {
-        logger.debug("Updating from API response - session: \(response.fiveHour.utilization)%, weekly: \(response.sevenDay.utilization)%")
+        Self.logger.debug("Updating from API response - session: \(response.fiveHour.utilization)%, weekly: \(response.sevenDay.utilization)%")
 
         self.sessionUsage = UsageMetric(
             used: 0,
@@ -251,12 +251,12 @@ final class TokenTrackingManager {
 
     private func getCLIOAuthToken() -> String? {
         guard let data = findCLIKeychainData() else {
-            logger.error("CLI OAuth token not found in any Keychain entry")
+            Self.logger.error("CLI OAuth token not found in any Keychain entry")
             return nil
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logger.error("Failed to parse CLI OAuth Keychain data as JSON")
+            Self.logger.error("Failed to parse CLI OAuth Keychain data as JSON")
             return nil
         }
 
@@ -271,7 +271,7 @@ final class TokenTrackingManager {
             accessToken = token
             expirySource = json
         } else {
-            logger.error("No accessToken found in CLI OAuth Keychain data")
+            Self.logger.error("No accessToken found in CLI OAuth Keychain data")
             return nil
         }
 
@@ -301,10 +301,10 @@ final class TokenTrackingManager {
             let status = SecItemCopyMatching(query as CFDictionary, &result)
 
             if status == errSecSuccess, let data = result as? Data {
-                logger.debug("Found CLI credentials in Keychain (service: \(candidate.service, privacy: .public))")
+                Self.logger.debug("Found CLI credentials in Keychain (service: \(candidate.service, privacy: .public))")
                 return data
             } else {
-                logger.debug("No credentials at service: \(candidate.service, privacy: .public) (status: \(status))")
+                Self.logger.debug("No credentials at service: \(candidate.service, privacy: .public) (status: \(status))")
             }
         }
 
@@ -316,17 +316,17 @@ final class TokenTrackingManager {
         if let ms = source["expiresAt"] as? Double {
             let expiry = Date(timeIntervalSince1970: ms / 1000)
             if expiry < Date() {
-                logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
+                Self.logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
                 return true
             }
-            logger.debug("CLI OAuth token valid (expires: \(expiry))")
+            Self.logger.debug("CLI OAuth token valid (expires: \(expiry))")
         } else if let ms = source["expiresAt"] as? Int {
             let expiry = Date(timeIntervalSince1970: Double(ms) / 1000)
             if expiry < Date() {
-                logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
+                Self.logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
                 return true
             }
-            logger.debug("CLI OAuth token valid (expires: \(expiry))")
+            Self.logger.debug("CLI OAuth token valid (expires: \(expiry))")
         } else if let str = source["expiresAt"] as? String {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -337,15 +337,15 @@ final class TokenTrackingManager {
             }
             if let expiry {
                 if expiry < Date() {
-                    logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
+                    Self.logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
                     return true
                 }
-                logger.debug("CLI OAuth token valid (expires: \(expiry))")
+                Self.logger.debug("CLI OAuth token valid (expires: \(expiry))")
             } else {
-                logger.debug("Could not parse expiresAt string, assuming token is valid")
+                Self.logger.debug("Could not parse expiresAt string, assuming token is valid")
             }
         } else {
-            logger.debug("No expiresAt field found, assuming token is valid")
+            Self.logger.debug("No expiresAt field found, assuming token is valid")
         }
 
         return false

@@ -156,7 +156,8 @@ final class AgentFileWatcher: @unchecked Sendable {
 
 // MARK: - AgentFileWatcherManager
 
-/// Manages agent file watchers for active Task tools
+/// Manages agent file watchers for active Task tools.
+/// Implicitly MainActor-isolated (SE-0466 default) — all access is MainActor-local.
 class AgentFileWatcherManager {
     // MARK: Lifecycle
 
@@ -223,8 +224,9 @@ class AgentFileWatcherManager {
 
 // MARK: - AgentFileWatcherBridge
 
-/// Bridge between AgentFileWatcherManager and SessionStore
-/// Converts delegate callbacks into SessionEvent processing
+/// Bridge between AgentFileWatcherManager and SessionStore.
+/// Converts delegate callbacks into SessionEvent processing.
+/// Implicitly MainActor-isolated (SE-0466 default) — all access is MainActor-local.
 class AgentFileWatcherBridge: AgentFileWatcherDelegate {
     // MARK: Lifecycle
 

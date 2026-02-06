@@ -12,8 +12,6 @@ import ServiceManagement
 @preconcurrency import Sparkle
 import SwiftUI
 
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchMenuView")
-
 // MARK: - NotchMenuView
 
 struct NotchMenuView: View {
@@ -75,7 +73,7 @@ struct NotchMenuView: View {
                             self.launchAtLogin = true
                         }
                     } catch {
-                        logger.error("Failed to toggle launch at login: \(error.localizedDescription)")
+                        Self.logger.error("Failed to toggle launch at login: \(error.localizedDescription)")
                     }
                 }
 
@@ -154,6 +152,8 @@ struct NotchMenuView: View {
     }
 
     // MARK: Private
+
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchMenuView")
 
     @State private var hooksInstalled = false
     @State private var launchAtLogin = false

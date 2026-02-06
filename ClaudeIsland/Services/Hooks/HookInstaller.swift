@@ -8,9 +8,6 @@
 import Foundation
 import os.log
 
-/// Logger for hook installation
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
-
 // MARK: - HookInstaller
 
 /// Hook installer — MainActor (default) protects static mutable state
@@ -136,6 +133,8 @@ enum HookInstaller {
 
     // MARK: Private
 
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+
     /// Detect the best available Python runtime
     private static func detectPythonRuntime() async {
         self.detectedRuntime = await PythonRuntimeDetector.shared.detectRuntime()
@@ -154,11 +153,11 @@ enum HookInstaller {
                   runtime: runtime
               )
         else {
-            logger.warning("Skipping hook settings update - no suitable Python runtime")
+            self.logger.warning("Skipping hook settings update - no suitable Python runtime")
             return
         }
 
-        logger.info("Using hook command: \(command)")
+        Self.logger.info("Using hook command: \(command)")
 
         var json: [String: Any] = [:]
         if let data = try? Data(contentsOf: settingsURL),
@@ -274,7 +273,7 @@ enum HookInstaller {
 
         // Remove duplicates in reverse order to preserve indices
         if !indicesToRemove.isEmpty {
-            logger.info("Removed \(indicesToRemove.count) duplicate claude-island hook entry(ies) from \(eventName)")
+            Self.logger.info("Removed \(indicesToRemove.count) duplicate claude-island hook entry(ies) from \(eventName)")
             for index in indicesToRemove.reversed() {
                 result.remove(at: index)
             }
@@ -308,7 +307,7 @@ enum HookInstaller {
 
         targetHooks.append(contentsOf: userHooks)
         entries[targetIndex]["hooks"] = targetHooks
-        logger.info("Merged \(userHooks.count) user hook(s) from duplicate entry in \(eventName)")
+        Self.logger.info("Merged \(userHooks.count) user hook(s) from duplicate entry in \(eventName)")
     }
 
     /// Update claude-island command in hooks array

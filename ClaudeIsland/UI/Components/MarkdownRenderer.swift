@@ -5,7 +5,7 @@
 //  Markdown renderer using swift-markdown for efficient parsing
 //
 
-@preconcurrency import Markdown
+import Markdown
 import SwiftUI
 import Synchronization
 

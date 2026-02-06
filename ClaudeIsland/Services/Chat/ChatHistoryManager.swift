@@ -188,7 +188,7 @@ nonisolated struct ToolCallItem: Equatable, Sendable {
 
 // MARK: - ToolStatus
 
-nonisolated enum ToolStatus: Sendable, CustomStringConvertible {
+nonisolated enum ToolStatus: Equatable, Sendable, CustomStringConvertible {
     case running
     case waitingForApproval
     case success
@@ -204,22 +204,6 @@ nonisolated enum ToolStatus: Sendable, CustomStringConvertible {
         case .success: "success"
         case .error: "error"
         case .interrupted: "interrupted"
-        }
-    }
-}
-
-// MARK: Equatable
-
-/// Explicit nonisolated Equatable conformance to avoid actor isolation issues
-nonisolated extension ToolStatus: Equatable {
-    nonisolated static func == (lhs: ToolStatus, rhs: ToolStatus) -> Bool {
-        switch (lhs, rhs) {
-        case (.running, .running): true
-        case (.waitingForApproval, .waitingForApproval): true
-        case (.success, .success): true
-        case (.error, .error): true
-        case (.interrupted, .interrupted): true
-        default: false
         }
     }
 }

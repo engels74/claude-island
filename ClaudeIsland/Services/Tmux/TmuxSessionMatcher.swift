@@ -143,6 +143,6 @@ actor TmuxSessionMatcher {
             return 0
         }
 
-        return snippets.filter { content.contains($0) }.count
+        return snippets.count { content.contains($0) }
     }
 }

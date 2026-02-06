@@ -9,9 +9,6 @@
 import Foundation
 import os.log
 
-/// Logger for tool events
-private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ToolEvents")
-
 // MARK: - ToolEventProcessor
 
 /// Processes tool-related events and updates session state
@@ -45,7 +42,7 @@ enum ToolEventProcessor {
                 timestamp: Date()
             )
             session.chatItems.append(placeholderItem)
-            logger.debug("Created placeholder tool entry for \(toolUseID.prefix(16), privacy: .public)")
+            Self.logger.debug("Created placeholder tool entry for \(toolUseID.prefix(16), privacy: .public)")
         }
     }
 
@@ -71,9 +68,9 @@ enum ToolEventProcessor {
 
         if event.tool == "Task" {
             session.subagentState.startTask(taskToolID: toolUseID)
-            logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
+            Self.logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
         } else if let toolName = event.tool, session.subagentState.hasActiveSubagent {
-            logger.debug("Adding subagent tool \(toolName, privacy: .public) to active Task")
+            Self.logger.debug("Adding subagent tool \(toolName, privacy: .public) to active Task")
             let input = self.extractToolInput(from: event.toolInput)
             let subagentTool = SubagentToolCall(
                 id: toolUseID,
@@ -95,14 +92,14 @@ enum ToolEventProcessor {
 
         if event.tool == "Task" {
             if let taskContext = session.subagentState.activeTasks[toolUseID] {
-                logger.debug("Task completing with \(taskContext.subagentTools.count) subagent tools")
+                Self.logger.debug("Task completing with \(taskContext.subagentTools.count) subagent tools")
                 self.attachSubagentToolsToTask(
                     session: &session,
                     taskToolID: toolUseID,
                     subagentTools: taskContext.subagentTools
                 )
             } else {
-                logger.debug("Task completing but no taskContext found for \(toolUseID.prefix(12), privacy: .public)")
+                Self.logger.debug("Task completing but no taskContext found for \(toolUseID.prefix(12), privacy: .public)")
             }
             session.subagentState.stopTask(taskToolID: toolUseID)
         } else {
@@ -150,7 +147,7 @@ enum ToolEventProcessor {
             }
         }
         let count = session.chatItems.count
-        logger.warning("Tool \(toolID.prefix(16), privacy: .public) not found in chatItems (count: \(count))")
+        Self.logger.warning("Tool \(toolID.prefix(16), privacy: .public) not found in chatItems (count: \(count))")
     }
 
     /// Find the next tool waiting for approval
@@ -184,6 +181,8 @@ enum ToolEventProcessor {
 
     // MARK: Private
 
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ToolEvents")
+
     // MARK: - Private Helpers
 
     /// Attach subagent tools to a Task's ChatHistoryItem
@@ -203,23 +202,23 @@ enum ToolEventProcessor {
                     type: .toolCall(tool),
                     timestamp: session.chatItems[i].timestamp
                 )
-                logger.debug("Attached \(subagentTools.count) subagent tools to Task \(taskToolID.prefix(12), privacy: .public)")
+                self.logger.debug("Attached \(subagentTools.count) subagent tools to Task \(taskToolID.prefix(12), privacy: .public)")
                 break
             }
         }
     }
 
-    /// Extract tool input from AnyCodable dictionary
-    private static func extractToolInput(from hookInput: [String: AnyCodable]?) -> [String: String] {
+    /// Extract tool input from JSONValue dictionary
+    private static func extractToolInput(from hookInput: [String: JSONValue]?) -> [String: String] {
         var input: [String: String] = [:]
         guard let hookInput else { return input }
 
         for (key, value) in hookInput {
-            if let str = value.value as? String {
+            if let str = value.stringValue {
                 input[key] = str
-            } else if let num = value.value as? Int {
+            } else if let num = value.intValue {
                 input[key] = String(num)
-            } else if let bool = value.value as? Bool {
+            } else if let bool = value.boolValue {
                 input[key] = bool ? "true" : "false"
             }
         }

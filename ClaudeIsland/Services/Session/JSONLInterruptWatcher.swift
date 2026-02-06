@@ -266,7 +266,8 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
 
 // MARK: - InterruptWatcherManager
 
-/// Manages interrupt watchers for all active sessions
+/// Manages interrupt watchers for all active sessions.
+/// Implicitly MainActor-isolated (SE-0466 default) — all access is MainActor-local.
 class InterruptWatcherManager {
     // MARK: Lifecycle
 

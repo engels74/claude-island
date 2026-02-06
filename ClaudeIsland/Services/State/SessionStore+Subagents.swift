@@ -17,7 +17,7 @@ extension SessionStore {
         switch event.event {
         case "PreToolUse":
             if event.tool == "Task", let toolUseID = event.toolUseID {
-                let description = event.toolInput?["description"]?.value as? String
+                let description = event.toolInput?["description"]?.stringValue
                 session.subagentState.startTask(taskToolID: toolUseID, description: description)
                 Self.logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
             }

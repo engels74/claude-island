@@ -345,11 +345,11 @@ actor SessionStore {
                     var input: [String: String] = [:]
                     if let hookInput = event.toolInput {
                         for (key, value) in hookInput {
-                            if let str = value.value as? String {
+                            if let str = value.stringValue {
                                 input[key] = str
-                            } else if let num = value.value as? Int {
+                            } else if let num = value.intValue {
                                 input[key] = String(num)
-                            } else if let bool = value.value as? Bool {
+                            } else if let bool = value.boolValue {
                                 input[key] = bool ? "true" : "false"
                             }
                         }

@@ -11,33 +11,12 @@ import Foundation
 // MARK: - PermissionContext
 
 /// Permission context for tools waiting for approval
-/// Note: Uses serialized JSON string for toolInput to ensure true Sendable safety
-/// (AnyCodable contains `Any` which can hold mutable reference types)
+/// Stores tool input directly as `[String: JSONValue]?` — natively `Sendable` without serialization.
 nonisolated struct PermissionContext: Sendable {
-    // MARK: Lifecycle
-
-    /// Initialize with raw tool input dictionary (serializes to JSON)
-    nonisolated init(toolUseID: String, toolName: String, toolInput: [String: AnyCodable]?, receivedAt: Date) {
-        self.toolUseID = toolUseID
-        self.toolName = toolName
-        self.receivedAt = receivedAt
-
-        // Serialize tool input to JSON string for Sendable safety
-        if let input = toolInput,
-           let data = try? JSONEncoder().encode(input),
-           let jsonString = String(data: data, encoding: .utf8) {
-            self.toolInputJSON = jsonString
-        } else {
-            self.toolInputJSON = nil
-        }
-    }
-
-    // MARK: Internal
-
     let toolUseID: String
     let toolName: String
-    /// Tool input serialized as JSON string for Sendable safety
-    let toolInputJSON: String?
+    /// Tool input stored directly — JSONValue is natively Sendable
+    let toolInput: [String: JSONValue]?
     let receivedAt: Date
 
     /// Format tool input for display with smart prioritization
@@ -57,7 +36,7 @@ nonisolated struct PermissionContext: Sendable {
 
         // Check if tool has a priority key
         if let key = priorityKeys[toolName],
-           let value = input[key] as? String,
+           let value = input[key]?.stringValue,
            !value.isEmpty {
             // For file operations, show only filename
             if ["Read", "Write", "Edit"].contains(self.toolName) {
@@ -69,25 +48,12 @@ nonisolated struct PermissionContext: Sendable {
         // Fallback: first non-empty string value (skip "description" key)
         for (key, value) in input {
             if key == "description" { continue }
-            if let str = value as? String, !str.isEmpty {
+            if let str = value.stringValue, !str.isEmpty {
                 return str.count > 100 ? String(str.prefix(100)) + "..." : str
             }
         }
 
         return nil
-    }
-
-    // MARK: Private
-
-    /// Decode tool input from JSON when needed
-    private var toolInput: [String: Any]? {
-        guard let json = toolInputJSON,
-              let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            return nil
-        }
-        return dict
     }
 }
 
@@ -96,10 +62,9 @@ nonisolated struct PermissionContext: Sendable {
 // swiftformat:disable all
 nonisolated extension PermissionContext: Equatable {
     nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
-        // Compare by identity fields and serialized input
         lhs.toolUseID == rhs.toolUseID &&
             lhs.toolName == rhs.toolName &&
-            lhs.toolInputJSON == rhs.toolInputJSON &&
+            lhs.toolInput == rhs.toolInput &&
             lhs.receivedAt == rhs.receivedAt
     }
 }

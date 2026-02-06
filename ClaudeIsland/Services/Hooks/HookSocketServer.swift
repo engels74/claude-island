@@ -54,7 +54,7 @@ nonisolated struct HookEvent: Sendable {
         pid: Int?,
         tty: String?,
         tool: String?,
-        toolInput: [String: AnyCodable]?,
+        toolInput: [String: JSONValue]?,
         toolUseID: String?,
         notificationType: String?,
         message: String?
@@ -90,7 +90,7 @@ nonisolated struct HookEvent: Sendable {
     let pid: Int?
     let tty: String?
     let tool: String?
-    let toolInput: [String: AnyCodable]?
+    let toolInput: [String: JSONValue]?
     let toolUseID: String?
     let notificationType: String?
     let message: String?
@@ -153,7 +153,7 @@ nonisolated extension HookEvent: Codable {
         pid = try container.decodeIfPresent(Int.self, forKey: .pid)
         tty = try container.decodeIfPresent(String.self, forKey: .tty)
         tool = try container.decodeIfPresent(String.self, forKey: .tool)
-        toolInput = try container.decodeIfPresent([String: AnyCodable].self, forKey: .toolInput)
+        toolInput = try container.decodeIfPresent([String: JSONValue].self, forKey: .toolInput)
         toolUseID = try container.decodeIfPresent(String.self, forKey: .toolUseID)
         notificationType = try container.decodeIfPresent(String.self, forKey: .notificationType)
         message = try container.decodeIfPresent(String.self, forKey: .message)
@@ -178,14 +178,14 @@ nonisolated extension HookEvent: Codable {
 // MARK: - HookResponse
 
 /// Response to send back to the hook
-struct HookResponse: Sendable {
+nonisolated struct HookResponse: Sendable {
     let decision: String // "allow", "deny", or "ask"
     let reason: String?
 }
 
 // MARK: - HookResponse + Codable
 
-extension HookResponse: Codable {
+nonisolated extension HookResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case decision, reason
     }
@@ -206,7 +206,7 @@ extension HookResponse: Codable {
 // MARK: - PendingPermission
 
 /// Pending permission request waiting for user decision
-struct PendingPermission: Sendable {
+nonisolated struct PendingPermission: Sendable {
     let sessionID: String
     let toolUseID: String
     let clientSocket: Int32
@@ -223,7 +223,7 @@ typealias PermissionFailureHandler = @Sendable (_ sessionID: String, _ toolUseID
 // MARK: - PermissionsState
 
 /// State protected by permissions Mutex
-private struct PermissionsState: Sendable {
+private nonisolated struct PermissionsState: Sendable {
     var pendingPermissions: [String: PendingPermission] = [:]
     var respondedPermissions: Set<String> = []
 }
@@ -231,7 +231,7 @@ private struct PermissionsState: Sendable {
 // MARK: - CacheState
 
 /// State protected by cache Mutex
-private struct CacheState: Sendable {
+private nonisolated struct CacheState: Sendable {
     var toolUseIDCache: [String: [String]] = [:]
 }
 
@@ -316,8 +316,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     /// Get the pending permission details for a session (if any)
-    nonisolated func getPendingPermission(sessionID: String) -> (toolName: String?, toolID: String?, toolInput: [String: AnyCodable]?)? {
-        permissionsState.withLock { state -> (toolName: String?, toolID: String?, toolInput: [String: AnyCodable]?)? in
+    nonisolated func getPendingPermission(sessionID: String) -> (toolName: String?, toolID: String?, toolInput: [String: JSONValue]?)? {
+        permissionsState.withLock { state -> (toolName: String?, toolID: String?, toolInput: [String: JSONValue]?)? in
             guard let pending = state.pendingPermissions.values.first(where: { $0.sessionID == sessionID }) else {
                 return nil
             }
@@ -555,7 +555,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     /// Generate cache key from event properties
-    private nonisolated func cacheKey(sessionID: String, toolName: String?, toolInput: [String: AnyCodable]?) -> String {
+    private nonisolated func cacheKey(sessionID: String, toolName: String?, toolInput: [String: JSONValue]?) -> String {
         let inputStr: String = if let input = toolInput,
                                   let data = try? Self.sortedEncoder.encode(input),
                                   let str = String(data: data, encoding: .utf8) {
@@ -765,7 +765,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
     }
 
-    private enum TimeoutResult {
+    private nonisolated enum TimeoutResult {
         case notFound
         case wrongSession
         case notTimedOut
@@ -799,7 +799,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         permissionFailureHandler?(sessionID, toolUseID)
     }
 
-    private enum PermissionLookupResult {
+    private nonisolated enum PermissionLookupResult {
         case alreadyResponded
         case notFound
         case found(pending: PendingPermission)
@@ -914,83 +914,6 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             if !writeSuccess {
                 permissionFailureHandler?(sessionID, pending.toolUseID)
             }
-        }
-    }
-}
-
-// MARK: - AnyCodable
-
-/// Type-erasing codable wrapper for heterogeneous values
-/// Used to decode JSON objects with mixed value types
-///
-/// `@unchecked Sendable` safety justification:
-/// 1. The `value` property is immutable (`let`) - once set, it cannot be changed
-/// 2. In practice, values are only JSON-compatible types (String, Int, Double, Bool, Array, Dict)
-/// 3. These JSON-compatible types are all either value types or immutable reference types
-/// 4. The struct is created from JSON decoding and immediately passed across actor boundaries
-/// 5. No mutation occurs after initialization - it's effectively a "frozen" value container
-///
-/// Note: For types that need true Sendable safety (like PermissionContext), we serialize
-/// the AnyCodable content to a JSON string instead. See PermissionContext.toolInputJSON.
-struct AnyCodable: Codable, @unchecked Sendable {
-    // MARK: Lifecycle
-
-    /// Initialize with any value
-    nonisolated init(_ value: Any) {
-        self.value = value
-    }
-
-    /// Decode from JSON
-    nonisolated init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            self.value = NSNull()
-        } else if let bool = try? container.decode(Bool.self) {
-            self.value = bool
-        } else if let int = try? container.decode(Int.self) {
-            self.value = int
-        } else if let double = try? container.decode(Double.self) {
-            self.value = double
-        } else if let string = try? container.decode(String.self) {
-            self.value = string
-        } else if let array = try? container.decode([Self].self) {
-            self.value = array.map(\.value)
-        } else if let dict = try? container.decode([String: Self].self) {
-            self.value = dict.mapValues { $0.value }
-        } else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode value")
-        }
-    }
-
-    // MARK: Internal
-
-    /// The underlying value
-    /// `nonisolated(unsafe)` is required because `Any` is not Sendable, but we ensure safety
-    /// through immutability (let) and limiting to JSON-compatible value types only
-    nonisolated(unsafe) let value: Any
-
-    /// Encode to JSON
-    nonisolated func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch value {
-        case is NSNull:
-            try container.encodeNil()
-        case let bool as Bool:
-            try container.encode(bool)
-        case let int as Int:
-            try container.encode(int)
-        case let double as Double:
-            try container.encode(double)
-        case let string as String:
-            try container.encode(string)
-        case let array as [Any]:
-            try container.encode(array.map { Self($0) })
-        case let dict as [String: Any]:
-            try container.encode(dict.mapValues { Self($0) })
-        default:
-            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: [], debugDescription: "Cannot encode value"))
         }
     }
 }
