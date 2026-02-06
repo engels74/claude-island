@@ -251,35 +251,100 @@ final class TokenTrackingManager {
     }
 
     private func getCLIOAuthToken() -> String? {
-        let keychainQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "claude-cli",
-            kSecAttrAccount as String: "oauth-tokens",
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(keychainQuery as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let accessToken = json["accessToken"] as? String
-        else {
+        guard let data = findCLIKeychainData() else {
+            logger.error("CLI OAuth token not found in any Keychain entry")
             return nil
         }
 
-        if let expiresAt = json["expiresAt"] as? String {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let expiryDate = formatter.date(from: expiresAt), expiryDate < Date() {
-                logger.warning("CLI OAuth token is expired")
-                return nil
-            }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            logger.error("Failed to parse CLI OAuth Keychain data as JSON")
+            return nil
+        }
+
+        let accessToken: String
+        let expirySource: [String: Any]
+
+        if let nested = json["claudeAiOauth"] as? [String: Any],
+           let token = nested["accessToken"] as? String {
+            accessToken = token
+            expirySource = nested
+        } else if let token = json["accessToken"] as? String {
+            accessToken = token
+            expirySource = json
+        } else {
+            logger.error("No accessToken found in CLI OAuth Keychain data")
+            return nil
+        }
+
+        if self.isOAuthTokenExpired(expirySource) {
+            return nil
         }
 
         return accessToken
+    }
+
+    private func findCLIKeychainData() -> Data? {
+        let candidates: [(service: String, account: String)] = [
+            ("Claude Code-credentials", NSUserName()),
+            ("claude-cli", "oauth-tokens"),
+        ]
+
+        for candidate in candidates {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: candidate.service,
+                kSecAttrAccount as String: candidate.account,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne,
+            ]
+
+            var result: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+            if status == errSecSuccess, let data = result as? Data {
+                logger.debug("Found CLI credentials in Keychain (service: \(candidate.service, privacy: .public))")
+                return data
+            } else {
+                logger.debug("No credentials at service: \(candidate.service, privacy: .public) (status: \(status))")
+            }
+        }
+
+        return nil
+    }
+
+    /// Returns `true` if the token is expired and should not be used.
+    private func isOAuthTokenExpired(_ source: [String: Any]) -> Bool {
+        if let ms = source["expiresAt"] as? Double {
+            let expiry = Date(timeIntervalSince1970: ms / 1000)
+            if expiry < Date() {
+                logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
+                return true
+            }
+            logger.debug("CLI OAuth token valid (expires: \(expiry))")
+        } else if let ms = source["expiresAt"] as? Int {
+            let expiry = Date(timeIntervalSince1970: Double(ms) / 1000)
+            if expiry < Date() {
+                logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
+                return true
+            }
+            logger.debug("CLI OAuth token valid (expires: \(expiry))")
+        } else if let str = source["expiresAt"] as? String {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let expiry = formatter.date(from: str) {
+                if expiry < Date() {
+                    logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
+                    return true
+                }
+                logger.debug("CLI OAuth token valid (expires: \(expiry))")
+            } else {
+                logger.debug("Could not parse expiresAt string, assuming token is valid")
+            }
+        } else {
+            logger.debug("No expiresAt field found, assuming token is valid")
+        }
+
+        return false
     }
 }
 
