@@ -11,7 +11,6 @@ import Observation
 /// Manages sound selection state for the settings menu
 /// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
 @Observable
-@MainActor
 final class SoundSelector {
     // MARK: Lifecycle
 

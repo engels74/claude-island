@@ -8,7 +8,7 @@
 import Foundation
 
 /// Registry of known terminal application names and bundle identifiers
-struct TerminalAppRegistry: Sendable {
+nonisolated struct TerminalAppRegistry: Sendable {
     /// Terminal app names for process matching
     nonisolated static let appNames: Set<String> = [
         "Terminal",

@@ -12,7 +12,7 @@ import Foundation
 
 /// Complete state for a single Claude session
 /// This is the single source of truth - all state reads and writes go through SessionStore
-struct SessionState: Equatable, Identifiable, Sendable {
+nonisolated struct SessionState: Equatable, Identifiable, Sendable {
     // MARK: Lifecycle
 
     // MARK: - Initialization
@@ -206,7 +206,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
 // MARK: - ToolTracker
 
 /// Unified tool tracking - replaces multiple dictionaries in ChatHistoryManager
-struct ToolTracker: Equatable, Sendable {
+nonisolated struct ToolTracker: Equatable, Sendable {
     // MARK: Lifecycle
 
     nonisolated init(
@@ -265,7 +265,7 @@ struct ToolTracker: Equatable, Sendable {
 // MARK: - ToolInProgress
 
 /// A tool currently in progress
-struct ToolInProgress: Equatable, Sendable {
+nonisolated struct ToolInProgress: Equatable, Sendable {
     let id: String
     let name: String
     let startTime: Date
@@ -275,7 +275,7 @@ struct ToolInProgress: Equatable, Sendable {
 // MARK: - ToolInProgressPhase
 
 /// Phase of a tool in progress
-enum ToolInProgressPhase: Equatable, Sendable {
+nonisolated enum ToolInProgressPhase: Equatable, Sendable {
     case starting
     case running
     case pendingApproval
@@ -284,7 +284,7 @@ enum ToolInProgressPhase: Equatable, Sendable {
 // MARK: - SubagentState
 
 /// State for Task (subagent) tools
-struct SubagentState: Equatable, Sendable {
+nonisolated struct SubagentState: Equatable, Sendable {
     // MARK: Lifecycle
 
     nonisolated init(activeTasks: [String: TaskContext] = [:], taskStack: [String] = [], agentDescriptions: [String: String] = [:]) {
@@ -369,7 +369,7 @@ struct SubagentState: Equatable, Sendable {
 // MARK: - TaskContext
 
 /// Context for an active Task tool
-struct TaskContext: Equatable, Sendable {
+nonisolated struct TaskContext: Equatable, Sendable {
     let taskToolID: String
     let startTime: Date
     var agentID: String?

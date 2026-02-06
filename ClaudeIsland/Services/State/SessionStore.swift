@@ -53,9 +53,9 @@ actor SessionStore {
         // Set onTermination synchronously (before any Task) to avoid a race where
         // the stream terminates before registerContinuation installs the handler.
         continuation.onTermination = { [weak self] _ in
-            Task { await self?.removeContinuation(id: id) }
+            Task(name: "session-stream-deregister") { await self?.removeContinuation(id: id) }
         }
-        Task {
+        Task(name: "session-stream-register") {
             await self.registerContinuation(continuation, id: id)
         }
         return stream
@@ -162,7 +162,7 @@ actor SessionStore {
 
         // Schedule new debounced sync
         // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
-        self.pendingSyncs[sessionID] = Task {
+        self.pendingSyncs[sessionID] = Task(name: "file-sync") {
             try? await Task.sleep(nanoseconds: self.syncDebounceNs)
             guard !Task.isCancelled else { return }
 

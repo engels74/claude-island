@@ -128,10 +128,9 @@ struct NotchView: View {
             // Catches the case where user grants permission in System Settings
             self.accessibilityManager.handleAppActivation()
         }
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: DispatchQueue.main)) { _ in
-                self.clawdColor = AppSettings.clawdColor
-                self.clawdAlwaysVisible = AppSettings.clawdAlwaysVisible
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            self.clawdColor = AppSettings.clawdColor
+            self.clawdAlwaysVisible = AppSettings.clawdAlwaysVisible
         }
         .onChange(of: self.clawdAlwaysVisible) { _, newValue in
             if newValue {
@@ -605,7 +604,7 @@ struct NotchView: View {
             // Don't hide on non-notched devices - users need a visible target
             if self.viewModel.status == .closed && self.viewModel.hasPhysicalNotch {
                 self.hideVisibilityTask?.cancel()
-                self.hideVisibilityTask = Task {
+                self.hideVisibilityTask = Task(name: "hide-notch-processing") {
                     try? await Task.sleep(for: .seconds(0.5))
                     guard !Task.isCancelled else { return }
                     if !self.isAnyProcessing && !self.hasPendingPermission && !self.hasWaitingForInput
@@ -634,7 +633,7 @@ struct NotchView: View {
             // Don't hide when always-visible is enabled
             guard !self.clawdAlwaysVisible else { return }
             self.hideVisibilityTask?.cancel()
-            self.hideVisibilityTask = Task {
+            self.hideVisibilityTask = Task(name: "hide-notch-close") {
                 try? await Task.sleep(for: .seconds(0.35))
                 guard !Task.isCancelled else { return }
                 if self.viewModel.status == .closed && !self.isAnyProcessing && !self.hasPendingPermission
@@ -700,7 +699,7 @@ struct NotchView: View {
             // Play notification sound if the session is not actively focused
             if let soundName = AppSettings.notificationSound.soundName {
                 // Check if we should play sound (async check for tmux pane focus)
-                Task {
+                Task(name: "notification-sound") {
                     let shouldPlaySound = await shouldPlayNotificationSound(for: newlyWaitingSessions)
                     if shouldPlaySound {
                         _ = await MainActor.run {
@@ -713,7 +712,7 @@ struct NotchView: View {
             // Trigger bounce animation to get user's attention
             self.bounceTask?.cancel()
             self.isBouncing = true
-            self.bounceTask = Task {
+            self.bounceTask = Task(name: "bounce-animation") {
                 // Bounce back after a short delay
                 try? await Task.sleep(for: .seconds(0.15))
                 guard !Task.isCancelled else { return }
@@ -722,7 +721,7 @@ struct NotchView: View {
 
             // Schedule hiding the checkmark after 30 seconds
             self.checkmarkHideTask?.cancel()
-            self.checkmarkHideTask = Task {
+            self.checkmarkHideTask = Task(name: "checkmark-hide") {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled else { return }
                 // Trigger a UI update to re-evaluate hasWaitingForInput

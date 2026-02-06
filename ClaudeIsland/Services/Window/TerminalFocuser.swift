@@ -31,7 +31,7 @@ struct TerminalFocuser: Sendable {
     /// - Returns: true if the terminal was successfully focused
     func focusTerminal(forClaudePID claudePID: Int) async -> Bool {
         // Run blocking process tree operations off the main thread via detached task
-        let result: (terminalPID: Int, command: String)? = await Task.detached(priority: .userInitiated) {
+        let result: (terminalPID: Int, command: String)? = await Task.detached(name: "find-terminal-pid", priority: .userInitiated) {
             let tree = ProcessTreeBuilder.shared.buildTree()
 
             guard let terminalPID = ProcessTreeBuilder.shared.findTerminalPID(forProcess: claudePID, tree: tree),
@@ -58,7 +58,7 @@ struct TerminalFocuser: Sendable {
     /// - Returns: true if a terminal was successfully focused
     func focusTerminal(forWorkingDirectory workingDirectory: String) async -> Bool {
         // Run blocking process tree operations off the main thread via detached task
-        let result: (terminalPID: Int, command: String)? = await Task.detached(priority: .userInitiated) {
+        let result: (terminalPID: Int, command: String)? = await Task.detached(name: "find-terminal-cwd", priority: .userInitiated) {
             let tree = ProcessTreeBuilder.shared.buildTree()
 
             // Find Claude processes with matching cwd

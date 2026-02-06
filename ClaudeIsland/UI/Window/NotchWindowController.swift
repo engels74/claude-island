@@ -62,7 +62,7 @@ class NotchWindowController: NSWindowController {
         // - Closed: ignoresMouseEvents = true (clicks pass through to menu bar/apps)
         // - Opened: ignoresMouseEvents = false (buttons inside panel work)
         let statusStream = self.viewModel.makeStatusStream()
-        self.statusTask = Task { @MainActor [weak notchWindow, weak viewModel] in
+        self.statusTask = Task(name: "notch-status-stream") { @MainActor [weak notchWindow, weak viewModel] in
             for await status in statusStream {
                 switch status {
                 case .opened:
@@ -86,7 +86,7 @@ class NotchWindowController: NSWindowController {
 
         // Perform boot animation after a brief delay (only on initial launch)
         if animateOnLaunch {
-            self.bootAnimationTask = Task { [weak self] in
+            self.bootAnimationTask = Task(name: "boot-animation-delay") { [weak self] in
                 try? await Task.sleep(for: .seconds(0.3))
                 guard !Task.isCancelled else { return }
                 self?.viewModel.performBootAnimation()

@@ -74,7 +74,7 @@ struct InlineColorPicker: View {
         self.isUpdatingFromColor = true
         self.selectedColor = Color(hue: self.hue, saturation: self.saturation, brightness: self.brightness)
         // Defer flag reset to next run loop iteration to prevent onChange feedback loops
-        Task { @MainActor in
+        Task(name: "color-update-reset") { @MainActor in
             self.isUpdatingFromColor = false
         }
     }

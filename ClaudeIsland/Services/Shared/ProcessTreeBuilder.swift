@@ -10,7 +10,7 @@ import Foundation
 // MARK: - ProcessInfo
 
 /// Information about a process in the tree
-struct ProcessInfo: Sendable {
+nonisolated struct ProcessInfo: Sendable {
     let pid: Int
     let ppid: Int
     let command: String
@@ -20,7 +20,7 @@ struct ProcessInfo: Sendable {
 // MARK: - ProcessTree
 
 /// Indexed process tree with O(1) parent→children lookup
-struct ProcessTree: Sendable {
+nonisolated struct ProcessTree: Sendable {
     // MARK: Lifecycle
 
     /// Create an indexed process tree from process info dictionary
@@ -48,7 +48,7 @@ struct ProcessTree: Sendable {
 // MARK: - ProcessTreeBuilder
 
 /// Builds and queries the system process tree
-struct ProcessTreeBuilder: Sendable {
+nonisolated struct ProcessTreeBuilder: Sendable {
     // MARK: Lifecycle
 
     private nonisolated init() {}

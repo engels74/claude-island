@@ -14,7 +14,7 @@ extension SessionStore {
     func startPeriodicStatusCheck() {
         guard statusCheckTask == nil else { return }
 
-        statusCheckTask = Task { [weak self] in
+        statusCheckTask = Task(name: "periodic-status-check") { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: self.statusCheckIntervalNs)

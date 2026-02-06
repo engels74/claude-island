@@ -50,7 +50,6 @@ enum NotchContentType: Equatable {
 /// State management for the dynamic island notch UI
 /// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
 @Observable
-@MainActor
 final class NotchViewModel {
     // MARK: Lifecycle
 
@@ -147,7 +146,7 @@ final class NotchViewModel {
         let (stream, continuation) = AsyncStream.makeStream(of: NotchStatus.self, bufferingPolicy: .bufferingNewest(1))
         self.statusContinuation = continuation
         continuation.onTermination = { [weak self] _ in
-            Task { @MainActor [weak self] in
+            Task(name: "status-stream-cleanup") { @MainActor [weak self] in
                 self?.statusContinuation = nil
             }
         }
@@ -217,7 +216,7 @@ final class NotchViewModel {
     func performBootAnimation() {
         self.notchOpen(reason: .boot)
         self.bootAnimationTask?.cancel()
-        self.bootAnimationTask = Task {
+        self.bootAnimationTask = Task(name: "boot-animation") {
             try? await Task.sleep(for: .seconds(1.0))
             guard !Task.isCancelled, self.openReason == .boot else { return }
             self.notchClose()
@@ -280,7 +279,7 @@ final class NotchViewModel {
             _ = self.clawdSelector.isColorPickerExpanded
         } onChange: { [weak self] in
             // Dispatch to main actor since onChange may be called from any context
-            Task { @MainActor [weak self] in
+            Task(name: "selector-change") { @MainActor [weak self] in
                 self?.selectorUpdateToken &+= 1
                 // Re-register for next change
                 self?.observeSelectorChanges()
@@ -293,7 +292,7 @@ final class NotchViewModel {
     private func setupEventHandlers() {
         // Mouse location stream with manual 50ms throttle
         let locationStream = self.events.makeMouseLocationStream()
-        self.mouseLocationTask = Task { [weak self] in
+        self.mouseLocationTask = Task(name: "mouse-location-stream") { [weak self] in
             let clock = ContinuousClock()
             var lastProcessed: ContinuousClock.Instant = .now - .milliseconds(50)
             for await location in locationStream {
@@ -306,7 +305,7 @@ final class NotchViewModel {
 
         // Mouse down stream
         let mouseDownStream = self.events.makeMouseDownStream()
-        self.mouseDownTask = Task { [weak self] in
+        self.mouseDownTask = Task(name: "mouse-down-stream") { [weak self] in
             for await _ in mouseDownStream {
                 self?.handleMouseDown()
             }
@@ -330,7 +329,7 @@ final class NotchViewModel {
 
         // Start hover timer to auto-expand after 1 second
         if self.isHovering && (self.status == .closed || self.status == .popping) {
-            self.hoverTask = Task {
+            self.hoverTask = Task(name: "hover-expand") {
                 try? await Task.sleep(for: .seconds(1.0))
                 guard !Task.isCancelled, self.isHovering else { return }
                 self.notchOpen(reason: .hover)
@@ -366,7 +365,7 @@ final class NotchViewModel {
         // Cancel any pending repost task
         self.repostClickTask?.cancel()
         // Small delay to let the window's ignoresMouseEvents update
-        self.repostClickTask = Task {
+        self.repostClickTask = Task(name: "repost-click") {
             try? await Task.sleep(for: .seconds(0.05))
             guard !Task.isCancelled else { return }
 

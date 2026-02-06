@@ -219,7 +219,7 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
             where self.isInterruptLine(line) {
             Self.logger.info("Detected interrupt in session: \(self.sessionID.prefix(8), privacy: .public)")
             // Use explicit MainActor isolation for Swift 6 compliance
-            Task { @MainActor [weak self] in
+            Task(name: "interrupt-notify") { @MainActor [weak self] in
                 guard let self else { return }
                 self.delegate?.didDetectInterrupt(sessionID: self.sessionID)
             }
@@ -267,7 +267,6 @@ final class JSONLInterruptWatcher: @unchecked Sendable {
 // MARK: - InterruptWatcherManager
 
 /// Manages interrupt watchers for all active sessions
-@MainActor
 class InterruptWatcherManager {
     // MARK: Lifecycle
 

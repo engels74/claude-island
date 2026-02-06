@@ -12,7 +12,7 @@ import Foundation
 
 /// All events that can affect session state
 /// This is the single entry point for state mutations
-enum SessionEvent: Sendable {
+nonisolated enum SessionEvent: Sendable {
     // MARK: - Hook Events (from HookSocketServer)
 
     /// A hook event was received from Claude Code
@@ -82,7 +82,7 @@ enum SessionEvent: Sendable {
 // MARK: - HistoryLoadedPayload
 
 /// Payload for history loaded events
-struct HistoryLoadedPayload: Sendable {
+nonisolated struct HistoryLoadedPayload: Sendable {
     let sessionID: String
     let messages: [ChatMessage]
     let completedTools: Set<String>
@@ -94,7 +94,7 @@ struct HistoryLoadedPayload: Sendable {
 // MARK: - FileUpdatePayload
 
 /// Payload for file update events
-struct FileUpdatePayload: Sendable {
+nonisolated struct FileUpdatePayload: Sendable {
     let sessionID: String
     let cwd: String
     /// Messages to process - either only new messages (if isIncremental) or all messages
@@ -110,7 +110,7 @@ struct FileUpdatePayload: Sendable {
 // MARK: - ToolCompletionResult
 
 /// Result of a tool completion detected from JSONL
-struct ToolCompletionResult: Sendable {
+nonisolated struct ToolCompletionResult: Sendable {
     let status: ToolStatus
     let result: String?
     let structuredResult: ToolResultData?
@@ -143,7 +143,7 @@ struct ToolCompletionResult: Sendable {
 
 // MARK: - Hook Event Extensions
 
-extension HookEvent {
+nonisolated extension HookEvent {
     /// Determine the target session phase based on this hook event
     nonisolated func determinePhase() -> SessionPhase {
         // PreCompact takes priority
@@ -212,7 +212,7 @@ extension HookEvent {
 
 // MARK: - SessionEvent + sessionID
 
-extension SessionEvent {
+nonisolated extension SessionEvent {
     /// Extract the session ID from this event (if available)
     nonisolated var sessionID: String? {
         switch self {
@@ -242,7 +242,7 @@ extension SessionEvent {
 
 // MARK: - SessionEvent + CustomStringConvertible
 
-extension SessionEvent: CustomStringConvertible {
+nonisolated extension SessionEvent: CustomStringConvertible {
     nonisolated var description: String {
         switch self {
         case let .hookReceived(event):

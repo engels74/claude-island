@@ -16,7 +16,6 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "A
 /// Manages Accessibility permission state for the app.
 /// Required for global mouse event monitoring and CGEvent posting.
 @Observable
-@MainActor
 final class AccessibilityPermissionManager {
     // MARK: Lifecycle
 
@@ -85,7 +84,7 @@ final class AccessibilityPermissionManager {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: .milliseconds(Int(self.fastPollingInterval * 1000)))
         timer.setEventHandler { [weak self] in
-            Task { @MainActor [weak self] in
+            Task(name: "accessibility-poll") { @MainActor [weak self] in
                 guard let self else { return }
                 self.checkPermission()
 

@@ -40,7 +40,6 @@ enum UpdateState: Equatable {
 // MARK: - UpdateManager
 
 /// Observable update manager that bridges Sparkle to SwiftUI
-@MainActor
 @Observable
 final class UpdateManager {
     // MARK: Internal
@@ -144,7 +143,7 @@ final class UpdateManager {
         // Cancel any previous reset task
         self.upToDateResetTask?.cancel()
         // Reset to idle after a few seconds
-        self.upToDateResetTask = Task {
+        self.upToDateResetTask = Task(name: "update-state-reset") {
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             if case .upToDate = self.state {
@@ -201,7 +200,7 @@ class NotchUserDriver: NSObject, SPUUserDriver {
     }
 
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {
-        Task { @MainActor in
+        Task(name: "update-checking") { @MainActor in
             UpdateManager.shared.state = .checking
         }
     }
@@ -210,7 +209,7 @@ class NotchUserDriver: NSObject, SPUUserDriver {
         let version = appcastItem.displayVersionString
         let releaseNotes = appcastItem.itemDescription
 
-        Task { @MainActor in
+        Task(name: "update-found") { @MainActor in
             UpdateManager.shared.updateFound(version: version, releaseNotes: releaseNotes, installHandler: reply)
         }
     }
@@ -224,14 +223,14 @@ class NotchUserDriver: NSObject, SPUUserDriver {
     }
 
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) {
-        Task { @MainActor in
+        Task(name: "update-not-found") { @MainActor in
             UpdateManager.shared.noUpdateFound()
         }
         acknowledgement()
     }
 
     func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) {
-        Task { @MainActor in
+        Task(name: "update-error") { @MainActor in
             UpdateManager.shared.updateError(error.localizedDescription)
         }
         acknowledgement()
@@ -240,56 +239,56 @@ class NotchUserDriver: NSObject, SPUUserDriver {
     // MARK: - Download Progress
 
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
-        Task { @MainActor in
+        Task(name: "download-started") { @MainActor in
             UpdateManager.shared.downloadStarted(cancellation: cancellation)
         }
     }
 
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
-        Task { @MainActor in
+        Task(name: "download-length") { @MainActor in
             UpdateManager.shared.downloadExpectedLength(expectedContentLength)
         }
     }
 
     func showDownloadDidReceiveData(ofLength length: UInt64) {
-        Task { @MainActor in
+        Task(name: "download-progress") { @MainActor in
             UpdateManager.shared.downloadReceivedData(length)
         }
     }
 
     func showDownloadDidStartExtractingUpdate() {
-        Task { @MainActor in
+        Task(name: "extraction-started") { @MainActor in
             UpdateManager.shared.extractionStarted()
         }
     }
 
     func showExtractionReceivedProgress(_ progress: Double) {
-        Task { @MainActor in
+        Task(name: "extraction-progress") { @MainActor in
             UpdateManager.shared.extractionProgress(progress)
         }
     }
 
     func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
-        Task { @MainActor in
+        Task(name: "ready-to-install") { @MainActor in
             UpdateManager.shared.readyToInstall(installHandler: reply)
         }
     }
 
     func showInstallingUpdate(withApplicationTerminated applicationTerminated: Bool, retryTerminatingApplication: @escaping () -> Void) {
-        Task { @MainActor in
+        Task(name: "update-installing") { @MainActor in
             UpdateManager.shared.installing()
         }
     }
 
     func showUpdateInstalledAndRelaunched(_ relaunched: Bool, acknowledgement: @escaping () -> Void) {
-        Task { @MainActor in
+        Task(name: "update-installed") { @MainActor in
             UpdateManager.shared.installed(relaunched: relaunched)
         }
         acknowledgement()
     }
 
     func dismissUpdateInstallation() {
-        Task { @MainActor in
+        Task(name: "update-dismissed") { @MainActor in
             UpdateManager.shared.dismiss()
         }
     }

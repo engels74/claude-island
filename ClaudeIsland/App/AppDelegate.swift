@@ -8,7 +8,6 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "A
 
 // MARK: - AppDelegate
 
-@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Lifecycle
 
@@ -53,7 +52,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        self.hookInstallTask = Task {
+        self.hookInstallTask = Task(name: "hook-install") {
             await HookInstaller.installIfNeeded()
         }
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -73,7 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         self.updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            Task(name: "update-check") { @MainActor [weak self] in
                 guard let updater = self?.updater, updater.canCheckForUpdates else { return }
                 updater.checkForUpdates()
             }
@@ -145,7 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Show explanatory alert after a brief delay to explain why permission is needed
             // The alert guides users to manually add the app via "+" button in System Settings
             // (this creates a more permissive TCC entry that works with ad-hoc signed apps)
-            Task { @MainActor in
+            Task(name: "accessibility-alert") {
                 try? await Task.sleep(for: .seconds(1.0))
                 manager.showPermissionAlert()
             }

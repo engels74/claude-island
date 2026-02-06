@@ -138,7 +138,7 @@ struct ScreenPickerRow: View {
 
     private func collapseAfterDelay() {
         self.collapseTask?.cancel()
-        self.collapseTask = Task {
+        self.collapseTask = Task(name: "collapse-color-picker") {
             try? await Task.sleep(for: .seconds(0.3))
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.2)) {

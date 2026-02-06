@@ -13,7 +13,7 @@ import Foundation
 /// Permission context for tools waiting for approval
 /// Note: Uses serialized JSON string for toolInput to ensure true Sendable safety
 /// (AnyCodable contains `Any` which can hold mutable reference types)
-struct PermissionContext: Sendable {
+nonisolated struct PermissionContext: Sendable {
     // MARK: Lifecycle
 
     /// Initialize with raw tool input dictionary (serializes to JSON)
@@ -94,7 +94,7 @@ struct PermissionContext: Sendable {
 // MARK: Equatable
 
 // swiftformat:disable all
-extension PermissionContext: Equatable {
+nonisolated extension PermissionContext: Equatable {
     nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
         // Compare by identity fields and serialized input
         lhs.toolUseID == rhs.toolUseID &&
@@ -108,7 +108,7 @@ extension PermissionContext: Equatable {
 // MARK: - SessionPhase
 
 /// Explicit session phases - the state machine
-enum SessionPhase: Sendable {
+nonisolated enum SessionPhase: Sendable {
     /// Session is idle, waiting for user input or new activity
     case idle
 
@@ -236,7 +236,7 @@ enum SessionPhase: Sendable {
 
 // MARK: Equatable
 
-extension SessionPhase: Equatable {
+nonisolated extension SessionPhase: Equatable {
     nonisolated static func == (lhs: SessionPhase, rhs: SessionPhase) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle): true
@@ -253,7 +253,7 @@ extension SessionPhase: Equatable {
 
 // MARK: CustomStringConvertible
 
-extension SessionPhase: CustomStringConvertible {
+nonisolated extension SessionPhase: CustomStringConvertible {
     nonisolated var description: String {
         switch self {
         case .idle:

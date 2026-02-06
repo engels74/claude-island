@@ -99,7 +99,7 @@ struct ClaudeInstancesView: View {
     }
 
     private func focusSession(_ session: SessionState) {
-        Task {
+        Task(name: "focus-terminal") {
             if let pid = session.pid {
                 let success = await TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
                 if success { return }

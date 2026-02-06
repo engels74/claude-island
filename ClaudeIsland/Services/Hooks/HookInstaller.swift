@@ -13,9 +13,8 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "H
 
 // MARK: - HookInstaller
 
-/// Hook installer with @MainActor isolation to protect static mutable state
+/// Hook installer — MainActor (default) protects static mutable state
 /// This ensures thread-safe access to detectedRuntime across all call sites
-@MainActor
 enum HookInstaller {
     // MARK: Internal
 

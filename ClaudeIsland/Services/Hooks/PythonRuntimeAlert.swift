@@ -13,8 +13,7 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "P
 // MARK: - PythonRuntimeAlert
 
 /// Handles user-facing alerts for Python runtime issues
-/// @MainActor ensures all UI operations happen on the main thread
-@MainActor
+/// MainActor (default) ensures all UI operations happen on the main thread
 enum PythonRuntimeAlert {
     // MARK: Internal
 

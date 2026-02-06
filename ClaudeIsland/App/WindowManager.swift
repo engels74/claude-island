@@ -14,8 +14,7 @@ private let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "W
 // MARK: - WindowManager
 
 /// Manages the notch window lifecycle.
-/// Requires @MainActor as it performs UI operations (orderOut, close, showWindow).
-@MainActor
+/// Performs UI operations (orderOut, close, showWindow) — MainActor via default isolation.
 final class WindowManager {
     // MARK: Internal
 

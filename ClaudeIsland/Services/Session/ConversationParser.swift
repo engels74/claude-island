@@ -12,7 +12,7 @@ import os.log
 // MARK: - UsageInfo
 
 /// Token usage information aggregated from assistant messages
-struct UsageInfo: Equatable, Sendable {
+nonisolated struct UsageInfo: Equatable, Sendable {
     let inputTokens: Int
     let outputTokens: Int
     let cacheReadTokens: Int
@@ -36,7 +36,7 @@ struct UsageInfo: Equatable, Sendable {
 
 // MARK: - ConversationInfo
 
-struct ConversationInfo: Equatable, Sendable {
+nonisolated struct ConversationInfo: Equatable, Sendable {
     let summary: String?
     let lastMessage: String?
     let lastMessageRole: String? // "user", "assistant", or "tool"

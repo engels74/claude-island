@@ -11,9 +11,8 @@ import ApplicationServices
 // MARK: - EventMonitors
 
 /// Singleton that aggregates all event monitors.
-/// @MainActor ensures thread-safe access to mutable state and AsyncStream continuations
+/// MainActor (default) ensures thread-safe access to mutable state and AsyncStream continuations
 /// since NSEvent monitors dispatch handlers on the main thread.
-@MainActor
 final class EventMonitors {
     // MARK: Lifecycle
 
@@ -34,7 +33,7 @@ final class EventMonitors {
         let (stream, continuation) = AsyncStream.makeStream(of: CGPoint.self, bufferingPolicy: .bufferingNewest(1))
         self.mouseLocationContinuation = continuation
         continuation.onTermination = { [weak self] _ in
-            Task { @MainActor [weak self] in
+            Task(name: "mouse-location-cleanup") { @MainActor [weak self] in
                 self?.mouseLocationContinuation = nil
             }
         }
@@ -49,7 +48,7 @@ final class EventMonitors {
         let (stream, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
         self.mouseDownContinuation = continuation
         continuation.onTermination = { [weak self] _ in
-            Task { @MainActor [weak self] in
+            Task(name: "mouse-down-cleanup") { @MainActor [weak self] in
                 self?.mouseDownContinuation = nil
             }
         }

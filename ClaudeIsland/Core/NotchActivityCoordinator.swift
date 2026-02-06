@@ -32,7 +32,6 @@ struct ExpandingActivity: Equatable {
 /// Coordinates notch activities and state
 /// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
 @Observable
-@MainActor
 final class NotchActivityCoordinator {
     // MARK: Lifecycle
 
@@ -104,7 +103,7 @@ final class NotchActivityCoordinator {
         guard self.activityDuration > 0 else { return }
 
         let currentType = self.expandingActivity.type
-        self.activityTask = Task { [weak self] in
+        self.activityTask = Task(name: "activity-auto-hide") { [weak self] in
             try? await Task.sleep(for: .seconds(self?.activityDuration ?? 3))
             guard let self, !Task.isCancelled else { return }
 

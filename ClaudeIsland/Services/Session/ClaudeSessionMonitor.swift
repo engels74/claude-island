@@ -16,12 +16,11 @@ import Synchronization
 /// Session monitor using modern @Observable macro for efficient SwiftUI updates.
 /// Subscribes to SessionStore's AsyncStream to receive session state changes.
 @Observable
-@MainActor
 final class ClaudeSessionMonitor {
     // MARK: Lifecycle
 
     init() {
-        self.sessionsTask = Task { [weak self] in
+        self.sessionsTask = Task(name: "sessions-stream") { [weak self] in
             let stream = await SessionStore.shared.sessionsStream()
             for await sessions in stream {
                 self?.updateFromSessions(sessions)
@@ -43,19 +42,19 @@ final class ClaudeSessionMonitor {
             onEvent: { [weak self] event in
                 // HookSocketServer calls this callback on its internal socket queue.
                 // Single MainActor hop handles all event processing.
-                Task { @MainActor [weak self] in
+                Task(name: "hook-event") { @MainActor [weak self] in
                     await self?.handleHookEvent(event)
                 }
             },
             onPermissionFailure: { [weak self] sessionID, toolUseID in
-                Task { @MainActor [weak self] in
+                Task(name: "permission-failure") { @MainActor [weak self] in
                     await self?.handlePermissionFailure(sessionID: sessionID, toolUseID: toolUseID)
                 }
             }
         )
 
         // Start periodic session status check
-        Task {
+        Task(name: "start-periodic-check") {
             await SessionStore.shared.startPeriodicStatusCheck()
         }
     }
@@ -67,7 +66,7 @@ final class ClaudeSessionMonitor {
         HookSocketServer.shared.stop()
 
         // Stop periodic session status check
-        Task {
+        Task(name: "stop-periodic-check") {
             await SessionStore.shared.stopPeriodicStatusCheck()
         }
     }
@@ -75,7 +74,7 @@ final class ClaudeSessionMonitor {
     // MARK: - Permission Handling
 
     func approvePermission(sessionID: String) {
-        Task {
+        Task(name: "approve-permission") {
             guard let session = await SessionStore.shared.session(for: sessionID),
                   let permission = session.activePermission
             else {
@@ -94,7 +93,7 @@ final class ClaudeSessionMonitor {
     }
 
     func denyPermission(sessionID: String, reason: String?) {
-        Task {
+        Task(name: "deny-permission") {
             guard let session = await SessionStore.shared.session(for: sessionID),
                   let permission = session.activePermission
             else {
@@ -115,7 +114,7 @@ final class ClaudeSessionMonitor {
 
     /// Archive (remove) a session from the instances list
     func archiveSession(sessionID: String) {
-        Task {
+        Task(name: "archive-session") {
             await SessionStore.shared.process(.sessionEnded(sessionID: sessionID))
         }
     }
@@ -124,7 +123,7 @@ final class ClaudeSessionMonitor {
 
     /// Request history load for a session
     func loadHistory(sessionID: String, cwd: String) {
-        Task {
+        Task(name: "load-history") {
             await SessionStore.shared.process(.loadHistory(sessionID: sessionID, cwd: cwd))
         }
     }
@@ -141,7 +140,7 @@ final class ClaudeSessionMonitor {
     /// Handle hook event - unified async handler to reduce executor hops
     private func handleHookEvent(_ event: HookEvent) async {
         // Process the hook event (hops to SessionStore actor)
-        let task = Task {
+        let task = Task(name: "process-hook-event") {
             await SessionStore.shared.process(.hookReceived(event))
         }
         self.trackTask(task)
@@ -170,7 +169,7 @@ final class ClaudeSessionMonitor {
 
     /// Handle permission socket failure - unified async handler
     private func handlePermissionFailure(sessionID: String, toolUseID: String) async {
-        let task = Task {
+        let task = Task(name: "process-permission-failure") {
             await SessionStore.shared.process(
                 .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
             )
@@ -184,7 +183,7 @@ final class ClaudeSessionMonitor {
         self.activeTasks.withLock { $0[id] = task }
 
         // Auto-remove when task completes
-        Task {
+        Task(name: "task-cleanup") {
             _ = await task.result
             _ = self.activeTasks.withLock { $0.removeValue(forKey: id) }
         }
@@ -216,7 +215,7 @@ final class ClaudeSessionMonitor {
 extension ClaudeSessionMonitor: JSONLInterruptWatcherDelegate {
     nonisolated func didDetectInterrupt(sessionID: String) {
         // Combined task for interrupt handling - both actions should complete together
-        Task { @MainActor in
+        Task(name: "interrupt-detected") { @MainActor in
             await SessionStore.shared.process(.interruptDetected(sessionID: sessionID))
             InterruptWatcherManager.shared.stopWatching(sessionID: sessionID)
         }

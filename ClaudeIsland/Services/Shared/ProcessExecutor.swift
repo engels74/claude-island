@@ -14,7 +14,7 @@ import System
 // MARK: - ProcessExecutorError
 
 /// Errors that can occur during process execution
-enum ProcessExecutorError: Error, LocalizedError, Sendable {
+nonisolated enum ProcessExecutorError: Error, LocalizedError, Sendable {
     case executionFailed(command: String, exitCode: Int32, stderr: String?)
     case invalidOutput(command: String)
     case commandNotFound(String)
@@ -40,7 +40,7 @@ enum ProcessExecutorError: Error, LocalizedError, Sendable {
 // MARK: - ProcessResult
 
 /// Result type for process execution
-struct ProcessResult: Sendable {
+nonisolated struct ProcessResult: Sendable {
     let output: String
     let exitCode: Int32
     let stderr: String?
@@ -53,7 +53,7 @@ struct ProcessResult: Sendable {
 // MARK: - ProcessExecuting
 
 /// Protocol for executing shell commands (enables testing)
-protocol ProcessExecuting: Sendable {
+nonisolated protocol ProcessExecuting: Sendable {
     func run(_ executable: String, arguments: [String]) async throws(ProcessExecutorError) -> String
     func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError>
     func runSync(_ executable: String, arguments: [String]) -> Result<String, ProcessExecutorError>
@@ -63,7 +63,7 @@ protocol ProcessExecuting: Sendable {
 
 /// Default implementation using Foundation.Process
 /// Stateless service - uses struct per Swift 6 best practices (no mutable state to protect)
-struct ProcessExecutor: ProcessExecuting, Sendable {
+nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
     // MARK: Lifecycle
 
     private nonisolated init() {}
@@ -197,7 +197,7 @@ struct ProcessExecutor: ProcessExecuting, Sendable {
 
 // MARK: - Convenience Extensions
 
-extension ProcessExecutor {
+nonisolated extension ProcessExecutor {
     /// Run a command and return output, returning nil only if the command itself fails to execute
     /// (as opposed to non-zero exit codes which may still have useful output)
     ///

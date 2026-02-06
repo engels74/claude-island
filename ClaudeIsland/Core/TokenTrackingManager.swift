@@ -24,7 +24,6 @@ struct UsageMetric: Equatable, Sendable {
 // MARK: - TokenTrackingManager
 
 @Observable
-@MainActor
 final class TokenTrackingManager {
     // MARK: Lifecycle
 
@@ -179,7 +178,7 @@ final class TokenTrackingManager {
 
     private func startPeriodicRefresh() {
         self.periodicRefreshTask?.cancel()
-        self.periodicRefreshTask = Task { [weak self] in
+        self.periodicRefreshTask = Task(name: "token-refresh") { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
 

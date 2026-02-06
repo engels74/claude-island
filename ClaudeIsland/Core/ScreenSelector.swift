@@ -57,7 +57,6 @@ struct ScreenIdentifier: Codable, Equatable, Hashable {
 /// Manages screen selection state and persistence
 /// Uses @Observable macro for efficient property-level change tracking (macOS 14+)
 @Observable
-@MainActor
 final class ScreenSelector {
     // MARK: Lifecycle
 

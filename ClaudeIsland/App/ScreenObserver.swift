@@ -8,8 +8,7 @@
 import AppKit
 
 /// Monitors screen configuration changes.
-/// All access is isolated to @MainActor since notifications are observed on the main queue.
-@MainActor
+/// Isolated to MainActor (default) since notifications are observed on the main queue.
 final class ScreenObserver {
     // MARK: Lifecycle
 
@@ -51,7 +50,7 @@ final class ScreenObserver {
     private func scheduleScreenChange() {
         self.debounceTask?.cancel()
 
-        self.debounceTask = Task { [weak self] in
+        self.debounceTask = Task(name: "screen-change-debounce") { [weak self] in
             try? await Task.sleep(for: self?.debounceInterval ?? .milliseconds(500))
             guard !Task.isCancelled else { return }
             self?.onScreenChange()

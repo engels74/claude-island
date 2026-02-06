@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum MCPToolFormatter {
+nonisolated enum MCPToolFormatter {
     // MARK: Internal
 
     /// Checks if tool name is in MCP format (e.g., "mcp__deepwiki__ask_question")

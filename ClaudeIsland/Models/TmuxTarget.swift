@@ -8,7 +8,7 @@
 import Foundation
 
 /// Represents a tmux target (session:window.pane)
-struct TmuxTarget: Sendable {
+nonisolated struct TmuxTarget: Sendable {
     // MARK: Lifecycle
 
     nonisolated init(session: String, window: String, pane: String) {

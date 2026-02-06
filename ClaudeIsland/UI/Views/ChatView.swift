@@ -145,7 +145,7 @@ struct ChatView: View {
                 if wasWaiting && isNowProcessing {
                     // Scroll to bottom after permission accepted (with slight delay)
                     self.scrollToBottomTask?.cancel()
-                    self.scrollToBottomTask = Task {
+                    self.scrollToBottomTask = Task(name: "scroll-to-bottom") {
                         try? await Task.sleep(for: .seconds(0.3))
                         guard !Task.isCancelled else { return }
                         self.shouldScrollToBottom = true
@@ -157,7 +157,7 @@ struct ChatView: View {
             // Auto-focus input when tmux messaging becomes available
             if canSend && !self.isInputFocused {
                 self.focusInputTask?.cancel()
-                self.focusInputTask = Task {
+                self.focusInputTask = Task(name: "auto-focus-input") {
                     try? await Task.sleep(for: .seconds(0.1))
                     guard !Task.isCancelled else { return }
                     self.isInputFocused = true
@@ -167,7 +167,7 @@ struct ChatView: View {
         .onAppear {
             // Auto-focus input when chat opens and tmux messaging is available
             self.focusInputTask?.cancel()
-            self.focusInputTask = Task {
+            self.focusInputTask = Task(name: "focus-on-appear") {
                 try? await Task.sleep(for: .seconds(0.3))
                 guard !Task.isCancelled else { return }
                 if self.canSendMessages {
@@ -639,7 +639,7 @@ struct ChatView: View {
     }
 
     private func focusTerminal() {
-        Task {
+        Task(name: "focus-terminal") {
             if let pid = session.pid {
                 let success = await TerminalFocuser.shared.focusTerminal(forClaudePID: pid)
                 if success { return }
@@ -696,7 +696,7 @@ struct ChatView: View {
         }
 
         // Don't add to history here - it will be synced from JSONL when UserPromptSubmit event fires
-        Task {
+        Task(name: "send-message") {
             await self.sendToSession(messageToSend)
         }
     }

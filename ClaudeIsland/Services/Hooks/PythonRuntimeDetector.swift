@@ -51,7 +51,7 @@ actor PythonRuntimeDetector {
         }
 
         // Start new detection task, store BEFORE await (per Swift guidelines)
-        let task = Task { await self.performDetection() }
+        let task = Task(name: "detect-python") { await self.performDetection() }
         self.detectionTask = task
 
         let runtime = await task.value

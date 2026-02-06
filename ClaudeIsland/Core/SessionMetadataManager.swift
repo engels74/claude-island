@@ -8,7 +8,6 @@
 import SwiftUI
 
 @Observable
-@MainActor
 final class SessionMetadataManager {
     // MARK: Lifecycle
 

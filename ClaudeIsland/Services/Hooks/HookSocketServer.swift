@@ -42,7 +42,7 @@ private actor SocketReconnectionManager {
 // MARK: - HookEvent
 
 /// Event received from Claude Code hooks
-struct HookEvent: Sendable {
+nonisolated struct HookEvent: Sendable {
     // MARK: Lifecycle
 
     /// Create a copy with updated toolUseID
@@ -143,7 +143,7 @@ struct HookEvent: Sendable {
 
 // MARK: - HookEvent + Codable
 
-extension HookEvent: Codable {
+nonisolated extension HookEvent: Codable {
     nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         sessionID = try container.decode(String.self, forKey: .sessionID)
@@ -448,7 +448,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         // Success - reset retry counter
-        Task {
+        Task(name: "reset-retry-counter") {
             await reconnectionManager.reset()
         }
         Self.logger.info("Listening on \(Self.socketPath, privacy: .public)")
@@ -473,7 +473,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             return
         }
 
-        Task { [weak self] in
+        Task(name: "handle-client") { [weak self] in
             guard let self else { return }
 
             // Check again after Task starts in case stop() was called

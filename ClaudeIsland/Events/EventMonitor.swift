@@ -8,8 +8,7 @@
 import AppKit
 
 /// Wraps NSEvent monitoring with proper lifecycle management.
-/// All access is isolated to @MainActor since NSEvent monitors deliver on the main thread.
-@MainActor
+/// Isolated to MainActor (default) since NSEvent monitors deliver on the main thread.
 final class EventMonitor {
     // MARK: Lifecycle
 

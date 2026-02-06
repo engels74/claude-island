@@ -136,7 +136,7 @@ final class AgentFileWatcher: @unchecked Sendable {
         Self.logger.debug("Agent \(self.agentID.prefix(8), privacy: .public) has \(tools.count) tools")
 
         // Use explicit MainActor isolation for Swift 6 compliance
-        Task { @MainActor [weak self] in
+        Task(name: "agent-tools-update") { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.didUpdateAgentTools(
                 sessionID: self.sessionID,
@@ -157,7 +157,6 @@ final class AgentFileWatcher: @unchecked Sendable {
 // MARK: - AgentFileWatcherManager
 
 /// Manages agent file watchers for active Task tools
-@MainActor
 class AgentFileWatcherManager {
     // MARK: Lifecycle
 
@@ -226,7 +225,6 @@ class AgentFileWatcherManager {
 
 /// Bridge between AgentFileWatcherManager and SessionStore
 /// Converts delegate callbacks into SessionEvent processing
-@MainActor
 class AgentFileWatcherBridge: AgentFileWatcherDelegate {
     // MARK: Lifecycle
 
@@ -237,7 +235,7 @@ class AgentFileWatcherBridge: AgentFileWatcherDelegate {
     static let shared = AgentFileWatcherBridge()
 
     func didUpdateAgentTools(sessionID: String, taskToolID: String, tools: [SubagentToolInfo]) {
-        Task {
+        Task(name: "agent-file-update") {
             await SessionStore.shared.process(
                 .agentFileUpdated(sessionID: sessionID, taskToolID: taskToolID, tools: tools)
             )
