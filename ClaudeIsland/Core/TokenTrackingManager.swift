@@ -331,7 +331,12 @@ final class TokenTrackingManager {
         } else if let str = source["expiresAt"] as? String {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let expiry = formatter.date(from: str) {
+            var expiry = formatter.date(from: str)
+            if expiry == nil {
+                formatter.formatOptions = [.withInternetDateTime]
+                expiry = formatter.date(from: str)
+            }
+            if let expiry {
                 if expiry < Date() {
                     logger.warning("CLI OAuth token is expired (expiry: \(expiry))")
                     return true
