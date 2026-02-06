@@ -22,6 +22,8 @@ final class AccessibilityPermissionManager {
 
     private init() {
         self.checkPermission()
+        // If permission is already granted (returning user), start event monitors immediately
+        EventMonitors.shared.startMonitorsIfPermitted()
     }
 
     // MARK: Internal
@@ -56,6 +58,11 @@ final class AccessibilityPermissionManager {
 
         if previousState != newState {
             logger.warning("Accessibility permission CHANGED: \(previousState) -> \(newState)")
+
+            // Permission just granted — start deferred event monitors
+            if newState {
+                EventMonitors.shared.startMonitorsIfPermitted()
+            }
         }
     }
 
@@ -176,6 +183,11 @@ final class AccessibilityPermissionManager {
 
         if previousState != self.isAccessibilityEnabled {
             logger.warning("Permission detected on activation: \(previousState) -> \(self.isAccessibilityEnabled)")
+
+            // Permission just granted on activation — start deferred event monitors
+            if self.isAccessibilityEnabled {
+                EventMonitors.shared.startMonitorsIfPermitted()
+            }
         }
     }
 

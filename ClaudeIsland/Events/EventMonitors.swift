@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import ApplicationServices
 import Combine
 
 // MARK: - SendableEvent
@@ -25,9 +26,7 @@ private struct SendableEvent: @unchecked Sendable {
 final class EventMonitors {
     // MARK: Lifecycle
 
-    private init() {
-        self.setupMonitors()
-    }
+    private init() {}
 
     // MARK: Internal
 
@@ -36,8 +35,19 @@ final class EventMonitors {
     let mouseLocation = CurrentValueSubject<CGPoint, Never>(.zero)
     let mouseDown = PassthroughSubject<NSEvent, Never>()
 
+    /// Start event monitors only if accessibility permission is already granted.
+    /// Must be called after the user grants Accessibility permission (or on launch if already granted).
+    /// Safe to call multiple times — subsequent calls are no-ops.
+    func startMonitorsIfPermitted() {
+        guard !self.monitorsStarted else { return }
+        guard AXIsProcessTrusted() else { return }
+        self.monitorsStarted = true
+        self.setupMonitors()
+    }
+
     // MARK: Private
 
+    private var monitorsStarted = false
     private var mouseMoveMonitor: EventMonitor?
     private var mouseDownMonitor: EventMonitor?
     private var mouseDraggedMonitor: EventMonitor?
