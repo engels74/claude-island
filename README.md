@@ -37,36 +37,53 @@ Key improvements in this fork:
 - macOS 15.6+
 - Claude Code CLI
 
-## Install
+## Installation Guide
 
-Download the latest release from [GitHub Releases](https://github.com/engels74/claude-island/releases/latest) or build from source:
+### Step 1 — Install the App
 
-```bash
-xcodebuild -scheme ClaudeIsland -configuration Release build
-```
+Download the latest `.dmg` from [GitHub Releases](https://github.com/engels74/claude-island/releases/latest), open it, and drag **Claude Island** into **Applications**. [`IMG`](docs/screenshots/cropped/001.png)
 
-## Installation
+### Step 2 — Bypass Gatekeeper
 
-### First Launch (Gatekeeper Bypass Required)
+Claude Island is ad-hoc signed and not notarized, so macOS blocks the first launch.
 
-Since Claude Island uses ad-hoc signing (not notarized), macOS will block the first launch.
+1. Open the app — macOS shows **"Claude Island" Not Opened**. Click **Done**. [`IMG`](docs/screenshots/cropped/002.png)
+2. Go to **System Settings → Privacy & Security**, find the blocked notice, and click **Open Anyway**. [`IMG`](docs/screenshots/cropped/003.png)
+3. In the confirmation dialog, click **Open Anyway**. [`IMG`](docs/screenshots/cropped/004.png)
+4. Authenticate with Touch ID or your password. [`IMG`](docs/screenshots/cropped/005.png)
 
-#### Option 1: System Settings (Recommended)
+### Step 3 — Grant Keychain Access
 
-1. Download and open the DMG from [GitHub Releases](https://github.com/engels74/claude-island/releases/latest)
-2. Drag Claude Island to Applications
-3. Try to open the app — it will be blocked
-4. Go to **System Settings → Privacy & Security**
-5. Find "Claude Island was blocked" and click **Open Anyway**
-6. Click **Open** in the confirmation dialog
+macOS prompts for access to **"Claude Code-credentials"** (the CLI's OAuth token, used for optional usage-quota tracking). Click **Always Allow**. [`IMG`](docs/screenshots/cropped/006.png)
 
-#### Option 2: Terminal
+### Step 4 — Grant Accessibility Permission
+
+1. The app shows an **Accessibility Permission Required** dialog. Click **Open Settings**. [`IMG`](docs/screenshots/cropped/007.png)
+2. In **System Settings → Privacy & Security → Accessibility**, click the **+** button. [`IMG`](docs/screenshots/cropped/008.png)
+3. Navigate to **Applications**, select **Claude Island**, and click **Open**. [`IMG`](docs/screenshots/cropped/009.png)
+4. Claude Island now appears in the Accessibility list with the toggle enabled. [`IMG`](docs/screenshots/cropped/010.png)
+
+> **Tip:** If Claude Island is already listed but not working, remove it first (click **−**), then re-add it with the steps above.
+
+Subsequent launches require no extra setup. Auto-updates via Sparkle work normally.
+
+### Alternative: Terminal Bypass
+
+If you prefer, you can skip the Gatekeeper steps above by removing the quarantine attribute:
 
 ```bash
 xattr -d com.apple.quarantine "/Applications/Claude Island.app"
 ```
 
-This is only required on first launch. Auto-updates via Sparkle work normally.
+### Alternative: Build from Source
+
+```bash
+xcodebuild -scheme ClaudeIsland -configuration Release build
+```
+
+### Walkthrough
+
+![Installation guide walkthrough](docs/screenshots/gif/installation-guide.gif)
 
 ## How It Works
 
