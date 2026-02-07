@@ -132,7 +132,7 @@ struct PermissionIndicatorIcon: View {
                     x: x * scale - pixelSize / 2,
                     y: y * scale - pixelSize / 2,
                     width: pixelSize,
-                    height: pixelSize
+                    height: pixelSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }
@@ -178,7 +178,7 @@ struct ReadyForInputIndicatorIcon: View {
                     x: x * scale - pixelSize / 2,
                     y: y * scale - pixelSize / 2,
                     width: pixelSize,
-                    height: pixelSize
+                    height: pixelSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }
@@ -226,7 +226,7 @@ struct AccessibilityWarningIcon: View {
                     x: x * scale - pixelSize / 2,
                     y: y * scale - pixelSize / 2,
                     width: pixelSize,
-                    height: pixelSize
+                    height: pixelSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }

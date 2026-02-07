@@ -49,7 +49,7 @@ final class ChatHistoryManager {
     func syncFromFile(sessionID: String, cwd: String) async {
         let messages = await ConversationParser.shared.parseFullConversation(
             sessionID: sessionID,
-            cwd: cwd
+            cwd: cwd,
         )
         let completedTools = await ConversationParser.shared.completedToolIDs(for: sessionID)
         let toolResults = await ConversationParser.shared.toolResults(for: sessionID)
@@ -62,7 +62,7 @@ final class ChatHistoryManager {
             isIncremental: false, // Full sync
             completedToolIDs: completedTools,
             toolResults: toolResults,
-            structuredResults: structuredResults
+            structuredResults: structuredResults,
         )
 
         await SessionStore.shared.process(.fileUpdated(payload))

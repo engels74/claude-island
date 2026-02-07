@@ -105,7 +105,7 @@ actor JSONLInterruptWatcher {
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
-            queue: .global(qos: .userInteractive)
+            queue: .global(qos: .userInteractive),
         )
 
         newSource.setEventHandler { [weak self] in
@@ -142,7 +142,7 @@ actor JSONLInterruptWatcher {
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write],
-            queue: .global(qos: .userInteractive)
+            queue: .global(qos: .userInteractive),
         )
 
         newSource.setEventHandler { [weak self] in

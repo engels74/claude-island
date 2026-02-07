@@ -59,7 +59,7 @@ final class NotchViewModel {
         self.geometry = NotchGeometry(
             deviceNotchRect: deviceNotchRect,
             screenRect: screenRect,
-            windowHeight: windowHeight
+            windowHeight: windowHeight,
         )
         self.hasPhysicalNotch = hasPhysicalNotch
         self.setupEventHandlers()
@@ -113,19 +113,19 @@ final class NotchViewModel {
             // Large size for chat view
             return CGSize(
                 width: min(self.screenRect.width * 0.5, 600),
-                height: 580
+                height: 580,
             )
         case .menu:
             // Compact size for settings menu
             return CGSize(
                 width: min(self.screenRect.width * 0.4, 480),
                 height: 500 + self.screenSelector.expandedPickerHeight + self.soundSelector.expandedPickerHeight + self.suppressionSelector
-                    .expandedPickerHeight + self.clawdSelector.expandedPickerHeight
+                    .expandedPickerHeight + self.clawdSelector.expandedPickerHeight,
             )
         case .instances:
             return CGSize(
                 width: min(self.screenRect.width * 0.4, 480),
-                height: 320
+                height: 320,
             )
         }
     }
@@ -379,7 +379,7 @@ final class NotchViewModel {
                 mouseEventSource: nil,
                 mouseType: .leftMouseDown,
                 mouseCursorPosition: cgPoint,
-                mouseButton: .left
+                mouseButton: .left,
             ) {
                 mouseDown.post(tap: .cghidEventTap)
             }
@@ -389,7 +389,7 @@ final class NotchViewModel {
                 mouseEventSource: nil,
                 mouseType: .leftMouseUp,
                 mouseCursorPosition: cgPoint,
-                mouseButton: .left
+                mouseButton: .left,
             ) {
                 mouseUp.post(tap: .cghidEventTap)
             }

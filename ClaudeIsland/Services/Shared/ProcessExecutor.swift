@@ -102,7 +102,7 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
                 .path(FilePath(executable)),
                 arguments: Arguments(arguments),
                 output: .string(limit: 10_000_000),
-                error: .string(limit: 1_000_000)
+                error: .string(limit: 1_000_000),
             )
 
             let stdout = result.standardOutput ?? ""
@@ -117,7 +117,7 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
             let processResult = ProcessResult(
                 output: stdout,
                 exitCode: exitCode,
-                stderr: stderr
+                stderr: stderr,
             )
 
             if result.terminationStatus.isSuccess {
@@ -125,12 +125,12 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
             } else {
                 Self.logger
                     .warning(
-                        "Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(exitCode)"
+                        "Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(exitCode)",
                     )
                 return .failure(.executionFailed(
                     command: executable,
                     exitCode: exitCode,
-                    stderr: stderr
+                    stderr: stderr,
                 ))
             }
         } catch {
@@ -177,7 +177,7 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
                 return .failure(.executionFailed(
                     command: executable,
                     exitCode: process.terminationStatus,
-                    stderr: stderr
+                    stderr: stderr,
                 ))
             }
         } catch let error as NSError {

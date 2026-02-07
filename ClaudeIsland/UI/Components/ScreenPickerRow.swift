@@ -48,7 +48,7 @@ struct ScreenPickerRow: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -61,7 +61,7 @@ struct ScreenPickerRow: View {
                     ScreenOptionRow(
                         label: "Automatic",
                         sublabel: "Built-in or Main",
-                        isSelected: self.screenSelector.selectionMode == .automatic
+                        isSelected: self.screenSelector.selectionMode == .automatic,
                     ) {
                         self.screenSelector.selectAutomatic()
                         self.triggerWindowRecreation()
@@ -74,7 +74,7 @@ struct ScreenPickerRow: View {
                             label: screen.localizedName,
                             sublabel: self.screenSublabel(for: screen),
                             isSelected: self.screenSelector.selectionMode == .specificScreen &&
-                                self.screenSelector.isSelected(screen)
+                                self.screenSelector.isSelected(screen),
                         ) {
                             self.screenSelector.selectScreen(screen)
                             self.triggerWindowRecreation()
@@ -132,7 +132,7 @@ struct ScreenPickerRow: View {
         // Notify to recreate the window
         NotificationCenter.default.post(
             name: NSApplication.didChangeScreenParametersNotification,
-            object: nil
+            object: nil,
         )
     }
 
@@ -189,7 +189,7 @@ private struct ScreenOptionRow: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear),
             )
         }
         .buttonStyle(.plain)

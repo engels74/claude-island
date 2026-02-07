@@ -12,7 +12,7 @@ struct NotchShape: Shape {
 
     init(
         topCornerRadius: CGFloat = 6,
-        bottomCornerRadius: CGFloat = 14
+        bottomCornerRadius: CGFloat = 14,
     ) {
         self.topCornerRadius = topCornerRadius
         self.bottomCornerRadius = bottomCornerRadius
@@ -52,7 +52,7 @@ struct NotchShape: Shape {
     private func addTopLeftCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
             to: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.minY + self.topCornerRadius),
-            control: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.minY)
+            control: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.minY),
         )
     }
 
@@ -63,7 +63,7 @@ struct NotchShape: Shape {
     private func addBottomLeftCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
             to: CGPoint(x: rect.minX + self.topCornerRadius + self.bottomCornerRadius, y: rect.maxY),
-            control: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.maxY)
+            control: CGPoint(x: rect.minX + self.topCornerRadius, y: rect.maxY),
         )
     }
 
@@ -74,7 +74,7 @@ struct NotchShape: Shape {
     private func addBottomRightCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
             to: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.maxY - self.bottomCornerRadius),
-            control: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.maxY)
+            control: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.maxY),
         )
     }
 
@@ -85,7 +85,7 @@ struct NotchShape: Shape {
     private func addTopRightCorner(to path: inout Path, rect: CGRect) {
         path.addQuadCurve(
             to: CGPoint(x: rect.maxX, y: rect.minY),
-            control: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.minY)
+            control: CGPoint(x: rect.maxX - self.topCornerRadius, y: rect.minY),
         )
     }
 }

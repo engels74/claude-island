@@ -14,7 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             hostBundle: Bundle.main,
             applicationBundle: Bundle.main,
             userDriver: self.userDriver,
-            delegate: nil
+            delegate: nil,
         )
         super.init()
         Self.shared = self

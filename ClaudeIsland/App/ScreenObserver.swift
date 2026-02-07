@@ -39,7 +39,7 @@ final class ScreenObserver {
         self.observer = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
-            queue: .main
+            queue: .main,
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.scheduleScreenChange()

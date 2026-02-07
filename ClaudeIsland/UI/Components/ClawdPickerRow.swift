@@ -35,7 +35,7 @@ struct ClawdPickerRow: View {
                         .frame(width: 12, height: 12)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1),
                         )
 
                     Image(systemName: self.isExpanded ? "chevron.up" : "chevron.down")
@@ -46,7 +46,7 @@ struct ClawdPickerRow: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -66,8 +66,8 @@ struct ClawdPickerRow: View {
                                     Circle()
                                         .stroke(
                                             self.selectedColor.hexString == color.hexString
-                                                ? Color.white : Color.clear, lineWidth: 2
-                                        )
+                                                ? Color.white : Color.clear, lineWidth: 2,
+                                        ),
                                 )
                                 .onTapGesture {
                                     self.selectedColor = color
@@ -113,7 +113,7 @@ struct ClawdPickerRow: View {
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(self.isAlwaysVisibleHovered ? Color.white.opacity(0.06) : Color.clear)
+                                .fill(self.isAlwaysVisibleHovered ? Color.white.opacity(0.06) : Color.clear),
                         )
                     }
                     .buttonStyle(.plain)

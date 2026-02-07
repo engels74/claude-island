@@ -108,7 +108,7 @@ struct ReadResultContent: View {
                 content: self.result.content,
                 startLine: self.result.startLine,
                 totalLines: self.result.totalLines,
-                maxLines: 10
+                maxLines: 10,
             )
         }
     }
@@ -700,7 +700,7 @@ struct FileCodeView: View {
                 CodeLineView(
                     line: line,
                     lineNumber: lineNumber,
-                    isLast: isLast
+                    isLast: isLast,
                 )
             }
 
@@ -958,7 +958,7 @@ struct SimpleDiffView: View {
                     .background(Color.white.opacity(0.06))
                     .clipShape(RoundedCorner(
                         radius: 6,
-                        corners: self.filename == nil ? [.topLeft, .topRight] as RoundedCorner.RectCorner : [] as RoundedCorner.RectCorner
+                        corners: self.filename == nil ? [.topLeft, .topRight] as RoundedCorner.RectCorner : [] as RoundedCorner.RectCorner,
                     ))
             }
 
@@ -971,7 +971,7 @@ struct SimpleDiffView: View {
                     type: line.type,
                     lineNumber: line.lineNumber,
                     isFirst: isFirst,
-                    isLast: isLast
+                    isLast: isLast,
                 )
             }
 
@@ -1186,7 +1186,7 @@ struct RoundedCorner: Shape {
                 radius: tr,
                 startAngle: .degrees(-90),
                 endAngle: .degrees(0),
-                clockwise: false
+                clockwise: false,
             )
         }
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - br))
@@ -1196,7 +1196,7 @@ struct RoundedCorner: Shape {
                 radius: br,
                 startAngle: .degrees(0),
                 endAngle: .degrees(90),
-                clockwise: false
+                clockwise: false,
             )
         }
         path.addLine(to: CGPoint(x: rect.minX + bl, y: rect.maxY))
@@ -1206,7 +1206,7 @@ struct RoundedCorner: Shape {
                 radius: bl,
                 startAngle: .degrees(90),
                 endAngle: .degrees(180),
-                clockwise: false
+                clockwise: false,
             )
         }
         path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + tl))
@@ -1216,7 +1216,7 @@ struct RoundedCorner: Shape {
                 radius: tl,
                 startAngle: .degrees(180),
                 endAngle: .degrees(270),
-                clockwise: false
+                clockwise: false,
             )
         }
         path.closeSubpath()

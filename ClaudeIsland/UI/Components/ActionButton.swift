@@ -28,11 +28,11 @@ struct ActionButton: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(self.isHovered ? self.color : self.color.opacity(0.15))
+                    .fill(self.isHovered ? self.color : self.color.opacity(0.15)),
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(self.color.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(self.color.opacity(0.3), lineWidth: 1),
             )
         }
         .buttonStyle(.plain)

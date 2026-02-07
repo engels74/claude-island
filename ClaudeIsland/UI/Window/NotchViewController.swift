@@ -65,7 +65,7 @@ class NotchViewController: NSViewController {
                     x: (screenWidth - panelWidth) / 2,
                     y: windowHeight - panelHeight,
                     width: panelWidth,
-                    height: panelHeight
+                    height: panelHeight,
                 )
             case .closed,
                  .popping:
@@ -80,7 +80,7 @@ class NotchViewController: NSViewController {
                     x: (screenWidth - totalWidth) / 2,
                     y: windowHeight - notchRect.height - 5,
                     width: totalWidth,
-                    height: notchRect.height + 10
+                    height: notchRect.height + 10,
                 )
             }
         }

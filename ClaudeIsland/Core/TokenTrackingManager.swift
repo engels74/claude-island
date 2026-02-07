@@ -246,14 +246,14 @@ final class TokenTrackingManager {
             used: 0,
             limit: 0,
             percentage: response.fiveHour.utilization,
-            resetTime: response.fiveHour.resetsAt
+            resetTime: response.fiveHour.resetsAt,
         )
 
         self.weeklyUsage = UsageMetric(
             used: 0,
             limit: 0,
             percentage: response.sevenDay.utilization,
-            resetTime: response.sevenDay.resetsAt
+            resetTime: response.sevenDay.resetsAt,
         )
     }
 

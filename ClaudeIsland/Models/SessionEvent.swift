@@ -157,7 +157,7 @@ nonisolated extension HookEvent {
                 toolUseID: toolUseID ?? "",
                 toolName: tool,
                 toolInput: toolInput,
-                receivedAt: Date()
+                receivedAt: Date(),
             ))
         }
 

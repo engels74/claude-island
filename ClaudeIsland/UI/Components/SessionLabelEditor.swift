@@ -48,7 +48,7 @@ struct SessionLabelEditor: View {
                 .overlay(
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(.white.opacity(0.4)),
                 )
         }
         .buttonStyle(.plain)
@@ -66,7 +66,7 @@ struct SessionLabelEditor: View {
                 .frame(width: 18, height: 18)
                 .overlay(
                     Circle()
-                        .stroke(Color.white, lineWidth: isSelected ? 2 : 0)
+                        .stroke(Color.white, lineWidth: isSelected ? 2 : 0),
                 )
         }
         .buttonStyle(.plain)

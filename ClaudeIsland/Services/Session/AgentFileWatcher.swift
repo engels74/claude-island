@@ -21,7 +21,7 @@ actor AgentFileWatcher {
         taskToolID: String,
         agentID: String,
         cwd: String,
-        onToolsUpdate: @escaping @Sendable (String, String, [SubagentToolInfo]) -> Void
+        onToolsUpdate: @escaping @Sendable (String, String, [SubagentToolInfo]) -> Void,
     ) {
         self.sessionID = sessionID
         self.taskToolID = taskToolID
@@ -99,7 +99,7 @@ actor AgentFileWatcher {
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
-            queue: .global(qos: .userInitiated)
+            queue: .global(qos: .userInitiated),
         )
 
         newSource.setEventHandler { [weak self] in
@@ -117,7 +117,7 @@ actor AgentFileWatcher {
 
         Self.logger
             .debug(
-                "Started watching agent file: \(self.agentID.prefix(8), privacy: .public) for task: \(self.taskToolID.prefix(12), privacy: .public)"
+                "Started watching agent file: \(self.agentID.prefix(8), privacy: .public) for task: \(self.taskToolID.prefix(12), privacy: .public)",
             )
     }
 
@@ -181,7 +181,7 @@ class AgentFileWatcherManager {
             taskToolID: taskToolID,
             agentID: agentID,
             cwd: cwd,
-            onToolsUpdate: callback
+            onToolsUpdate: callback,
         )
         Task(name: "agent-watcher-start") { await watcher.start() }
         self.watchers[key] = watcher
@@ -247,7 +247,7 @@ class AgentFileWatcherBridge {
         AgentFileWatcherManager.shared.onToolsUpdate = { sessionID, taskToolID, tools in
             Task(name: "agent-file-update") {
                 await SessionStore.shared.process(
-                    .agentFileUpdated(sessionID: sessionID, taskToolID: taskToolID, tools: tools)
+                    .agentFileUpdated(sessionID: sessionID, taskToolID: taskToolID, tools: tools),
                 )
             }
         }

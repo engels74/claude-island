@@ -63,7 +63,7 @@ final class NotchActivityCoordinator {
     func showActivity(
         type: NotchActivityType,
         value: CGFloat = 0,
-        duration: TimeInterval = 0
+        duration: TimeInterval = 0,
     ) {
         self.activityDuration = duration
 
@@ -71,7 +71,7 @@ final class NotchActivityCoordinator {
             self.expandingActivity = ExpandingActivity(
                 show: true,
                 type: type,
-                value: value
+                value: value,
             )
         }
     }

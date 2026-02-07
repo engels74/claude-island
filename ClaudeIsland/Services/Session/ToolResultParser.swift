@@ -19,7 +19,7 @@ enum ToolResultParser {
     nonisolated static func parseStructuredResult(
         toolName: String,
         toolUseResult: [String: Any],
-        isError: Bool
+        isError: Bool,
     ) -> ToolResultData {
         switch toolName {
         case let name where name.hasPrefix("mcp__"):
@@ -73,7 +73,7 @@ enum ToolResultParser {
                 content: fileData["content"] as? String ?? "",
                 numLines: fileData["numLines"] as? Int ?? 0,
                 startLine: fileData["startLine"] as? Int ?? 1,
-                totalLines: fileData["totalLines"] as? Int ?? 0
+                totalLines: fileData["totalLines"] as? Int ?? 0,
             ))
         }
         return .read(ReadResult(
@@ -81,7 +81,7 @@ enum ToolResultParser {
             content: data["content"] as? String ?? "",
             numLines: data["numLines"] as? Int ?? 0,
             startLine: data["startLine"] as? Int ?? 1,
-            totalLines: data["totalLines"] as? Int ?? 0
+            totalLines: data["totalLines"] as? Int ?? 0,
         ))
     }
 
@@ -102,7 +102,7 @@ enum ToolResultParser {
                     oldLines: oldLines,
                     newStart: newStart,
                     newLines: newLines,
-                    lines: lines
+                    lines: lines,
                 )
             }
         }
@@ -113,7 +113,7 @@ enum ToolResultParser {
             newString: data["newString"] as? String ?? "",
             replaceAll: data["replaceAll"] as? Bool ?? false,
             userModified: data["userModified"] as? Bool ?? false,
-            structuredPatch: patches
+            structuredPatch: patches,
         ))
     }
 
@@ -137,7 +137,7 @@ enum ToolResultParser {
                     oldLines: oldLines,
                     newStart: newStart,
                     newLines: newLines,
-                    lines: lines
+                    lines: lines,
                 )
             }
         }
@@ -146,7 +146,7 @@ enum ToolResultParser {
             type: writeType,
             filePath: data["filePath"] as? String ?? "",
             content: data["content"] as? String ?? "",
-            structuredPatch: patches
+            structuredPatch: patches,
         ))
     }
 
@@ -157,7 +157,7 @@ enum ToolResultParser {
             interrupted: data["interrupted"] as? Bool ?? false,
             isImage: data["isImage"] as? Bool ?? false,
             returnCodeInterpretation: data["returnCodeInterpretation"] as? String,
-            backgroundTaskID: data["backgroundTaskId"] as? String
+            backgroundTaskID: data["backgroundTaskId"] as? String,
         ))
     }
 
@@ -175,7 +175,7 @@ enum ToolResultParser {
             numFiles: data["numFiles"] as? Int ?? 0,
             content: data["content"] as? String,
             numLines: data["numLines"] as? Int,
-            appliedLimit: data["appliedLimit"] as? Int
+            appliedLimit: data["appliedLimit"] as? Int,
         ))
     }
 
@@ -184,7 +184,7 @@ enum ToolResultParser {
             filenames: data["filenames"] as? [String] ?? [],
             durationMs: data["durationMs"] as? Int ?? 0,
             numFiles: data["numFiles"] as? Int ?? 0,
-            truncated: data["truncated"] as? Bool ?? false
+            truncated: data["truncated"] as? Bool ?? false,
         ))
     }
 
@@ -200,14 +200,14 @@ enum ToolResultParser {
                 return TodoItem(
                     content: content,
                     status: status,
-                    activeForm: item["activeForm"] as? String
+                    activeForm: item["activeForm"] as? String,
                 )
             }
         }
 
         return .todoWrite(TodoWriteResult(
             oldTodos: parseTodos(data["oldTodos"] as? [[String: Any]]),
-            newTodos: parseTodos(data["newTodos"] as? [[String: Any]])
+            newTodos: parseTodos(data["newTodos"] as? [[String: Any]]),
         ))
     }
 
@@ -219,7 +219,7 @@ enum ToolResultParser {
             prompt: data["prompt"] as? String,
             totalDurationMs: data["totalDurationMs"] as? Int,
             totalTokens: data["totalTokens"] as? Int,
-            totalToolUseCount: data["totalToolUseCount"] as? Int
+            totalToolUseCount: data["totalToolUseCount"] as? Int,
         ))
     }
 
@@ -230,7 +230,7 @@ enum ToolResultParser {
             codeText: data["codeText"] as? String ?? "",
             bytes: data["bytes"] as? Int ?? 0,
             durationMs: data["durationMs"] as? Int ?? 0,
-            result: data["result"] as? String ?? ""
+            result: data["result"] as? String ?? "",
         ))
     }
 
@@ -246,7 +246,7 @@ enum ToolResultParser {
                 return SearchResultItem(
                     title: title,
                     url: url,
-                    snippet: item["snippet"] as? String ?? ""
+                    snippet: item["snippet"] as? String ?? "",
                 )
             }
         }
@@ -254,7 +254,7 @@ enum ToolResultParser {
         return .webSearch(WebSearchResult(
             query: data["query"] as? String ?? "",
             durationSeconds: data["durationSeconds"] as? Double ?? 0,
-            results: results
+            results: results,
         ))
     }
 
@@ -269,14 +269,14 @@ enum ToolResultParser {
                         guard let label = opt["label"] as? String else { return nil }
                         return QuestionOption(
                             label: label,
-                            description: opt["description"] as? String
+                            description: opt["description"] as? String,
                         )
                     }
                 }
                 return QuestionItem(
                     question: question,
                     header: questionData["header"] as? String,
-                    options: options
+                    options: options,
                 )
             }
         }
@@ -288,7 +288,7 @@ enum ToolResultParser {
 
         return .askUserQuestion(AskUserQuestionResult(
             questions: questions,
-            answers: answers
+            answers: answers,
         ))
     }
 
@@ -302,14 +302,14 @@ enum ToolResultParser {
             stderrLines: data["stderrLines"] as? Int ?? 0,
             exitCode: data["exitCode"] as? Int,
             command: data["command"] as? String,
-            timestamp: data["timestamp"] as? String
+            timestamp: data["timestamp"] as? String,
         ))
     }
 
     private nonisolated static func parseKillShellResult(_ data: [String: Any]) -> ToolResultData {
         .killShell(KillShellResult(
             shellID: data["shell_id"] as? String ?? data["shellId"] as? String ?? "",
-            message: data["message"] as? String ?? ""
+            message: data["message"] as? String ?? "",
         ))
     }
 
@@ -317,7 +317,7 @@ enum ToolResultParser {
         .exitPlanMode(ExitPlanModeResult(
             filePath: data["filePath"] as? String,
             plan: data["plan"] as? String,
-            isAgent: data["isAgent"] as? Bool ?? false
+            isAgent: data["isAgent"] as? Bool ?? false,
         ))
     }
 }

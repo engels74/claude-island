@@ -172,7 +172,7 @@ actor SessionStore {
             // Parse incrementally - only get NEW messages since last call
             let result = await ConversationParser.shared.parseIncremental(
                 sessionID: sessionID,
-                cwd: cwd
+                cwd: cwd,
             )
 
             // Recheck cancellation after await
@@ -198,7 +198,7 @@ actor SessionStore {
                 isIncremental: !result.clearDetected,
                 completedToolIDs: result.completedToolIDs,
                 toolResults: result.toolResults,
-                structuredResults: result.structuredResults
+                structuredResults: result.structuredResults,
             )
 
             await self.process(.fileUpdated(payload))
@@ -251,7 +251,7 @@ actor SessionStore {
         let entry = AuditEntry(
             timestamp: Date(),
             event: String(describing: event).prefix(200).description,
-            sessionID: event.sessionID
+            sessionID: event.sessionID,
         )
 
         self.eventAuditTrail.append(entry)
@@ -291,7 +291,7 @@ actor SessionStore {
         } else {
             Self.logger
                 .debug(
-                    "Invalid transition: \(String(describing: session.phase), privacy: .public) -> \(String(describing: newPhase), privacy: .public), ignoring"
+                    "Invalid transition: \(String(describing: session.phase), privacy: .public) -> \(String(describing: newPhase), privacy: .public), ignoring",
                 )
         }
 
@@ -323,7 +323,7 @@ actor SessionStore {
             pid: event.pid,
             tty: event.tty?.replacingOccurrences(of: "/dev/", with: ""),
             isInTmux: false, // Will be updated
-            phase: .idle
+            phase: .idle,
         )
     }
 
@@ -363,9 +363,9 @@ actor SessionStore {
                             status: .running,
                             result: nil,
                             structuredResult: nil,
-                            subagentTools: []
+                            subagentTools: [],
                         )),
-                        timestamp: Date()
+                        timestamp: Date(),
                     )
                     session.chatItems.append(placeholderItem)
                     Self.logger.debug("Created placeholder tool entry for \(toolUseID.prefix(16), privacy: .public)")
@@ -385,7 +385,7 @@ actor SessionStore {
                         session.chatItems[i] = ChatHistoryItem(
                             id: toolUseID,
                             type: .toolCall(tool),
-                            timestamp: session.chatItems[i].timestamp
+                            timestamp: session.chatItems[i].timestamp,
                         )
                         break
                     }
@@ -420,7 +420,7 @@ actor SessionStore {
                 toolUseID: nextPending.id,
                 toolName: nextPending.name,
                 toolInput: nil, // We don't have the input stored in chatItems
-                receivedAt: nextPending.timestamp
+                receivedAt: nextPending.timestamp,
             ))
             if session.phase.canTransition(to: newPhase) {
                 session.phase = newPhase
@@ -469,11 +469,11 @@ actor SessionStore {
                 session.chatItems[i] = ChatHistoryItem(
                     id: toolUseID,
                     type: .toolCall(tool),
-                    timestamp: session.chatItems[i].timestamp
+                    timestamp: session.chatItems[i].timestamp,
                 )
                 Self.logger
                     .debug(
-                        "Tool \(toolUseID.prefix(12), privacy: .public) completed with status: \(String(describing: result.status), privacy: .public)"
+                        "Tool \(toolUseID.prefix(12), privacy: .public) completed with status: \(String(describing: result.status), privacy: .public)",
                     )
                 break
             }
@@ -487,7 +487,7 @@ actor SessionStore {
                     toolUseID: nextPending.id,
                     toolName: nextPending.name,
                     toolInput: nil,
-                    receivedAt: nextPending.timestamp
+                    receivedAt: nextPending.timestamp,
                 ))
                 session.phase = newPhase
                 Self.logger.debug("Switched to next pending tool after completion: \(nextPending.id.prefix(12), privacy: .public)")
@@ -525,7 +525,7 @@ actor SessionStore {
                 toolUseID: nextPending.id,
                 toolName: nextPending.name,
                 toolInput: nil,
-                receivedAt: nextPending.timestamp
+                receivedAt: nextPending.timestamp,
             ))
             if session.phase.canTransition(to: newPhase) {
                 session.phase = newPhase
@@ -561,7 +561,7 @@ actor SessionStore {
                 toolUseID: nextPending.id,
                 toolName: nextPending.name,
                 toolInput: nil,
-                receivedAt: nextPending.timestamp
+                receivedAt: nextPending.timestamp,
             ))
             if session.phase.canTransition(to: newPhase) {
                 session.phase = newPhase
@@ -588,7 +588,7 @@ actor SessionStore {
         // Update conversationInfo from JSONL (summary, lastMessage, etc.)
         let conversationInfo = await ConversationParser.shared.parse(
             sessionID: payload.sessionID,
-            cwd: session.cwd
+            cwd: session.cwd,
         )
         session.conversationInfo = conversationInfo
 
@@ -628,7 +628,7 @@ actor SessionStore {
 
         self.processMessages(
             from: payload,
-            into: &session
+            into: &session,
         )
 
         if !payload.isIncremental {
@@ -640,7 +640,7 @@ actor SessionStore {
         await self.populateSubagentToolsFromAgentFiles(
             session: &session,
             cwd: payload.cwd,
-            structuredResults: payload.structuredResults
+            structuredResults: payload.structuredResults,
         )
 
         self.sessions[payload.sessionID] = session
@@ -650,21 +650,21 @@ actor SessionStore {
             session: session,
             completedToolIDs: payload.completedToolIDs,
             toolResults: payload.toolResults,
-            structuredResults: payload.structuredResults
+            structuredResults: payload.structuredResults,
         )
     }
 
     /// Process messages from payload into session chat items
     private func processMessages(
         from payload: FileUpdatePayload,
-        into session: inout SessionState
+        into session: inout SessionState,
     ) {
         var context = ItemCreationContext(
             existingIDs: Set(session.chatItems.map(\.id)),
             completedTools: payload.completedToolIDs,
             toolResults: payload.toolResults,
             structuredResults: payload.structuredResults,
-            toolTracker: session.toolTracker
+            toolTracker: session.toolTracker,
         )
 
         for message in payload.messages {
@@ -680,9 +680,9 @@ actor SessionStore {
                                     status: existingTool.status,
                                     result: existingTool.result,
                                     structuredResult: existingTool.structuredResult,
-                                    subagentTools: existingTool.subagentTools
+                                    subagentTools: existingTool.subagentTools,
                                 )),
-                                timestamp: message.timestamp
+                                timestamp: message.timestamp,
                             )
                         }
                         continue
@@ -693,7 +693,7 @@ actor SessionStore {
                     from: block,
                     message: message,
                     blockIndex: blockIndex,
-                    context: &context
+                    context: &context,
                 ) {
                     session.chatItems.append(item)
                 }
@@ -707,7 +707,7 @@ actor SessionStore {
     private func populateSubagentToolsFromAgentFiles(
         session: inout SessionState,
         cwd: String,
-        structuredResults: [String: ToolResultData]
+        structuredResults: [String: ToolResultData],
     ) async {
         for i in 0 ..< session.chatItems.count {
             guard case var .toolCall(tool) = session.chatItems[i].type,
@@ -728,7 +728,7 @@ actor SessionStore {
 
             let subagentToolInfos = await ConversationParser.shared.parseSubagentTools(
                 agentID: taskResult.agentID,
-                cwd: cwd
+                cwd: cwd,
             )
 
             guard !subagentToolInfos.isEmpty else { continue }
@@ -739,19 +739,19 @@ actor SessionStore {
                     name: info.name,
                     input: info.input,
                     status: info.isCompleted ? .success : .running,
-                    timestamp: self.parseTimestamp(info.timestamp) ?? Date()
+                    timestamp: self.parseTimestamp(info.timestamp) ?? Date(),
                 )
             }
 
             session.chatItems[i] = ChatHistoryItem(
                 id: taskToolID,
                 type: .toolCall(tool),
-                timestamp: session.chatItems[i].timestamp
+                timestamp: session.chatItems[i].timestamp,
             )
 
             Self.logger
                 .debug(
-                    "Populated \(subagentToolInfos.count) subagent tools for Task \(taskToolID.prefix(12), privacy: .public) from agent \(taskResult.agentID.prefix(8), privacy: .public)"
+                    "Populated \(subagentToolInfos.count) subagent tools for Task \(taskToolID.prefix(12), privacy: .public) from agent \(taskResult.agentID.prefix(8), privacy: .public)",
                 )
         }
     }
@@ -762,7 +762,7 @@ actor SessionStore {
         session: SessionState,
         completedToolIDs: Set<String>,
         toolResults: [String: ConversationParser.ToolResult],
-        structuredResults: [String: ToolResultData]
+        structuredResults: [String: ToolResultData],
     ) async {
         for item in session.chatItems {
             guard case let .toolCall(tool) = item.type else { continue }
@@ -773,7 +773,7 @@ actor SessionStore {
 
             let result = ToolCompletionResult.from(
                 parserResult: toolResults[item.id],
-                structuredResult: structuredResults[item.id]
+                structuredResult: structuredResults[item.id],
             )
 
             // Process the completion event (this will update state and phase consistently)
@@ -790,7 +790,7 @@ actor SessionStore {
                 session.chatItems[i] = ChatHistoryItem(
                     id: toolID,
                     type: .toolCall(tool),
-                    timestamp: session.chatItems[i].timestamp
+                    timestamp: session.chatItems[i].timestamp,
                 )
                 found = true
                 break
@@ -818,7 +818,7 @@ actor SessionStore {
                 session.chatItems[i] = ChatHistoryItem(
                     id: session.chatItems[i].id,
                     type: .toolCall(tool),
-                    timestamp: session.chatItems[i].timestamp
+                    timestamp: session.chatItems[i].timestamp,
                 )
             }
         }
@@ -859,7 +859,7 @@ actor SessionStore {
         // Parse file asynchronously
         let messages = await ConversationParser.shared.parseFullConversation(
             sessionID: sessionID,
-            cwd: cwd
+            cwd: cwd,
         )
         let completedTools = await ConversationParser.shared.completedToolIDs(for: sessionID)
         let toolResults = await ConversationParser.shared.toolResults(for: sessionID)
@@ -868,7 +868,7 @@ actor SessionStore {
         // Also parse conversationInfo (summary, lastMessage, etc.)
         let conversationInfo = await ConversationParser.shared.parse(
             sessionID: sessionID,
-            cwd: cwd
+            cwd: cwd,
         )
 
         // Process loaded history
@@ -878,7 +878,7 @@ actor SessionStore {
             completedTools: completedTools,
             toolResults: toolResults,
             structuredResults: structuredResults,
-            conversationInfo: conversationInfo
+            conversationInfo: conversationInfo,
         )))
     }
 
@@ -895,7 +895,7 @@ actor SessionStore {
                lastRole == "assistant" || lastRole == "tool" {
                 session.phase = .waitingForInput
                 Self.logger.debug(
-                    "History loaded: inferred phase .waitingForInput from lastMessageRole=\(lastRole, privacy: .public)"
+                    "History loaded: inferred phase .waitingForInput from lastMessageRole=\(lastRole, privacy: .public)",
                 )
             }
         }
@@ -906,7 +906,7 @@ actor SessionStore {
             completedTools: payload.completedTools,
             toolResults: payload.toolResults,
             structuredResults: payload.structuredResults,
-            toolTracker: session.toolTracker
+            toolTracker: session.toolTracker,
         )
 
         for message in payload.messages {
@@ -915,7 +915,7 @@ actor SessionStore {
                     from: block,
                     message: message,
                     blockIndex: blockIndex,
-                    context: &context
+                    context: &context,
                 ) {
                     session.chatItems.append(item)
                 }

@@ -12,7 +12,7 @@ import SwiftUI
 /// Corner radius constants
 private let cornerRadiusInsets = (
     opened: (top: CGFloat(19), bottom: CGFloat(24)),
-    closed: (top: CGFloat(6), bottom: CGFloat(14))
+    closed: (top: CGFloat(6), bottom: CGFloat(14)),
 )
 
 // MARK: - NotchView
@@ -41,13 +41,13 @@ struct NotchView: View {
                         maxWidth: self.viewModel.status == .opened
                             ? self.notchSize.width
                             : (self.showClosedActivity ? self.closedContentWidth : nil),
-                        alignment: .top
+                        alignment: .top,
                     )
                     .padding(
                         .horizontal,
                         self.viewModel.status == .opened
                             ? cornerRadiusInsets.opened.top
-                            : cornerRadiusInsets.closed.bottom
+                            : cornerRadiusInsets.closed.bottom,
                     )
                     .padding([.horizontal, .bottom], self.viewModel.status == .opened ? 12 : 0)
                     .background(.black)
@@ -60,14 +60,14 @@ struct NotchView: View {
                     }
                     .shadow(
                         color: (self.viewModel.status == .opened || self.isHovering) ? .black.opacity(0.7) : .clear,
-                        radius: 6
+                        radius: 6,
                     )
                     .frame(
                         maxWidth: self.viewModel.status == .opened
                             ? self.notchSize.width
                             : (self.showClosedActivity ? self.closedContentWidth : nil),
                         maxHeight: self.viewModel.status == .opened ? self.notchSize.height : nil,
-                        alignment: .top
+                        alignment: .top,
                     )
                     .animation(self.viewModel.status == .opened ? self.openAnimation : self.closeAnimation, value: self.viewModel.status)
                     .animation(self.openAnimation, value: self.notchSize) // Animate container size changes between content types
@@ -226,7 +226,7 @@ struct NotchView: View {
     private var closedNotchSize: CGSize {
         CGSize(
             width: self.viewModel.deviceNotchRect.width,
-            height: self.viewModel.deviceNotchRect.height
+            height: self.viewModel.deviceNotchRect.height,
         )
     }
 
@@ -329,7 +329,7 @@ struct NotchView: View {
     private var currentNotchShape: NotchShape {
         NotchShape(
             topCornerRadius: self.topCornerRadius,
-            bottomCornerRadius: self.bottomCornerRadius
+            bottomCornerRadius: self.bottomCornerRadius,
         )
     }
 
@@ -386,7 +386,7 @@ struct NotchView: View {
             size: 16,
             strokeWidth: 2,
             showResetTime: AppSettings.tokenShowResetTime,
-            sessionResetTime: self.tokenTrackingManager.sessionResetTime
+            sessionResetTime: self.tokenTrackingManager.sessionResetTime,
         )
     }
 
@@ -405,8 +405,8 @@ struct NotchView: View {
                             insertion: .scale(scale: 0.8, anchor: .top)
                                 .combined(with: .opacity)
                                 .animation(.smooth(duration: 0.35)),
-                            removal: .opacity.animation(.easeOut(duration: 0.15))
-                        )
+                            removal: .opacity.animation(.easeOut(duration: 0.15)),
+                        ),
                     )
             }
         }
@@ -493,7 +493,7 @@ struct NotchView: View {
         }
         .frame(
             width: self.viewModel.status == .opened ? self.notchSize.width - 24 : nil,
-            height: self.closedNotchSize.height
+            height: self.closedNotchSize.height,
         )
     }
 
@@ -564,7 +564,7 @@ struct NotchView: View {
             case .instances:
                 ClaudeInstancesView(
                     sessionMonitor: self.sessionMonitor,
-                    viewModel: self.viewModel
+                    viewModel: self.viewModel,
                 )
             case .menu:
                 NotchMenuView(viewModel: self.viewModel)
@@ -573,7 +573,7 @@ struct NotchView: View {
                     sessionID: session.sessionID,
                     initialSession: session,
                     sessionMonitor: self.sessionMonitor,
-                    viewModel: self.viewModel
+                    viewModel: self.viewModel,
                 )
             }
         }

@@ -22,7 +22,7 @@ struct InlineColorPicker: View {
             SaturationBrightnessPlane(
                 hue: self.hue,
                 saturation: self.$saturation,
-                brightness: self.$brightness
+                brightness: self.$brightness,
             )
             .frame(height: 100)
             .cornerRadius(6)
@@ -93,7 +93,7 @@ struct HueSlider: View {
                 LinearGradient(
                     gradient: Gradient(colors: self.hueGradientColors),
                     startPoint: .leading,
-                    endPoint: .trailing
+                    endPoint: .trailing,
                 )
                 .cornerRadius(6)
 
@@ -102,7 +102,7 @@ struct HueSlider: View {
                     .frame(width: 14, height: 14)
                     .overlay(
                         Circle()
-                            .stroke(Color.white, lineWidth: 2)
+                            .stroke(Color.white, lineWidth: 2),
                     )
                     .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                     .offset(x: self.thumbOffset(for: geometry.size.width))
@@ -112,7 +112,7 @@ struct HueSlider: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         self.updateHue(from: value.location.x, width: geometry.size.width)
-                    }
+                    },
             )
         }
     }
@@ -153,13 +153,13 @@ struct SaturationBrightnessPlane: View {
                 LinearGradient(
                     gradient: Gradient(colors: [.white, Color(hue: self.hue, saturation: 1, brightness: 1)]),
                     startPoint: .leading,
-                    endPoint: .trailing
+                    endPoint: .trailing,
                 )
 
                 LinearGradient(
                     gradient: Gradient(colors: [.clear, .black]),
                     startPoint: .top,
-                    endPoint: .bottom
+                    endPoint: .bottom,
                 )
 
                 Circle()
@@ -167,7 +167,7 @@ struct SaturationBrightnessPlane: View {
                     .frame(width: 16, height: 16)
                     .overlay(
                         Circle()
-                            .stroke(Color.white, lineWidth: 2)
+                            .stroke(Color.white, lineWidth: 2),
                     )
                     .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                     .position(self.thumbPosition(for: geometry.size))
@@ -177,7 +177,7 @@ struct SaturationBrightnessPlane: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         self.updateSaturationBrightness(from: value.location, size: geometry.size)
-                    }
+                    },
             )
         }
     }

@@ -125,7 +125,7 @@ actor ConversationParser {
                 lastToolName: nil,
                 firstUserMessage: nil,
                 lastUserMessageDate: nil,
-                usage: nil
+                usage: nil,
             )
         }
 
@@ -146,7 +146,7 @@ actor ConversationParser {
                 lastToolName: nil,
                 firstUserMessage: nil,
                 lastUserMessageDate: nil,
-                usage: nil
+                usage: nil,
             )
             self.cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
             return info
@@ -161,7 +161,7 @@ actor ConversationParser {
                 lastToolName: nil,
                 firstUserMessage: nil,
                 lastUserMessageDate: nil,
-                usage: nil
+                usage: nil,
             )
         }
 
@@ -202,7 +202,7 @@ actor ConversationParser {
                 completedToolIDs: [],
                 toolResults: [:],
                 structuredResults: [:],
-                clearDetected: false
+                clearDetected: false,
             )
         }
 
@@ -222,7 +222,7 @@ actor ConversationParser {
             completedToolIDs: state.completedToolIDs,
             toolResults: state.toolResults,
             structuredResults: state.structuredResults,
-            clearDetected: clearDetected
+            clearDetected: clearDetected,
         )
     }
 
@@ -356,7 +356,7 @@ actor ConversationParser {
         return FileInfo(
             exists: true,
             modificationDate: attrs[.modificationDate] as? Date,
-            size: attrs[.size] as? Int
+            size: attrs[.size] as? Int,
         )
     }
 
@@ -483,7 +483,7 @@ actor ConversationParser {
                 inputTokens: totalInput,
                 outputTokens: totalOutput,
                 cacheReadTokens: totalCacheRead,
-                cacheCreationTokens: totalCacheCreation
+                cacheCreationTokens: totalCacheCreation,
             )
             : nil
 
@@ -582,7 +582,7 @@ actor ConversationParser {
             lastToolName: lastToolName,
             firstUserMessage: firstUserMessage,
             lastUserMessageDate: lastUserMessageDate,
-            usage: usageInfo
+            usage: usageInfo,
         )
     }
 
@@ -648,7 +648,7 @@ actor ConversationParser {
                                 content: content,
                                 stdout: stdout,
                                 stderr: stderr,
-                                isError: isError
+                                isError: isError,
                             )
 
                             let toolName = topLevelToolName ?? state.toolIDToName[toolUseID]
@@ -658,7 +658,7 @@ actor ConversationParser {
                                 let structured = ToolResultParser.parseStructuredResult(
                                     toolName: name,
                                     toolUseResult: toolUseResult,
-                                    isError: isError
+                                    isError: isError,
                                 )
                                 state.structuredResults[toolUseID] = structured
                             }
@@ -765,7 +765,7 @@ actor ConversationParser {
             id: uuid,
             role: role,
             timestamp: timestamp,
-            content: blocks
+            content: blocks,
         )
     }
 

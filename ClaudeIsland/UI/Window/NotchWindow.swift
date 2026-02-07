@@ -17,13 +17,13 @@ class NotchPanel: NSPanel {
         contentRect: NSRect,
         styleMask style: NSWindow.StyleMask,
         backing backingStoreType: NSWindow.BackingStoreType,
-        defer flag: Bool
+        defer flag: Bool,
     ) {
         super.init(
             contentRect: contentRect,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
-            defer: false
+            defer: false,
         )
 
         // Floating panel behavior
@@ -124,7 +124,7 @@ class NotchPanel: NSPanel {
             mouseEventSource: nil,
             mouseType: mouseType,
             mouseCursorPosition: cgPoint,
-            mouseButton: mouseButton
+            mouseButton: mouseButton,
         ) {
             cgEvent.post(tap: .cghidEventTap)
         }

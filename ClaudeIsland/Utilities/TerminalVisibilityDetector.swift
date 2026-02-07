@@ -124,7 +124,7 @@ nonisolated enum TerminalVisibilityDetector {
         // Find the terminal PID for this session
         guard let sessionTerminalPID = ProcessTreeBuilder.shared.findTerminalPID(
             forProcess: sessionPID,
-            tree: tree
+            tree: tree,
         )
         else {
             return []
@@ -151,7 +151,7 @@ nonisolated enum TerminalVisibilityDetector {
                 ProcessTreeBuilder.shared.isDescendant(
                     targetPID: ownerPID,
                     ofAncestor: sessionTerminalPID,
-                    tree: tree
+                    tree: tree,
                 ) {
                 windowIDs.append(windowID)
             }

@@ -55,7 +55,7 @@ struct WaitingForInputIcon: View {
                     x: x * scale - dotSize / 2,
                     y: y * scale - dotSize / 2,
                     width: dotSize,
-                    height: dotSize
+                    height: dotSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }
@@ -66,7 +66,7 @@ struct WaitingForInputIcon: View {
                     x: x * scale - dotSize / 2,
                     y: y * scale - dotSize / 2,
                     width: dotSize,
-                    height: dotSize
+                    height: dotSize,
                 )
                 context.fill(Path(rect), with: .color(self.color.opacity(0.4)))
             }
@@ -112,7 +112,7 @@ struct WaitingForApprovalIcon: View {
                     x: x * scale - dotSize / 2,
                     y: y * scale - dotSize / 2,
                     width: dotSize,
-                    height: dotSize
+                    height: dotSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }
@@ -166,7 +166,7 @@ struct RunningIcon: View {
                     x: x * scale - dotSize / 2,
                     y: y * scale - dotSize / 2,
                     width: dotSize,
-                    height: dotSize
+                    height: dotSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }
@@ -177,7 +177,7 @@ struct RunningIcon: View {
                     x: x * scale - dotSize / 2,
                     y: y * scale - dotSize / 2,
                     width: dotSize,
-                    height: dotSize
+                    height: dotSize,
                 )
                 context.fill(Path(rect), with: .color(self.color.opacity(0.4)))
             }
@@ -187,7 +187,7 @@ struct RunningIcon: View {
         .onAppear {
             withAnimation(
                 .linear(duration: 2.0)
-                    .repeatForever(autoreverses: false)
+                    .repeatForever(autoreverses: false),
             ) {
                 self.rotation = 360
             }
@@ -229,7 +229,7 @@ struct IdleIcon: View {
                     x: x * scale - dotSize / 2,
                     y: y * scale - dotSize / 2,
                     width: dotSize,
-                    height: dotSize
+                    height: dotSize,
                 )
                 context.fill(Path(rect), with: .color(self.color))
             }

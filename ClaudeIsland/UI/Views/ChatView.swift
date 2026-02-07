@@ -63,13 +63,13 @@ struct ChatView: View {
                         self.interactivePromptBar
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                removal: .opacity
+                                removal: .opacity,
                             ))
                     } else {
                         self.approvalBar(tool: tool)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                removal: .opacity
+                                removal: .opacity,
                             ))
                     }
                 } else {
@@ -282,7 +282,7 @@ struct ChatView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(self.isHeaderHovered ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHeaderHovered ? Color.white.opacity(0.08) : Color.clear),
             )
         }
         .buttonStyle(.plain)
@@ -294,7 +294,7 @@ struct ChatView: View {
             LinearGradient(
                 colors: [self.fadeColor.opacity(0.7), self.fadeColor.opacity(0)],
                 startPoint: .top,
-                endPoint: .bottom
+                endPoint: .bottom,
             )
             .frame(height: 24)
             .offset(y: 24) // Push below header
@@ -347,7 +347,7 @@ struct ChatView: View {
                             .scaleEffect(x: 1, y: -1)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -4)),
-                                removal: .opacity
+                                removal: .opacity,
                             ))
                     }
 
@@ -357,7 +357,7 @@ struct ChatView: View {
                             .scaleEffect(x: 1, y: -1)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                                removal: .opacity
+                                removal: .opacity,
                             ))
                     }
                 }
@@ -403,7 +403,7 @@ struct ChatView: View {
                     .padding(.bottom, 16)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .bottom)),
-                        removal: .opacity
+                        removal: .opacity,
                     ))
                 }
             }
@@ -444,8 +444,8 @@ struct ChatView: View {
                             .fill(Color.white.opacity(self.canSendMessages ? 0.08 : 0.04))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                            )
+                                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1),
+                            ),
                     )
                     .onSubmit {
                         self.sendMessage()
@@ -469,7 +469,7 @@ struct ChatView: View {
             LinearGradient(
                 colors: [self.fadeColor.opacity(0), self.fadeColor.opacity(0.7)],
                 startPoint: .top,
-                endPoint: .bottom
+                endPoint: .bottom,
             )
             .frame(height: 24)
             .offset(y: -24) // Push above input bar
@@ -483,7 +483,7 @@ struct ChatView: View {
     /// Bar for interactive tools like AskUserQuestion that need terminal input
     private var interactivePromptBar: some View {
         ChatInteractivePromptBar(
-            isInTmux: self.session.isInTmux
+            isInTmux: self.session.isInTmux,
         ) { self.focusTerminal() }
     }
 
@@ -498,7 +498,7 @@ struct ChatView: View {
                 .cornerRadius(8)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1),
                 )
 
             Button {
@@ -518,7 +518,7 @@ struct ChatView: View {
         .padding(.horizontal, 4)
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .scale(scale: 0.95)),
-            removal: .opacity
+            removal: .opacity,
         ))
     }
 
@@ -529,7 +529,7 @@ struct ChatView: View {
             tool: tool,
             toolInput: self.session.pendingToolInput,
             onApprove: { self.approvePermission() },
-            onDeny: { self.denyPermission() }
+            onDeny: { self.denyPermission() },
         )
     }
 
@@ -717,7 +717,7 @@ struct ChatView: View {
         do {
             let output = try await ProcessExecutor.shared.run(
                 tmuxPath,
-                arguments: ["list-panes", "-a", "-F", "#{session_name}:#{window_index}.#{pane_index} #{pane_tty}"]
+                arguments: ["list-panes", "-a", "-F", "#{session_name}:#{window_index}.#{pane_index} #{pane_tty}"],
             )
 
             let lines = output.components(separatedBy: "\n")
@@ -776,7 +776,7 @@ struct UserMessageView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.white.opacity(0.15))
+                        .fill(Color.white.opacity(0.15)),
                 )
         }
     }
@@ -932,7 +932,7 @@ struct ToolCallView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(self.canExpand && self.isHovering ? Color.white.opacity(0.05) : Color.clear)
+                .fill(self.canExpand && self.isHovering ? Color.white.opacity(0.05) : Color.clear),
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -1009,7 +1009,7 @@ struct ToolCallView: View {
     private func startPulsing() {
         withAnimation(
             .easeInOut(duration: 0.6)
-                .repeatForever(autoreverses: true)
+                .repeatForever(autoreverses: true),
         ) {
             self.pulseOpacity = 0.15
         }
@@ -1149,7 +1149,7 @@ struct SubagentToolsSummary: View {
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color.white.opacity(0.03))
+                .fill(Color.white.opacity(0.03)),
         )
     }
 
@@ -1407,7 +1407,7 @@ struct NewMessagesIndicator: View {
             .background(
                 Capsule()
                     .fill(Color(red: 0.85, green: 0.47, blue: 0.34)) // Claude orange
-                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4),
             )
             .scaleEffect(self.isHovering ? 1.05 : 1.0)
         }

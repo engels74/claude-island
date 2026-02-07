@@ -74,7 +74,7 @@ struct ClaudeInstancesView: View {
                         onChat: { self.openChat(session) },
                         onArchive: { self.archiveSession(session) },
                         onApprove: { self.approveSession(session) },
-                        onReject: { self.rejectSession(session) }
+                        onReject: { self.rejectSession(session) },
                     )
                     .id(session.stableID)
                 }
@@ -150,7 +150,7 @@ struct InstanceRow: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.isEditing)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
+                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear),
         )
         .onHover { self.isHovered = $0 }
         .onRightClick {
@@ -325,7 +325,7 @@ struct InstanceRow: View {
                     InlineApprovalButtons(
                         onChat: self.onChat,
                         onApprove: self.onApprove,
-                        onReject: self.onReject
+                        onReject: self.onReject,
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {
@@ -478,7 +478,7 @@ struct IconButton: View {
                 .frame(width: 24, height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(self.isHovered ? Color.white.opacity(0.1) : Color.clear)
+                        .fill(self.isHovered ? Color.white.opacity(0.1) : Color.clear),
                 )
         }
         .buttonStyle(.plain)

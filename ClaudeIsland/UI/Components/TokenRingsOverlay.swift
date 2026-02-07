@@ -33,7 +33,7 @@ struct TokenRingsOverlay: View {
                         percentage: self.sessionPercentage,
                         label: "S",
                         size: self.size,
-                        strokeWidth: self.strokeWidth
+                        strokeWidth: self.strokeWidth,
                     )
                 }
                 if self.showWeekly {
@@ -41,7 +41,7 @@ struct TokenRingsOverlay: View {
                         percentage: self.weeklyPercentage,
                         label: "W",
                         size: self.size,
-                        strokeWidth: self.strokeWidth
+                        strokeWidth: self.strokeWidth,
                     )
                 }
             }
@@ -68,7 +68,7 @@ struct TokenRingsOverlay: View {
         weeklyPercentage: 72,
         showSession: true,
         showWeekly: true,
-        size: 16
+        size: 16,
     )
     .padding()
     .background(.black)
@@ -80,7 +80,7 @@ struct TokenRingsOverlay: View {
         weeklyPercentage: 0,
         showSession: true,
         showWeekly: false,
-        size: 16
+        size: 16,
     )
     .padding()
     .background(.black)
@@ -92,7 +92,7 @@ struct TokenRingsOverlay: View {
         weeklyPercentage: 88,
         showSession: false,
         showWeekly: true,
-        size: 16
+        size: 16,
     )
     .padding()
     .background(.black)

@@ -20,7 +20,7 @@ enum ToolEventProcessor {
     /// Process PreToolUse event for tool tracking
     static func processPreToolUse(
         event: HookEvent,
-        session: inout SessionState
+        session: inout SessionState,
     ) {
         guard let toolUseID = event.toolUseID, let toolName = event.tool else { return }
 
@@ -37,9 +37,9 @@ enum ToolEventProcessor {
                     status: .running,
                     result: nil,
                     structuredResult: nil,
-                    subagentTools: []
+                    subagentTools: [],
                 )),
-                timestamp: Date()
+                timestamp: Date(),
             )
             session.chatItems.append(placeholderItem)
             Self.logger.debug("Created placeholder tool entry for \(toolUseID.prefix(16), privacy: .public)")
@@ -49,7 +49,7 @@ enum ToolEventProcessor {
     /// Process PostToolUse event for tool tracking
     static func processPostToolUse(
         event: HookEvent,
-        session: inout SessionState
+        session: inout SessionState,
     ) {
         guard let toolUseID = event.toolUseID else { return }
 
@@ -62,7 +62,7 @@ enum ToolEventProcessor {
     /// Process PreToolUse event for subagent tracking
     static func processSubagentPreToolUse(
         event: HookEvent,
-        session: inout SessionState
+        session: inout SessionState,
     ) {
         guard let toolUseID = event.toolUseID else { return }
 
@@ -77,7 +77,7 @@ enum ToolEventProcessor {
                 name: toolName,
                 input: input,
                 status: .running,
-                timestamp: Date()
+                timestamp: Date(),
             )
             session.subagentState.addSubagentTool(subagentTool)
         }
@@ -86,7 +86,7 @@ enum ToolEventProcessor {
     /// Process PostToolUse event for subagent tracking
     static func processSubagentPostToolUse(
         event: HookEvent,
-        session: inout SessionState
+        session: inout SessionState,
     ) {
         guard let toolUseID = event.toolUseID else { return }
 
@@ -96,7 +96,7 @@ enum ToolEventProcessor {
                 self.attachSubagentToolsToTask(
                     session: &session,
                     taskToolID: toolUseID,
-                    subagentTools: taskContext.subagentTools
+                    subagentTools: taskContext.subagentTools,
                 )
             } else {
                 Self.logger.debug("Task completing but no taskContext found for \(toolUseID.prefix(12), privacy: .public)")
@@ -119,7 +119,7 @@ enum ToolEventProcessor {
             self.attachSubagentToolsToTask(
                 session: &session,
                 taskToolID: taskID,
-                subagentTools: tools
+                subagentTools: tools,
             )
         }
         session.subagentState = SubagentState()
@@ -131,7 +131,7 @@ enum ToolEventProcessor {
     static func updateToolStatus(
         in session: inout SessionState,
         toolID: String,
-        status: ToolStatus
+        status: ToolStatus,
     ) {
         for i in 0 ..< session.chatItems.count {
             if session.chatItems[i].id == toolID,
@@ -141,7 +141,7 @@ enum ToolEventProcessor {
                 session.chatItems[i] = ChatHistoryItem(
                     id: toolID,
                     type: .toolCall(tool),
-                    timestamp: session.chatItems[i].timestamp
+                    timestamp: session.chatItems[i].timestamp,
                 )
                 return
             }
@@ -153,7 +153,7 @@ enum ToolEventProcessor {
     /// Find the next tool waiting for approval
     static func findNextPendingTool(
         in session: SessionState,
-        excluding toolID: String
+        excluding toolID: String,
     ) -> (id: String, name: String, timestamp: Date)? {
         for item in session.chatItems {
             if item.id == toolID { continue }
@@ -173,7 +173,7 @@ enum ToolEventProcessor {
                 session.chatItems[i] = ChatHistoryItem(
                     id: session.chatItems[i].id,
                     type: .toolCall(tool),
-                    timestamp: session.chatItems[i].timestamp
+                    timestamp: session.chatItems[i].timestamp,
                 )
             }
         }
@@ -189,7 +189,7 @@ enum ToolEventProcessor {
     private static func attachSubagentToolsToTask(
         session: inout SessionState,
         taskToolID: String,
-        subagentTools: [SubagentToolCall]
+        subagentTools: [SubagentToolCall],
     ) {
         guard !subagentTools.isEmpty else { return }
 
@@ -200,7 +200,7 @@ enum ToolEventProcessor {
                 session.chatItems[i] = ChatHistoryItem(
                     id: taskToolID,
                     type: .toolCall(tool),
-                    timestamp: session.chatItems[i].timestamp
+                    timestamp: session.chatItems[i].timestamp,
                 )
                 self.logger.debug("Attached \(subagentTools.count) subagent tools to Task \(taskToolID.prefix(12), privacy: .public)")
                 break

@@ -35,11 +35,11 @@ nonisolated struct SessionState: Equatable, Identifiable, Sendable {
             lastToolName: nil,
             firstUserMessage: nil,
             lastUserMessageDate: nil,
-            usage: nil
+            usage: nil,
         ),
         needsClearReconciliation: Bool = false,
         lastActivity: Date = Date(),
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
     ) {
         self.sessionID = sessionID
         self.cwd = cwd
@@ -213,7 +213,7 @@ nonisolated struct ToolTracker: Equatable, Sendable {
         inProgress: [String: ToolInProgress] = [:],
         seenIDs: Set<String> = [],
         lastSyncOffset: UInt64 = 0,
-        lastSyncTime: Date? = nil
+        lastSyncTime: Date? = nil,
     ) {
         self.inProgress = inProgress
         self.seenIDs = seenIDs
@@ -252,7 +252,7 @@ nonisolated struct ToolTracker: Equatable, Sendable {
             id: id,
             name: name,
             startTime: Date(),
-            phase: .running
+            phase: .running,
         )
     }
 
@@ -317,7 +317,7 @@ nonisolated struct SubagentState: Equatable, Sendable {
             startTime: Date(),
             agentID: nil,
             description: description,
-            subagentTools: []
+            subagentTools: [],
         )
     }
 

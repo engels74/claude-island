@@ -34,7 +34,7 @@ enum ChatItemFactory {
         from block: MessageBlock,
         message: ChatMessage,
         blockIndex: Int,
-        context: inout ItemCreationContext
+        context: inout ItemCreationContext,
     ) -> ChatHistoryItem? {
         switch block {
         case let .text(text):
@@ -42,7 +42,7 @@ enum ChatItemFactory {
                 text: text,
                 message: message,
                 blockIndex: blockIndex,
-                existingIDs: context.existingIDs
+                existingIDs: context.existingIDs,
             )
 
         case let .toolUse(tool):
@@ -53,14 +53,14 @@ enum ChatItemFactory {
                 text: text,
                 message: message,
                 blockIndex: blockIndex,
-                existingIDs: context.existingIDs
+                existingIDs: context.existingIDs,
             )
 
         case .interrupted:
             self.createInterruptedItem(
                 message: message,
                 blockIndex: blockIndex,
-                existingIDs: context.existingIDs
+                existingIDs: context.existingIDs,
             )
         }
     }
@@ -73,7 +73,7 @@ enum ChatItemFactory {
         text: String,
         message: ChatMessage,
         blockIndex: Int,
-        existingIDs: Set<String>
+        existingIDs: Set<String>,
     ) -> ChatHistoryItem? {
         let itemID = "\(message.id)-text-\(blockIndex)"
         guard !existingIDs.contains(itemID) else { return nil }
@@ -88,7 +88,7 @@ enum ChatItemFactory {
     private nonisolated static func createToolUseItem(
         tool: ToolUseBlock,
         message: ChatMessage,
-        context: inout ItemCreationContext
+        context: inout ItemCreationContext,
     ) -> ChatHistoryItem? {
         guard context.markToolSeen(tool.id) else { return nil }
 
@@ -115,9 +115,9 @@ enum ChatItemFactory {
                 status: status,
                 result: resultText,
                 structuredResult: context.structuredResults[tool.id],
-                subagentTools: []
+                subagentTools: [],
             )),
-            timestamp: message.timestamp
+            timestamp: message.timestamp,
         )
     }
 
@@ -125,7 +125,7 @@ enum ChatItemFactory {
         text: String,
         message: ChatMessage,
         blockIndex: Int,
-        existingIDs: Set<String>
+        existingIDs: Set<String>,
     ) -> ChatHistoryItem? {
         let itemID = "\(message.id)-thinking-\(blockIndex)"
         guard !existingIDs.contains(itemID) else { return nil }
@@ -135,7 +135,7 @@ enum ChatItemFactory {
     private nonisolated static func createInterruptedItem(
         message: ChatMessage,
         blockIndex: Int,
-        existingIDs: Set<String>
+        existingIDs: Set<String>,
     ) -> ChatHistoryItem? {
         let itemID = "\(message.id)-interrupted-\(blockIndex)"
         guard !existingIDs.contains(itemID) else { return nil }

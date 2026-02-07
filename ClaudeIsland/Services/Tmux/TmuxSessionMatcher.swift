@@ -40,7 +40,7 @@ actor TmuxSessionMatcher {
             .contentsOfDirectory(
                 at: projectDir,
                 includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
+                options: [.skipsHiddenFiles],
             )
             .filter({ $0.pathExtension == "jsonl" && !$0.lastPathComponent.hasPrefix("agent-") })
         else {

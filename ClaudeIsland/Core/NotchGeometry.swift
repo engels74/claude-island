@@ -20,7 +20,7 @@ struct NotchGeometry: Sendable {
             x: self.screenRect.midX - self.deviceNotchRect.width / 2,
             y: self.screenRect.maxY - self.deviceNotchRect.height,
             width: self.deviceNotchRect.width,
-            height: self.deviceNotchRect.height
+            height: self.deviceNotchRect.height,
         )
     }
 
@@ -33,7 +33,7 @@ struct NotchGeometry: Sendable {
             x: self.screenRect.midX - width / 2,
             y: self.screenRect.maxY - height,
             width: width,
-            height: height
+            height: height,
         )
     }
 

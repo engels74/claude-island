@@ -1,7 +1,7 @@
 # SwiftFormat configuration for Claude Island
 
 # Swift version
---swiftversion 6.0
+--swiftversion 6.2
 
 # Indentation
 --indent 4

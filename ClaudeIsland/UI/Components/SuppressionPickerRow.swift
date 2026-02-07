@@ -48,7 +48,7 @@ struct SuppressionPickerRow: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -60,7 +60,7 @@ struct SuppressionPickerRow: View {
                     ForEach(SoundSuppression.allCases, id: \.self) { suppression in
                         SuppressionOptionRowInline(
                             suppression: suppression,
-                            isSelected: self.selectedSuppression == suppression
+                            isSelected: self.selectedSuppression == suppression,
                         ) {
                             self.selectedSuppression = suppression
                             AppSettings.soundSuppression = suppression
@@ -133,7 +133,7 @@ private struct SuppressionOptionRowInline: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear),
             )
         }
         .buttonStyle(.plain)

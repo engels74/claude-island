@@ -205,7 +205,7 @@ actor ClaudeAPIService {
 
         return APIUsageResponse(
             fiveHour: UsageWindow(utilization: sessionPercentage, resetsAt: sessionResetTime),
-            sevenDay: UsageWindow(utilization: weeklyPercentage, resetsAt: weeklyResetTime)
+            sevenDay: UsageWindow(utilization: weeklyPercentage, resetsAt: weeklyResetTime),
         )
     }
 

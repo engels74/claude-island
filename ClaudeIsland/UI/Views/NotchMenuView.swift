@@ -32,7 +32,7 @@ struct NotchMenuView: View {
                 // Back button
                 MenuRow(
                     icon: "chevron.left",
-                    label: "Back"
+                    label: "Back",
                 ) {
                     self.viewModel.toggleMenu()
                 }
@@ -62,7 +62,7 @@ struct NotchMenuView: View {
                 MenuToggleRow(
                     icon: "power",
                     label: "Launch at Login",
-                    isOn: self.launchAtLogin
+                    isOn: self.launchAtLogin,
                 ) {
                     do {
                         if self.launchAtLogin {
@@ -80,7 +80,7 @@ struct NotchMenuView: View {
                 MenuToggleRow(
                     icon: "arrow.triangle.2.circlepath",
                     label: "Hooks",
-                    isOn: self.hooksInstalled
+                    isOn: self.hooksInstalled,
                 ) {
                     // Cancel any in-flight installation tasks first (both local and AppDelegate's)
                     // This prevents race conditions where an app-launch install could re-write settings.json
@@ -114,7 +114,7 @@ struct NotchMenuView: View {
 
                 MenuRow(
                     icon: "star",
-                    label: "Star on GitHub"
+                    label: "Star on GitHub",
                 ) {
                     if let url = URL(string: "https://github.com/engels74/claude-island") {
                         NSWorkspace.shared.open(url)
@@ -128,7 +128,7 @@ struct NotchMenuView: View {
                 MenuRow(
                     icon: "xmark.circle",
                     label: "Quit",
-                    isDestructive: true
+                    isDestructive: true,
                 ) {
                     NSApplication.shared.terminate(nil)
                 }
@@ -219,7 +219,7 @@ struct UpdateRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(self.isHovered && self.isInteractive ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered && self.isInteractive ? Color.white.opacity(0.08) : Color.clear),
             )
         }
         .buttonStyle(.plain)
@@ -469,7 +469,7 @@ struct AccessibilityRow: View {
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 5)
-                                .fill(TerminalColors.amber)
+                                .fill(TerminalColors.amber),
                         )
                 }
                 .buttonStyle(.plain)
@@ -479,7 +479,7 @@ struct AccessibilityRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
         )
         .onHover { self.isHovered = $0 }
     }
@@ -528,7 +528,7 @@ struct MenuRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
             )
         }
         .buttonStyle(.plain)
@@ -583,7 +583,7 @@ struct MenuToggleRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
             )
         }
         .buttonStyle(.plain)
@@ -631,13 +631,13 @@ struct TokenTrackingRow: View {
                                 percentage: self.tokenTrackingManager.sessionPercentage,
                                 label: "S",
                                 size: 16,
-                                strokeWidth: 2
+                                strokeWidth: 2,
                             )
                             TokenRingView(
                                 percentage: self.tokenTrackingManager.weeklyPercentage,
                                 label: "W",
                                 size: 16,
-                                strokeWidth: 2
+                                strokeWidth: 2,
                             )
                         }
                     }
@@ -650,7 +650,7 @@ struct TokenTrackingRow: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)

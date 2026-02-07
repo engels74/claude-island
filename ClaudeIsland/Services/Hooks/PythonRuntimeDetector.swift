@@ -213,7 +213,7 @@ actor PythonRuntimeDetector {
     private func findPyenvPython314(at baseURL: URL) -> String? {
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: baseURL,
-            includingPropertiesForKeys: nil
+            includingPropertiesForKeys: nil,
         )
         else {
             return nil
@@ -257,7 +257,7 @@ actor PythonRuntimeDetector {
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(
                   in: output,
-                  range: NSRange(output.startIndex..., in: output)
+                  range: NSRange(output.startIndex..., in: output),
               ),
               let versionRange = Range(match.range(at: 1), in: output)
         else {

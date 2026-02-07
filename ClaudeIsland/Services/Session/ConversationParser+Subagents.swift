@@ -72,7 +72,7 @@ extension ConversationParser {
 
     private nonisolated static func parseToolUseBlocks(
         from content: String,
-        completedToolIDs: Set<String>
+        completedToolIDs: Set<String>,
     ) -> [SubagentToolInfo] {
         var tools: [SubagentToolInfo] = []
         var seenToolIDs: Set<String> = []
@@ -101,7 +101,7 @@ extension ConversationParser {
         _ block: [String: Any],
         seenToolIDs: inout Set<String>,
         completedToolIDs: Set<String>,
-        json: [String: Any]
+        json: [String: Any],
     ) -> SubagentToolInfo? {
         guard block["type"] as? String == "tool_use",
               let toolID = block["id"] as? String,
@@ -122,7 +122,7 @@ extension ConversationParser {
             name: toolName,
             input: input,
             isCompleted: isCompleted,
-            timestamp: timestamp
+            timestamp: timestamp,
         )
     }
 

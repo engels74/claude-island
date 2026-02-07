@@ -33,7 +33,7 @@ enum HookInstaller {
 
         try? FileManager.default.createDirectory(
             at: hooksDir,
-            withIntermediateDirectories: true
+            withIntermediateDirectories: true,
         )
 
         if let bundled = Bundle.main.url(forResource: "claude-island-state", withExtension: "py") {
@@ -41,7 +41,7 @@ enum HookInstaller {
             try? FileManager.default.copyItem(at: bundled, to: pythonScript)
             try? FileManager.default.setAttributes(
                 [.posixPermissions: 0o755],
-                ofItemAtPath: pythonScript.path
+                ofItemAtPath: pythonScript.path,
             )
         }
 
@@ -125,7 +125,7 @@ enum HookInstaller {
 
         if let data = try? JSONSerialization.data(
             withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys]
+            options: [.prettyPrinted, .sortedKeys],
         ) {
             try? data.write(to: settings)
         }
@@ -150,7 +150,7 @@ enum HookInstaller {
         guard let runtime = detectedRuntime,
               let command = PythonRuntimeDetector.shared.getCommand(
                   for: "~/.claude/hooks/claude-island-state.py",
-                  runtime: runtime
+                  runtime: runtime,
               )
         else {
             self.logger.warning("Skipping hook settings update - no suitable Python runtime")
@@ -173,7 +173,7 @@ enum HookInstaller {
                 existing: hooks[event] as? [[String: Any]],
                 config: config,
                 command: command,
-                eventName: event
+                eventName: event,
             )
         }
 
@@ -215,7 +215,7 @@ enum HookInstaller {
         existing: [[String: Any]]?,
         config: [[String: Any]],
         command: String,
-        eventName: String
+        eventName: String,
     ) -> [[String: Any]] {
         guard var existingEvent = existing else {
             return config
@@ -226,7 +226,7 @@ enum HookInstaller {
 
         // Deduplicate and update claude-island entries, preserving user hooks
         let (updatedEntries, seenMatchers) = self.deduplicateClaudeIslandEntries(
-            in: existingEvent, command: command, eventName: eventName
+            in: existingEvent, command: command, eventName: eventName,
         )
         existingEvent = updatedEntries
 
@@ -246,7 +246,7 @@ enum HookInstaller {
     private static func deduplicateClaudeIslandEntries(
         in entries: [[String: Any]],
         command: String,
-        eventName: String
+        eventName: String,
     ) -> ([[String: Any]], Set<String>) {
         var result = entries
         var matcherToFirstIndex: [String: Int] = [:]
@@ -294,7 +294,7 @@ enum HookInstaller {
         from sourceHooks: [[String: Any]],
         into entries: inout [[String: Any]],
         at targetIndex: Int,
-        eventName: String
+        eventName: String,
     ) {
         let userHooks = sourceHooks.filter { hook in
             guard let cmd = hook["command"] as? String else { return true }

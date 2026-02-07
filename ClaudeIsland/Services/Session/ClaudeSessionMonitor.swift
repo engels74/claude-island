@@ -55,7 +55,7 @@ final class ClaudeSessionMonitor {
                 Task(name: "permission-failure") { @MainActor [weak self] in
                     await self?.handlePermissionFailure(sessionID: sessionID, toolUseID: toolUseID)
                 }
-            }
+            },
         )
 
         // Start periodic session status check
@@ -88,11 +88,11 @@ final class ClaudeSessionMonitor {
 
             HookSocketServer.shared.respondToPermission(
                 toolUseID: permission.toolUseID,
-                decision: "allow"
+                decision: "allow",
             )
 
             await SessionStore.shared.process(
-                .permissionApproved(sessionID: sessionID, toolUseID: permission.toolUseID)
+                .permissionApproved(sessionID: sessionID, toolUseID: permission.toolUseID),
             )
         }
     }
@@ -108,11 +108,11 @@ final class ClaudeSessionMonitor {
             HookSocketServer.shared.respondToPermission(
                 toolUseID: permission.toolUseID,
                 decision: "deny",
-                reason: reason
+                reason: reason,
             )
 
             await SessionStore.shared.process(
-                .permissionDenied(sessionID: sessionID, toolUseID: permission.toolUseID, reason: reason)
+                .permissionDenied(sessionID: sessionID, toolUseID: permission.toolUseID, reason: reason),
             )
         }
     }
@@ -154,7 +154,7 @@ final class ClaudeSessionMonitor {
         if event.sessionPhase == .processing {
             InterruptWatcherManager.shared.startWatching(
                 sessionID: event.sessionID,
-                cwd: event.cwd
+                cwd: event.cwd,
             )
         }
 
@@ -176,7 +176,7 @@ final class ClaudeSessionMonitor {
     private func handlePermissionFailure(sessionID: String, toolUseID: String) async {
         let task = Task(name: "process-permission-failure") {
             await SessionStore.shared.process(
-                .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID)
+                .permissionSocketFailed(sessionID: sessionID, toolUseID: toolUseID),
             )
         }
         self.trackTask(task)
