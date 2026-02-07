@@ -73,7 +73,7 @@ final class TokenTrackingManager {
         self.isRefreshing = true
         defer { self.isRefreshing = false }
 
-        do {
+        do throws(TokenTrackingError) {
             switch AppSettings.tokenTrackingMode {
             case .disabled:
                 self.sessionUsage = .zero
@@ -86,8 +86,8 @@ final class TokenTrackingManager {
             self.lastError = nil
             Self.logger.debug("Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
         } catch {
-            Self.logger.error("Token tracking refresh failed: \(error.localizedDescription)")
-            self.lastError = error.localizedDescription
+            Self.logger.error("Token tracking refresh failed: \(error.errorDescription ?? "unknown", privacy: .public)")
+            self.lastError = error.errorDescription
         }
     }
 
@@ -206,7 +206,7 @@ final class TokenTrackingManager {
         }
     }
 
-    private func refreshFromAPI() async throws {
+    private func refreshFromAPI() async throws(TokenTrackingError) {
         Self.logger.debug("refreshFromAPI called")
         let apiService = ClaudeAPIService.shared
 
@@ -214,9 +214,13 @@ final class TokenTrackingManager {
             Self.logger.debug("CLI OAuth mode enabled, checking for token...")
             if let oauthToken = self.getCLIOAuthToken() {
                 Self.logger.debug("Found OAuth token, fetching usage...")
-                let response = try await apiService.fetchUsage(oauthToken: oauthToken)
-                self.updateFromAPIResponse(response)
-                return
+                do {
+                    let response = try await apiService.fetchUsage(oauthToken: oauthToken)
+                    self.updateFromAPIResponse(response)
+                    return
+                } catch {
+                    throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
+                }
             } else {
                 Self.logger.debug("CLI OAuth enabled but no token found, falling back to session key")
             }
@@ -227,8 +231,12 @@ final class TokenTrackingManager {
             throw TokenTrackingError.noCredentials
         }
 
-        let response = try await apiService.fetchUsage(sessionKey: sessionKey)
-        self.updateFromAPIResponse(response)
+        do {
+            let response = try await apiService.fetchUsage(sessionKey: sessionKey)
+            self.updateFromAPIResponse(response)
+        } catch {
+            throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
+        }
     }
 
     private func updateFromAPIResponse(_ response: APIUsageResponse) {

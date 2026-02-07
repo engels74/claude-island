@@ -493,7 +493,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             let attempt = await reconnectionManager.currentAttempt
             Self.logger.warning("Socket server failed, retrying in \(String(format: "%.1f", delay))s (attempt \(attempt))")
 
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(delay))
 
             // Final check after sleep before actually restarting
             let stoppedAfterSleep = self.queue.sync { self.isStopped }

@@ -42,7 +42,7 @@ actor SessionStore {
     // MARK: - Periodic Status Check (see SessionStore+PeriodicCheck.swift)
 
     var statusCheckTask: Task<Void, Never>?
-    let statusCheckIntervalNs: UInt64 = 3_000_000_000
+    let statusCheckInterval: Duration = .seconds(3)
 
     /// Create a new stream of session state changes.
     /// Yields the current sessions immediately, then yields on every subsequent state change.
@@ -163,7 +163,7 @@ actor SessionStore {
         // Schedule new debounced sync
         // Note: Actors maintain strong references during execution, so [weak self] is unnecessary
         self.pendingSyncs[sessionID] = Task(name: "file-sync") {
-            try? await Task.sleep(nanoseconds: self.syncDebounceNs)
+            try? await Task.sleep(for: self.syncDebounce)
             guard !Task.isCancelled else { return }
 
             // Revalidate session still exists after sleep (actor reentrancy protection)
@@ -221,7 +221,7 @@ actor SessionStore {
     private var pendingSyncs: [String: Task<Void, Never>] = [:]
 
     /// Sync debounce interval (100ms)
-    private let syncDebounceNs: UInt64 = 100_000_000
+    private let syncDebounce: Duration = .milliseconds(100)
 
     // MARK: - Event Audit Trail
 
