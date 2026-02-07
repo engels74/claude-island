@@ -172,28 +172,6 @@ jobs:
           name: v${{ steps.version.outputs.version }}
           files: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
           generate_release_notes: true
-          body: |
-            ## Claude Island v${{ steps.version.outputs.version }}
-
-            ### Installation
-
-            **First Launch (Required):** macOS will block this app since it's not notarized.
-
-            **Option 1 (GUI):**
-            1. Download the DMG and drag Claude Island to Applications
-            2. Try to open — it will be blocked
-            3. Go to **System Settings → Privacy & Security**
-            4. Find "Claude Island was blocked" and click **Open Anyway**
-
-            **Option 2 (Terminal):**
-            ```bash
-            xattr -d com.apple.quarantine "/Applications/Claude Island.app"
-            ```
-
-            ### Auto-updates
-            After first launch, auto-updates via Sparkle work normally.
-
-            ---
 
       - name: Upload appcast artifact
         if: steps.sparkle-key.outputs.has_key == 'true'
@@ -219,7 +197,6 @@ jobs:
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           request_rate: 4
-          update_release_body: true
           files: |
             *.dmg
 
@@ -247,6 +224,27 @@ jobs:
             echo ""
             echo "_Click the links above to view full analysis on VirusTotal._"
           } | tee virustotal-results.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Append VirusTotal results to release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+
+          # Fetch current release body
+          gh release view "$VERSION" --json body --jq '.body' > current-body.md
+
+          # Combine current body with VirusTotal results
+          {
+            cat current-body.md
+            echo ""
+            cat virustotal-results.md
+          } > updated-body.md
+
+          # Update the release
+          gh release edit "$VERSION" --notes-file updated-body.md
+          echo "✅ VirusTotal results appended to release v$VERSION"
 
       - name: Upload scan results
         uses: actions/upload-artifact@v6
