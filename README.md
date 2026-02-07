@@ -1,16 +1,25 @@
 <div align="center">
   <img src="docs/logo.svg" alt="Logo" width="256" height="256">
-  <h3 align="center">Claude Island</h3>
-  <p align="center">
-    A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions.
-    <br />
-    <br />
+  <p>
     <a href="https://github.com/engels74/claude-island/releases/latest" target="_blank" rel="noopener noreferrer">
       <img src="https://img.shields.io/github/v/release/engels74/claude-island?style=rounded&color=white&labelColor=000000&label=release" alt="Release Version" />
     </a>
     <a href="#" target="_blank" rel="noopener noreferrer">
       <img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/engels74/claude-island/total?style=rounded&color=white&labelColor=000000">
     </a>
+    <a href="https://opensource.org/licenses/Apache-2.0" target="_blank" rel="noopener noreferrer">
+      <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=rounded&labelColor=000000" alt="License: Apache 2.0">
+    </a>
+    <a href="#" target="_blank" rel="noopener noreferrer">
+      <img src="https://img.shields.io/badge/Swift-6-F05138.svg?style=rounded&labelColor=000000" alt="Swift 6">
+    </a>
+    <a href="https://deepwiki.com/engels74/claude-island">
+      <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+    </a>
+  </p>
+  <h3 align="center">Claude Island</h3>
+  <p align="center">
+    A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions.
   </p>
 </div>
 
