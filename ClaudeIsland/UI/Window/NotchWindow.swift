@@ -91,7 +91,7 @@ class NotchPanel: NSPanel {
                 ignoresMouseEvents = true
 
                 // Re-post the event after a tiny delay
-                Task { @MainActor [weak self] in
+                Task(name: "notch-window-mouse-up") { @MainActor [weak self] in
                     self?.repostMouseEvent(event, at: screenLocation)
                 }
                 return

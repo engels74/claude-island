@@ -110,12 +110,12 @@ actor JSONLInterruptWatcher {
 
         newSource.setEventHandler { [weak self] in
             guard let self else { return }
-            Task { await self.checkForInterrupt() }
+            Task(name: "interrupt-check") { await self.checkForInterrupt() }
         }
 
         newSource.setCancelHandler { [weak self] in
             guard let self else { return }
-            Task { await self.cleanupFileHandle() }
+            Task(name: "interrupt-cleanup-handle") { await self.cleanupFileHandle() }
         }
 
         self.source = newSource
@@ -147,12 +147,12 @@ actor JSONLInterruptWatcher {
 
         newSource.setEventHandler { [weak self] in
             guard let self else { return }
-            Task { await self.checkForFileAppearance() }
+            Task(name: "interrupt-check-appearance") { await self.checkForFileAppearance() }
         }
 
         newSource.setCancelHandler { [weak self] in
             guard let self else { return }
-            Task { await self.cleanupDirectoryHandle() }
+            Task(name: "interrupt-cleanup-dir") { await self.cleanupDirectoryHandle() }
         }
 
         self.directorySource = newSource
@@ -287,14 +287,14 @@ class InterruptWatcherManager {
         guard let callback = self.onInterrupt else { return }
 
         let watcher = JSONLInterruptWatcher(sessionID: sessionID, cwd: cwd, onInterrupt: callback)
-        Task { await watcher.start() }
+        Task(name: "interrupt-watcher-start") { await watcher.start() }
         self.watchers[sessionID] = watcher
     }
 
     /// Stop watching a specific session
     func stopWatching(sessionID: String) {
         if let watcher = self.watchers[sessionID] {
-            Task { await watcher.stop() }
+            Task(name: "interrupt-watcher-stop") { await watcher.stop() }
         }
         self.watchers.removeValue(forKey: sessionID)
     }
@@ -302,7 +302,7 @@ class InterruptWatcherManager {
     /// Stop all watchers
     func stopAll() {
         for (_, watcher) in self.watchers {
-            Task { await watcher.stop() }
+            Task(name: "interrupt-watcher-stop") { await watcher.stop() }
         }
         self.watchers.removeAll()
     }

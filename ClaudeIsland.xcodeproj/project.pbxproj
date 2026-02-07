@@ -17,9 +17,22 @@
 		FD33FD5D2EDF32D7002A6548 /* Claude Island.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Claude Island.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		FD33FD602EDF32D7002A6548 /* Exceptions for "ClaudeIsland" folder in "ClaudeIsland" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FD33FD5C2EDF32D7002A6548 /* ClaudeIsland */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		FD33FD5F2EDF32D7002A6548 /* ClaudeIsland */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FD33FD602EDF32D7002A6548 /* Exceptions for "ClaudeIsland" folder in "ClaudeIsland" target */,
+			);
 			path = ClaudeIsland;
 			sourceTree = "<group>";
 		};

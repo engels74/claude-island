@@ -104,12 +104,12 @@ actor AgentFileWatcher {
 
         newSource.setEventHandler { [weak self] in
             guard let self else { return }
-            Task { await self.parseTools() }
+            Task(name: "agent-parse-tools") { await self.parseTools() }
         }
 
         newSource.setCancelHandler { [weak self] in
             guard let self else { return }
-            Task { await self.cleanupFileHandle() }
+            Task(name: "agent-cleanup-handle") { await self.cleanupFileHandle() }
         }
 
         self.source = newSource
@@ -183,7 +183,7 @@ class AgentFileWatcherManager {
             cwd: cwd,
             onToolsUpdate: callback
         )
-        Task { await watcher.start() }
+        Task(name: "agent-watcher-start") { await watcher.start() }
         self.watchers[key] = watcher
 
         AgentFileWatcher.logger.info("Started agent watcher for task \(taskToolID.prefix(12), privacy: .public)")
@@ -193,7 +193,7 @@ class AgentFileWatcherManager {
     func stopWatching(sessionID: String, taskToolID: String) {
         let key = "\(sessionID)-\(taskToolID)"
         if let watcher = self.watchers[key] {
-            Task { await watcher.stop() }
+            Task(name: "agent-watcher-stop") { await watcher.stop() }
         }
         self.watchers.removeValue(forKey: key)
     }
@@ -203,7 +203,7 @@ class AgentFileWatcherManager {
         let keysToRemove = self.watchers.keys.filter { $0.hasPrefix(sessionID) }
         for key in keysToRemove {
             if let watcher = self.watchers[key] {
-                Task { await watcher.stop() }
+                Task(name: "agent-watcher-stop") { await watcher.stop() }
             }
             self.watchers.removeValue(forKey: key)
         }
@@ -212,7 +212,7 @@ class AgentFileWatcherManager {
     /// Stop all watchers
     func stopAll() {
         for (_, watcher) in self.watchers {
-            Task { await watcher.stop() }
+            Task(name: "agent-watcher-stop") { await watcher.stop() }
         }
         self.watchers.removeAll()
     }
