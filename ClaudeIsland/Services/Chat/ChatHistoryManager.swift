@@ -16,7 +16,7 @@ final class ChatHistoryManager {
 
     private init() {
         self.sessionsTask = Task(name: "chat-history-stream") { [weak self] in
-            let stream = await SessionStore.shared.sessionsStream()
+            let stream = SessionStore.shared.sessionsStream()
             for await sessions in stream {
                 self?.updateFromSessions(sessions)
             }

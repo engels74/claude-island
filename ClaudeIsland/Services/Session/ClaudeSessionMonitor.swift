@@ -21,7 +21,7 @@ final class ClaudeSessionMonitor {
 
     init() {
         self.sessionsTask = Task(name: "sessions-stream") { [weak self] in
-            let stream = await SessionStore.shared.sessionsStream()
+            let stream = SessionStore.shared.sessionsStream()
             for await sessions in stream {
                 self?.updateFromSessions(sessions)
             }
