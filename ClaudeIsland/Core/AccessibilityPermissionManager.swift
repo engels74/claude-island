@@ -90,6 +90,10 @@ final class AccessibilityPermissionManager {
                 self.adjustPollingIntervalIfNeeded()
                 try? await Task.sleep(for: .seconds(self.currentPollingInterval))
             }
+
+            // Clean up stale state so startPeriodicMonitoring() can restart if needed
+            self.pollingTask = nil
+            self.monitoringStartTime = nil
         }
     }
 
