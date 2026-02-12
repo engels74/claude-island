@@ -130,8 +130,12 @@ final class TokenTrackingManager {
             return true
         }
 
-        if updateStatus == errSecItemNotFound {
-            // Item doesn't exist yet, add new
+        // errSecItemNotFound: item doesn't exist yet
+        // errSecParam: existing item may have incompatible attributes (e.g. different kSecAttrAccessible)
+        if updateStatus == errSecItemNotFound || updateStatus == errSecParam {
+            if updateStatus == errSecParam {
+                SecItemDelete(baseQuery as CFDictionary)
+            }
             var addQuery = baseQuery
             addQuery[kSecValueData as String] = valueData
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
@@ -227,8 +231,13 @@ final class TokenTrackingManager {
                     self.updateFromAPIResponse(response)
                     return
                 } catch {
-                    // Cached token may be stale — invalidate so next attempt re-reads from CLI keychain
-                    self.deleteCLIOAuthCache()
+                    // Only invalidate cache for authentication rejections — transient errors
+                    // should not wipe a valid token and re-trigger keychain prompts
+                    if let apiError = error as? APIServiceError,
+                       case let .httpError(statusCode) = apiError,
+                       statusCode == 401 || statusCode == 403 {
+                        self.deleteCLIOAuthCache()
+                    }
                     throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
                 }
             } else {
@@ -294,7 +303,12 @@ extension TokenTrackingManager {
             return true
         }
 
-        if updateStatus == errSecItemNotFound {
+        // errSecItemNotFound: item doesn't exist yet
+        // errSecParam: existing item may have incompatible attributes (e.g. different kSecAttrAccessible)
+        if updateStatus == errSecItemNotFound || updateStatus == errSecParam {
+            if updateStatus == errSecParam {
+                SecItemDelete(baseQuery as CFDictionary)
+            }
             var addQuery = baseQuery
             addQuery[kSecValueData as String] = data
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
