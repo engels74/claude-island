@@ -120,7 +120,10 @@ final class TokenTrackingManager {
         let valueData = Data(key.utf8)
 
         // Try to update existing item first to avoid deleting before a successful write
-        let updateAttributes: [String: Any] = [kSecValueData as String: valueData]
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: valueData,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
         let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
 
         if updateStatus == errSecSuccess {
@@ -131,6 +134,7 @@ final class TokenTrackingManager {
             // Item doesn't exist yet, add new
             var addQuery = baseQuery
             addQuery[kSecValueData as String] = valueData
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             if addStatus == errSecSuccess {
                 return true
@@ -173,8 +177,12 @@ final class TokenTrackingManager {
 
     private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
 
+    private static let cliKeychainCooldownInterval: TimeInterval = 300
+    private static let cliOAuthCacheAccount = "cli-oauth-cache"
+
     private var refreshTask: Task<Void, Never>?
     private var periodicRefreshTask: Task<Void, Never>?
+    private var lastCLIKeychainAttempt: Date?
 
     private func startPeriodicRefresh() {
         self.periodicRefreshTask?.cancel()
@@ -219,6 +227,8 @@ final class TokenTrackingManager {
                     self.updateFromAPIResponse(response)
                     return
                 } catch {
+                    // Cached token may be stale — invalidate so next attempt re-reads from CLI keychain
+                    self.deleteCLIOAuthCache()
                     throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
                 }
             } else {
@@ -256,13 +266,128 @@ final class TokenTrackingManager {
             resetTime: response.sevenDay.resetsAt,
         )
     }
+}
+
+// MARK: - CLI OAuth Keychain Operations
+
+extension TokenTrackingManager {
+    /// Save CLI OAuth JSON blob to Claude Island's own keychain (never prompts).
+    @discardableResult
+    private func saveCLIOAuthCache(_ data: Data) -> Bool {
+        let service = "com.engels74.ClaudeIsland"
+        let account = Self.cliOAuthCacheAccount
+
+        let baseQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
+        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
+
+        if updateStatus == errSecSuccess {
+            Self.logger.debug("Updated CLI OAuth cache in Keychain")
+            return true
+        }
+
+        if updateStatus == errSecItemNotFound {
+            var addQuery = baseQuery
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus == errSecSuccess {
+                Self.logger.debug("Saved CLI OAuth cache to Keychain")
+                return true
+            }
+            Self.logger.error("Failed to save CLI OAuth cache to Keychain: \(addStatus)")
+            return false
+        }
+
+        Self.logger.error("Failed to update CLI OAuth cache in Keychain: \(updateStatus)")
+        return false
+    }
+
+    /// Load cached CLI OAuth JSON blob (never prompts).
+    private func loadCLIOAuthCache() -> Data? {
+        let service = "com.engels74.ClaudeIsland"
+        let account = Self.cliOAuthCacheAccount
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+
+        return data
+    }
+
+    /// Delete the cached CLI OAuth data.
+    private func deleteCLIOAuthCache() {
+        let service = "com.engels74.ClaudeIsland"
+        let account = Self.cliOAuthCacheAccount
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound {
+            Self.logger.debug("Deleted CLI OAuth cache from Keychain")
+        } else {
+            Self.logger.error("Failed to delete CLI OAuth cache from Keychain: \(status)")
+        }
+    }
 
     private func getCLIOAuthToken() -> String? {
-        guard let data = findCLIKeychainData() else {
+        // Step 1: Try cached data first (own keychain — never prompts)
+        if let cachedData = self.loadCLIOAuthCache() {
+            if let token = self.extractOAuthToken(from: cachedData) {
+                Self.logger.debug("Using cached CLI OAuth token")
+                return token
+            }
+            // Cache exists but token is expired or invalid — delete it
+            Self.logger.debug("Cached CLI OAuth token expired or invalid, will re-read from CLI keychain")
+            self.deleteCLIOAuthCache()
+        }
+
+        // Step 2: Rate-limit CLI keychain access to avoid repeated prompts
+        if let lastAttempt = self.lastCLIKeychainAttempt,
+           Date().timeIntervalSince(lastAttempt) < Self.cliKeychainCooldownInterval {
+            Self.logger.debug("CLI keychain access rate-limited, skipping")
+            return nil
+        }
+        self.lastCLIKeychainAttempt = Date()
+
+        // Step 3: Read from CLI keychain (may prompt once)
+        guard let data = self.findCLIKeychainData() else {
             Self.logger.error("CLI OAuth token not found in any Keychain entry")
             return nil
         }
 
+        // Step 4: Cache the raw data for future use (own keychain — never prompts)
+        self.saveCLIOAuthCache(data)
+
+        // Step 5: Extract and return token
+        return self.extractOAuthToken(from: data)
+    }
+
+    /// Parse CLI OAuth JSON data and return the access token if valid and not expired.
+    private func extractOAuthToken(from data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             Self.logger.error("Failed to parse CLI OAuth Keychain data as JSON")
             return nil
