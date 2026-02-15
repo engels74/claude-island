@@ -30,85 +30,25 @@ final class ReleaseService {
     private(set) var errorMessage: String?
 
     func fetchReleases() async {
-        isLoading = true
+        self.isLoading = true
         defer { isLoading = false }
 
-        if releases.isEmpty {
-            loadCachedReleases()
+        if self.releases.isEmpty {
+            self.loadCachedReleases()
         }
 
         do {
             let fetched = try await fetchFromGitHub()
-            releases = fetched
-            saveCachedReleases(fetched)
-            errorMessage = nil
+            self.releases = fetched
+            self.saveCachedReleases(fetched)
+            self.errorMessage = nil
         } catch is CancellationError {
             Self.logger.info("Release fetch cancelled")
         } catch {
             Self.logger.error("Failed to fetch releases: \(error.localizedDescription)")
-            if releases.isEmpty {
-                errorMessage = error.localizedDescription
+            if self.releases.isEmpty {
+                self.errorMessage = error.localizedDescription
             }
-        }
-    }
-
-    // MARK: Private
-
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ReleaseService")
-
-    private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
-
-    private static var cacheDirectoryURL: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("com.engels74.ClaudeIsland")
-    }
-
-    private static var cacheFileURL: URL {
-        cacheDirectoryURL.appendingPathComponent("releases.json")
-    }
-
-    private let dateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
-    private func fetchFromGitHub() async throws -> [ReleaseInfo] {
-        guard let url = URL(string: Self.releasesURL) else {
-            throw URLError(.badURL)
-        }
-
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.httpMethod = "GET"
-        request.timeoutInterval = 30
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            Self.logger.error("GitHub API returned status \(httpResponse.statusCode)")
-            throw URLError(.badServerResponse)
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-
-        let githubReleases = try decoder.decode([GitHubRelease].self, from: data)
-
-        return githubReleases.map { release in
-            let date = dateFormatter.date(from: release.publishedAt) ?? Date()
-            let changes = parseChanges(release.body ?? "")
-
-            return ReleaseInfo(
-                id: release.tagName,
-                name: release.name,
-                publishedAt: date,
-                changes: changes
-            )
         }
     }
 
@@ -152,6 +92,74 @@ final class ReleaseService {
         return results
     }
 
+    // MARK: Private
+
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ReleaseService")
+
+    private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
+
+    private static var cacheDirectoryURL: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("com.engels74.ClaudeIsland")
+    }
+
+    private static var cacheFileURL: URL {
+        cacheDirectoryURL.appendingPathComponent("releases.json")
+    }
+
+    private let dateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private let fractionalDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private func fetchFromGitHub() async throws -> [ReleaseInfo] {
+        guard let url = URL(string: Self.releasesURL) else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            Self.logger.error("GitHub API returned status \(httpResponse.statusCode)")
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let githubReleases = try decoder.decode([GitHubRelease].self, from: data)
+
+        return githubReleases.map { release in
+            let date = self.fractionalDateFormatter.date(from: release.publishedAt)
+                ?? self.dateFormatter.date(from: release.publishedAt)
+                ?? Date.distantPast
+            let changes = self.parseChanges(release.body ?? "")
+
+            return ReleaseInfo(
+                id: release.tagName,
+                name: release.name,
+                publishedAt: date,
+                changes: changes,
+            )
+        }
+    }
+
     // MARK: - Disk Cache
 
     private func loadCachedReleases() {
@@ -162,7 +170,7 @@ final class ReleaseService {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            releases = try decoder.decode([ReleaseInfo].self, from: data)
+            self.releases = try decoder.decode([ReleaseInfo].self, from: data)
             Self.logger.debug("Loaded \(self.releases.count) cached releases")
         } catch {
             Self.logger.warning("Failed to load cached releases: \(error.localizedDescription)")
