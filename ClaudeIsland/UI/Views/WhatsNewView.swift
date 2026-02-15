@@ -87,7 +87,7 @@ struct WhatsNewView: View {
                     ForEach(Array(self.releaseService.releases.enumerated()), id: \.element.id) { index, release in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text(release.id)
+                                Text(release.name)
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
 
@@ -147,8 +147,7 @@ struct WhatsNewView: View {
     private var releaseService = ReleaseService.shared
 
     private var installedVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        return "v\(version)"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     }
 
     private func isInstalled(_ release: ReleaseInfo) -> Bool {
