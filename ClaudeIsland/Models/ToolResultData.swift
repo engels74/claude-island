@@ -397,11 +397,11 @@ nonisolated struct ToolStatusDisplay {
             let firstLine = command.components(separatedBy: "\n").first ?? command
             return String(firstLine.prefix(60))
         case "Read":
-            return input["file_path"].map { Self.shortenPath($0) }
+            return (input["file_path"] ?? input["path"]).map { Self.shortenPath($0) }
         case "Edit":
-            return input["file_path"].map { Self.shortenPath($0) }
+            return (input["file_path"] ?? input["path"]).map { Self.shortenPath($0) }
         case "Write":
-            return input["file_path"].map { Self.shortenPath($0) }
+            return (input["file_path"] ?? input["path"]).map { Self.shortenPath($0) }
         case "Grep":
             return input["pattern"].map { "\"\($0)\"" }
         case "Glob":

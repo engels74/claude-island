@@ -1011,10 +1011,12 @@ struct ToolCallView: View {
     }
 
     private var verboseToolName: String {
+        let formatted = MCPToolFormatter.formatToolName(self.tool.name)
         if self.verboseMode {
-            return ToolStatusDisplay.verboseToolLabel(for: self.tool.name, input: self.tool.input)
+            let label = ToolStatusDisplay.verboseToolLabel(for: formatted, input: self.tool.input)
+            return label
         }
-        return MCPToolFormatter.formatToolName(self.tool.name)
+        return formatted
     }
 
     private var outputPreview: String? {
