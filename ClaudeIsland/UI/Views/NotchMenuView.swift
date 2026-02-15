@@ -27,6 +27,11 @@ struct NotchMenuView: View {
     var viewModel: NotchViewModel
 
     var body: some View {
+        if self.showWhatsNew {
+            WhatsNewView {
+                self.showWhatsNew = false
+            }
+        } else {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 4) {
                 // Back button
@@ -113,6 +118,13 @@ struct NotchMenuView: View {
                 UpdateRow(updateManager: self.updateManager)
 
                 MenuRow(
+                    icon: "list.bullet.rectangle",
+                    label: "What's New",
+                ) {
+                    self.showWhatsNew = true
+                }
+
+                MenuRow(
                     icon: "star",
                     label: "Star on GitHub",
                 ) {
@@ -149,6 +161,7 @@ struct NotchMenuView: View {
             // Cancel any in-flight hook installation when view disappears
             self.hookInstallTask?.cancel()
         }
+        }
     }
 
     // MARK: Private
@@ -158,6 +171,7 @@ struct NotchMenuView: View {
     @State private var hooksInstalled = false
     @State private var launchAtLogin = false
     @State private var hookInstallTask: Task<Void, Never>?
+    @State private var showWhatsNew = false
 
     private var updateManager = UpdateManager.shared
 
