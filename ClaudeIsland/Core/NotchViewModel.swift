@@ -62,7 +62,7 @@ final class NotchViewModel {
             windowHeight: windowHeight,
         )
         self.hasPhysicalNotch = hasPhysicalNotch
-        self.layoutEngine = ModuleLayoutEngine(registry: moduleRegistry)
+        self.layoutEngine = ModuleLayoutEngine(registry: self.moduleRegistry)
         self.setupEventHandlers()
         self.observeSelectors()
     }
@@ -80,7 +80,7 @@ final class NotchViewModel {
     let hasPhysicalNotch: Bool
 
     let moduleRegistry = ModuleRegistry.shared
-    private(set) var layoutEngine: ModuleLayoutEngine!
+    let layoutEngine: ModuleLayoutEngine
 
     /// Tracks selector expansion state changes to trigger view updates
     /// (With @Observable, views reading openedSize will observe this and re-compute when selectors change)

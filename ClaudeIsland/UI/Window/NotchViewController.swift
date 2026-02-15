@@ -77,7 +77,7 @@ class NotchViewController: NSViewController {
                         && NotchActivityCoordinator.shared.expandingActivity.type == .claude,
                     hasPendingPermission: false,
                     hasWaitingForInput: false,
-                    needsAccessibilityWarning: AccessibilityPermissionManager.shared.shouldShowPermissionWarning
+                    needsAccessibilityWarning: AccessibilityPermissionManager.shared.shouldShowPermissionWarning,
                 )
                 let expansionPadding = max(layout.totalExpansionWidth, 38)
                 let totalWidth = notchRect.width + expansionPadding
