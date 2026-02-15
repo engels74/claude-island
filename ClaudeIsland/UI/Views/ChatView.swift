@@ -861,10 +861,11 @@ struct ToolCallView: View {
                     }
 
                 // Tool name (formatted for MCP tools, verbose when enabled)
-                Text(self.displayToolName)
+                Text(self.verboseToolName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(self.textColor)
-                    .fixedSize()
+                    .lineLimit(1)
+                    .truncationMode(.middle)
 
                 if self.tool.name == "Task" && !self.tool.subagentTools.isEmpty {
                     let taskDesc = self.tool.input["description"] ?? "Running agent..."
@@ -906,6 +907,18 @@ struct ToolCallView: View {
                 }
             }
 
+            if self.verboseMode && self.tool.status != .running && self.tool.status != .waitingForApproval {
+                if let preview = self.outputPreview {
+                    Text(preview)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.35))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 12)
+                        .padding(.top, 2)
+                }
+            }
+
             // Subagent tools list (for Task tools)
             if self.tool.name == "Task" && !self.tool.subagentTools.isEmpty {
                 SubagentToolsList(tools: self.tool.subagentTools)
@@ -927,17 +940,6 @@ struct ToolCallView: View {
                 EditInputDiffView(input: self.tool.input)
                     .padding(.leading, 12)
                     .padding(.top, 4)
-            }
-
-            // Verbose output preview (first 3 lines of result)
-            if self.verboseMode && !self.isExpanded, let preview = self.outputPreview {
-                Text(preview)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-                    .lineLimit(3)
-                    .truncationMode(.tail)
-                    .padding(.leading, 12)
-                    .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1008,20 +1010,20 @@ struct ToolCallView: View {
         self.tool.name == "Edit" || self.isExpanded
     }
 
-    private var displayToolName: String {
-        if self.verboseMode && !MCPToolFormatter.isMCPTool(self.tool.name) {
+    private var verboseToolName: String {
+        if self.verboseMode {
             return ToolStatusDisplay.verboseToolLabel(for: self.tool.name, input: self.tool.input)
         }
         return MCPToolFormatter.formatToolName(self.tool.name)
     }
 
     private var outputPreview: String? {
-        guard self.tool.status != .running && self.tool.status != .waitingForApproval else { return nil }
-        if let result = self.tool.result, !result.isEmpty {
-            let lines = result.components(separatedBy: "\n").prefix(3)
-            return lines.joined(separator: "\n")
-        }
-        return nil
+        guard let result = self.tool.result, !result.isEmpty else { return nil }
+        let lines = result.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .prefix(3)
+            .map { String($0.prefix(80)) }
+        return lines.joined(separator: "\n")
     }
 
     private var agentDescription: String? {
