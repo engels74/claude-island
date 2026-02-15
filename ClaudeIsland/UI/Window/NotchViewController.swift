@@ -71,10 +71,15 @@ class NotchViewController: NSViewController {
                  .popping:
                 let notchRect = geometry.deviceNotchRect
                 let screenWidth = geometry.screenRect.width
-                // Calculate expansion padding to account for session dots and activity indicators
-                // Max expansion: 2 * (notchHeight - 12) + 20 + 18 (permission indicator)
-                // Matches NotchView.expansionWidth logic: base 20 + optional 18 for permission indicator
-                let expansionPadding = 2 * max(0, notchRect.height - 12) + 38
+                let layout = vm.layoutEngine.computeLayout(
+                    notchSize: notchRect.size,
+                    isProcessing: NotchActivityCoordinator.shared.expandingActivity.show
+                        && NotchActivityCoordinator.shared.expandingActivity.type == .claude,
+                    hasPendingPermission: false,
+                    hasWaitingForInput: false,
+                    needsAccessibilityWarning: AccessibilityPermissionManager.shared.shouldShowPermissionWarning
+                )
+                let expansionPadding = max(layout.totalExpansionWidth, 38)
                 let totalWidth = notchRect.width + expansionPadding
                 return CGRect(
                     x: (screenWidth - totalWidth) / 2,
