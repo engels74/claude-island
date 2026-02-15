@@ -20,8 +20,8 @@ struct ModulePlacement: Codable, Identifiable, Sendable, Equatable {
 struct ModuleLayoutConfig: Codable, Sendable, Equatable {
     var placements: [ModulePlacement]
 
-    static func defaultConfig(from modules: [any NotchModule]) -> ModuleLayoutConfig {
-        ModuleLayoutConfig(
+    static func defaultConfig(from modules: [any NotchModule]) -> Self {
+        Self(
             placements: modules.map { module in
                 ModulePlacement(
                     id: module.id,
