@@ -1339,7 +1339,7 @@ struct ChatApprovalBar: View {
     let onDeny: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Tool info
             VStack(alignment: .leading, spacing: 2) {
                 Text(MCPToolFormatter.formatToolName(self.tool))
@@ -1349,47 +1349,49 @@ struct ChatApprovalBar: View {
                     Text(input)
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.5))
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .opacity(self.showContent ? 1 : 0)
             .offset(x: self.showContent ? 0 : -10)
 
-            Spacer()
+            // Buttons
+            HStack(spacing: 12) {
+                Spacer()
 
-            // Deny button
-            Button {
-                self.onDeny()
-            } label: {
-                Text("Deny")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.1))
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .opacity(self.showDenyButton ? 1 : 0)
-            .scaleEffect(self.showDenyButton ? 1 : 0.8)
+                // Deny button
+                Button {
+                    self.onDeny()
+                } label: {
+                    Text("Deny")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .opacity(self.showDenyButton ? 1 : 0)
+                .scaleEffect(self.showDenyButton ? 1 : 0.8)
 
-            // Allow button
-            Button {
-                self.onApprove()
-            } label: {
-                Text("Allow")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.95))
-                    .clipShape(Capsule())
+                // Allow button
+                Button {
+                    self.onApprove()
+                } label: {
+                    Text("Allow")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.95))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .opacity(self.showAllowButton ? 1 : 0)
+                .scaleEffect(self.showAllowButton ? 1 : 0.8)
             }
-            .buttonStyle(.plain)
-            .opacity(self.showAllowButton ? 1 : 0)
-            .scaleEffect(self.showAllowButton ? 1 : 0.8)
         }
-        .frame(minHeight: 44) // Consistent height with other bars
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.2))

@@ -42,14 +42,14 @@ nonisolated struct PermissionContext: Sendable {
             if ["Read", "Write", "Edit"].contains(self.toolName) {
                 return (value as NSString).lastPathComponent
             }
-            return value.count > 100 ? String(value.prefix(100)) + "..." : value
+            return value
         }
 
         // Fallback: first non-empty string value (skip "description" key)
         for (key, value) in input {
             if key == "description" { continue }
             if let str = value.stringValue, !str.isEmpty {
-                return str.count > 100 ? String(str.prefix(100)) + "..." : str
+                return str
             }
         }
 
