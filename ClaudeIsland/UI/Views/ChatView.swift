@@ -860,8 +860,8 @@ struct ToolCallView: View {
                         }
                     }
 
-                // Tool name (formatted for MCP tools)
-                Text(MCPToolFormatter.formatToolName(self.tool.name))
+                // Tool name (formatted for MCP tools, verbose when enabled)
+                Text(self.displayToolName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(self.textColor)
                     .fixedSize()
@@ -928,6 +928,17 @@ struct ToolCallView: View {
                     .padding(.leading, 12)
                     .padding(.top, 4)
             }
+
+            // Verbose output preview (first 3 lines of result)
+            if self.verboseMode && !self.isExpanded, let preview = self.outputPreview {
+                Text(preview)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.4))
+                    .lineLimit(3)
+                    .truncationMode(.tail)
+                    .padding(.leading, 12)
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -951,6 +962,7 @@ struct ToolCallView: View {
 
     // MARK: Private
 
+    @AppStorage("verboseMode") private var verboseMode = false
     @State private var pulseOpacity = 0.6
     @State private var isExpanded = false
     @State private var isHovering = false
@@ -994,6 +1006,22 @@ struct ToolCallView: View {
 
     private var showContent: Bool {
         self.tool.name == "Edit" || self.isExpanded
+    }
+
+    private var displayToolName: String {
+        if self.verboseMode && !MCPToolFormatter.isMCPTool(self.tool.name) {
+            return ToolStatusDisplay.verboseToolLabel(for: self.tool.name, input: self.tool.input)
+        }
+        return MCPToolFormatter.formatToolName(self.tool.name)
+    }
+
+    private var outputPreview: String? {
+        guard self.tool.status != .running && self.tool.status != .waitingForApproval else { return nil }
+        if let result = self.tool.result, !result.isEmpty {
+            let lines = result.components(separatedBy: "\n").prefix(3)
+            return lines.joined(separator: "\n")
+        }
+        return nil
     }
 
     private var agentDescription: String? {
