@@ -111,6 +111,14 @@ struct NotchMenuView: View {
 
                         AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
+                        MenuToggleRow(
+                            icon: "text.line.first.and.arrowforward",
+                            label: "Verbose Mode",
+                            isOn: self.verboseMode,
+                        ) {
+                            self.verboseMode.toggle()
+                        }
+
                         Divider()
                             .background(Color.white.opacity(0.08))
                             .padding(.vertical, 4)
@@ -173,6 +181,7 @@ struct NotchMenuView: View {
     @State private var launchAtLogin = false
     @State private var hookInstallTask: Task<Void, Never>?
     @State private var showWhatsNew = false
+    @AppStorage("verboseMode") private var verboseMode = false
 
     private var updateManager = UpdateManager.shared
 
