@@ -215,6 +215,22 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.tokenShowResetTime) }
     }
 
+    // MARK: - Module Layout
+
+    static var moduleLayoutConfig: ModuleLayoutConfig? {
+        get {
+            guard let data = defaults.data(forKey: Keys.moduleLayoutConfig) else { return nil }
+            return try? JSONDecoder().decode(ModuleLayoutConfig.self, from: data)
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.moduleLayoutConfig)
+            } else {
+                defaults.removeObject(forKey: Keys.moduleLayoutConfig)
+            }
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -229,6 +245,7 @@ enum AppSettings {
         static let tokenShowRingsMinimized = "tokenShowRingsMinimized"
         static let tokenMinimizedRingDisplay = "tokenMinimizedRingDisplay"
         static let tokenShowResetTime = "tokenShowResetTime"
+        static let moduleLayoutConfig = "moduleLayoutConfig"
     }
 
     private static let defaults = UserDefaults.standard
