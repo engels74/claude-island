@@ -51,7 +51,7 @@ final class ModuleLayoutEngine {
 
     // MARK: Internal
 
-    static let interModuleSpacing: CGFloat = 4
+    static let interModuleSpacing: CGFloat = 8
     static let sideInset: CGFloat = 8
     static let outerEdgeInset: CGFloat = 6
     static let shapeEdgeMargin: CGFloat = 20
