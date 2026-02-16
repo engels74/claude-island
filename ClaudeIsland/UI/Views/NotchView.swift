@@ -325,9 +325,7 @@ struct NotchView: View {
 
     private var headerRow: some View {
         HStack(spacing: 0) {
-            if self.viewModel.status == .opened {
-                self.openedHeaderContent
-            } else if self.showClosedActivity {
+            if self.showClosedActivity || self.viewModel.status == .opened {
                 HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
                     ForEach(self.closedLayout.leftModules) { entry in
                         if let module = self.viewModel.moduleRegistry.module(for: entry.id) {
@@ -361,6 +359,10 @@ struct NotchView: View {
                             )
                         }
                     }
+
+                    if self.viewModel.status == .opened {
+                        self.menuToggleButton
+                    }
                 }
                 .padding(.trailing, ModuleLayoutEngine.outerEdgeInset)
                 .frame(width: self.closedLayout.symmetricSideWidth, alignment: .trailing)
@@ -377,63 +379,31 @@ struct NotchView: View {
         )
     }
 
-    // MARK: - Opened Header Content
-
-    private var openedHeaderContent: some View {
-        HStack(spacing: 0) {
-            // Always show crab in opened state - animates from headerRow via matchedGeometryEffect
-            ClaudeCrabIcon(size: 14, color: self.clawdColor, animateLegs: self.isProcessing)
-                .matchedGeometryEffect(id: "crab", in: self.activityNamespace, isSource: self.viewModel.status == .opened)
-                .padding(.leading, 8)
-
-            Spacer()
-
-            // Right-side elements grouped together
-            HStack(spacing: 12) {
-                // Activity indicator
-                if self.isProcessing || self.hasPendingPermission {
-                    ProcessingSpinner()
-                        .matchedGeometryEffect(id: "spinner", in: self.activityNamespace, isSource: self.viewModel.status == .opened)
-                } else if self.hasWaitingForInput {
-                    ReadyForInputIndicatorIcon(size: 14, color: TerminalColors.green)
-                        .matchedGeometryEffect(id: "spinner", in: self.activityNamespace, isSource: self.viewModel.status == .opened)
+    private var menuToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                self.viewModel.toggleMenu()
+                if self.viewModel.contentType == .menu {
+                    self.updateManager.markUpdateSeen()
                 }
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: self.viewModel.contentType == .menu ? "xmark" : "line.3.horizontal")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
 
-                // Token rings in expanded header
-                if self.shouldShowTokenRingsExpanded {
-                    self.minimizedTokenRings
-                        .matchedGeometryEffect(id: "token-rings", in: self.activityNamespace, isSource: self.viewModel.status == .opened)
+                if self.updateManager.hasUnseenUpdate && self.viewModel.contentType != .menu {
+                    Circle()
+                        .fill(TerminalColors.green)
+                        .frame(width: 6, height: 6)
+                        .offset(x: -2, y: 2)
                 }
-
-                // Menu toggle
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        self.viewModel.toggleMenu()
-                        if self.viewModel.contentType == .menu {
-                            self.updateManager.markUpdateSeen()
-                        }
-                    }
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: self.viewModel.contentType == .menu ? "xmark" : "line.3.horizontal")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.4))
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
-
-                        // Green dot for unseen update
-                        if self.updateManager.hasUnseenUpdate && self.viewModel.contentType != .menu {
-                            Circle()
-                                .fill(TerminalColors.green)
-                                .frame(width: 6, height: 6)
-                                .offset(x: -2, y: 2)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
             }
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
     }
 
     // MARK: - Content View (Opened State)
