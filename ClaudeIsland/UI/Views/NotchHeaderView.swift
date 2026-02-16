@@ -277,7 +277,7 @@ struct SessionStateDots: View {
 
             ForEach(displaySessions) { session in
                 Circle()
-                    .fill(self.color(for: session.phase))
+                    .fill(self.color(for: session))
                     .frame(width: Self.dotSize, height: Self.dotSize)
             }
 
@@ -292,7 +292,7 @@ struct SessionStateDots: View {
     /// Calculate expected width for a given number of active sessions
     /// Used by NotchView to ensure spacer math stays in sync
     static func expectedWidth(for sessionCount: Int) -> CGFloat {
-        guard sessionCount > 1 else { return 0 }
+        guard sessionCount >= 1 else { return 0 }
 
         let visibleDots = min(sessionCount, maxDots)
         // Each dot is dotSize, with dotSpacing between them
@@ -325,9 +325,12 @@ struct SessionStateDots: View {
         }
     }
 
-    /// Color for each session phase
-    private func color(for phase: SessionPhase) -> Color {
-        switch phase {
+    /// Color for a session — prefers user-chosen color, falls back to phase-based
+    private func color(for session: SessionState) -> Color {
+        if let userColor = SessionMetadataManager.shared.color(for: session.sessionID) {
+            return userColor
+        }
+        return switch session.phase {
         case .waitingForApproval:
             TerminalColors.blue
         case .processing,

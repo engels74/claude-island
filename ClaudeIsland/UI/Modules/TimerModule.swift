@@ -9,7 +9,7 @@ import SwiftUI
 
 struct TimerModule: NotchModule {
     nonisolated let id = "timer"
-    let displayName = "Timer"
+    let displayName = "Session Reset Time"
     let defaultSide: ModuleSide = .right
     let defaultOrder = 4
 

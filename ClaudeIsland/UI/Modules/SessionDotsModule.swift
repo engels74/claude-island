@@ -21,7 +21,7 @@ struct SessionDotsModule: NotchModule {
         hasWaitingForInput: Bool,
         needsAccessibilityWarning: Bool,
     ) -> Bool {
-        self.sessions.count { $0.phase != .ended } > 1
+        self.sessions.count { $0.phase != .ended } >= 1
     }
 
     func preferredWidth() -> CGFloat {
