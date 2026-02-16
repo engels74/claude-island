@@ -23,6 +23,7 @@ protocol NotchModule: Identifiable where ID == String {
     var displayName: String { get }
     var defaultSide: ModuleSide { get }
     var defaultOrder: Int { get }
+    var showInExpandedHeader: Bool { get }
 
     func isVisible(
         isProcessing: Bool,
@@ -44,4 +45,10 @@ protocol NotchModule: Identifiable where ID == String {
         isSourceNamespace: Bool,
     ) -> AnyView
     // swiftlint:enable function_parameter_count
+}
+
+extension NotchModule {
+    var showInExpandedHeader: Bool {
+        true
+    }
 }

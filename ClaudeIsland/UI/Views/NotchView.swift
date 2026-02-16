@@ -328,7 +328,8 @@ struct NotchView: View {
             if self.viewModel.status == .opened {
                 HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
                     ForEach(self.closedLayout.leftModules) { entry in
-                        if let module = self.viewModel.moduleRegistry.module(for: entry.id) {
+                        if let module = self.viewModel.moduleRegistry.module(for: entry.id),
+                           module.showInExpandedHeader {
                             module.makeBody(
                                 isProcessing: self.isProcessing,
                                 hasPendingPermission: self.hasPendingPermission,
@@ -346,7 +347,8 @@ struct NotchView: View {
 
                 HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
                     ForEach(self.closedLayout.rightModules) { entry in
-                        if let module = self.viewModel.moduleRegistry.module(for: entry.id) {
+                        if let module = self.viewModel.moduleRegistry.module(for: entry.id),
+                           module.showInExpandedHeader {
                             module.makeBody(
                                 isProcessing: self.isProcessing,
                                 hasPendingPermission: self.hasPendingPermission,

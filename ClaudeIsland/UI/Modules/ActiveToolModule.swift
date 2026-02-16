@@ -14,6 +14,7 @@ struct ActiveToolModule: NotchModule {
     let displayName = "Active Tool"
     let defaultSide: ModuleSide = .right
     let defaultOrder = 5
+    let showInExpandedHeader = false
 
     var sessions: [SessionState] = []
 
