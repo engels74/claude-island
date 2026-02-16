@@ -29,11 +29,14 @@ final class ModuleRegistry {
         self.modules.first { $0.id == id }
     }
 
-    func updateSessionDots(sessions: [SessionState]) {
+    func updateSessions(_ sessions: [SessionState]) {
         for index in self.modules.indices {
             if var dots = modules[index] as? SessionDotsModule {
                 dots.sessions = sessions
                 self.modules[index] = dots
+            } else if var tool = modules[index] as? ActiveToolModule {
+                tool.sessions = sessions
+                self.modules[index] = tool
             }
         }
     }
@@ -49,6 +52,7 @@ final class ModuleRegistry {
             ReadyCheckmarkModule(),
             TokenRingsModule(),
             SessionDotsModule(),
+            ActiveToolModule(),
             TimerModule(),
         ]
     }

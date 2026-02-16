@@ -303,6 +303,10 @@ actor SessionStore {
         self.processToolTracking(event: event, session: &session)
         trackSubagent(event: event, session: &session)
 
+        if event.event == "Stop" || event.event == "UserPromptSubmit" {
+            session.toolTracker.inProgress.removeAll()
+        }
+
         if event.event == "Stop" {
             session.subagentState = SubagentState()
         }
@@ -514,6 +518,8 @@ actor SessionStore {
 
     private func processPermissionDenied(sessionID: String, toolUseID: String, reason: String?) async {
         guard var session = sessions[sessionID] else { return }
+
+        session.toolTracker.completeTool(id: toolUseID, success: false)
 
         // Update tool status in chat history first
         self.updateToolStatus(in: &session, toolID: toolUseID, status: .error)

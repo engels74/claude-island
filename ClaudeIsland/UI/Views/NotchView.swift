@@ -58,7 +58,7 @@ struct NotchView: View {
             self.handlePendingSessionsChange(sessions)
         }
         .onChange(of: self.sessionMonitor.instances) { _, instances in
-            self.viewModel.moduleRegistry.updateSessionDots(sessions: instances)
+            self.viewModel.moduleRegistry.updateSessions(instances)
             self.handleProcessingChange()
             self.handleWaitingForInputChange(instances)
         }

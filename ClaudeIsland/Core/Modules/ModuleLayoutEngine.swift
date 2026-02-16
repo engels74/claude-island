@@ -45,8 +45,15 @@ final class ModuleLayoutEngine {
 
     init(registry: ModuleRegistry) {
         self.registry = registry
-        self.config = AppSettings.moduleLayoutConfig
+        var config = AppSettings.moduleLayoutConfig
             ?? ModuleLayoutConfig.defaultConfig(from: registry.modules)
+        let knownIDs = Set(config.placements.map(\.id))
+        for module in registry.modules where !knownIDs.contains(module.id) {
+            config.placements.append(
+                ModulePlacement(id: module.id, side: module.defaultSide, order: module.defaultOrder),
+            )
+        }
+        self.config = config
     }
 
     // MARK: Internal
