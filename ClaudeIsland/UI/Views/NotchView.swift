@@ -36,58 +36,7 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             // Outer container does NOT receive hits - only the notch content does
             VStack(spacing: 0) {
-                self.notchLayout
-                    .frame(
-                        maxWidth: self.viewModel.status == .opened
-                            ? self.notchSize.width
-                            : (self.showClosedActivity ? self.closedContentWidth : nil),
-                        alignment: .top,
-                    )
-                    .padding(
-                        .horizontal,
-                        self.viewModel.status == .opened
-                            ? cornerRadiusInsets.opened.top
-                            : cornerRadiusInsets.closed.bottom,
-                    )
-                    .padding([.horizontal, .bottom], self.viewModel.status == .opened ? 12 : 0)
-                    .background(.black)
-                    .clipShape(self.currentNotchShape)
-                    .overlay(alignment: .top) {
-                        Rectangle()
-                            .fill(.black)
-                            .frame(height: 1)
-                            .padding(.horizontal, self.topCornerRadius)
-                    }
-                    .shadow(
-                        color: (self.viewModel.status == .opened || self.isHovering) ? .black.opacity(0.7) : .clear,
-                        radius: 6,
-                    )
-                    .frame(
-                        maxWidth: self.viewModel.status == .opened
-                            ? self.notchSize.width
-                            : (self.showClosedActivity ? self.closedContentWidth : nil),
-                        maxHeight: self.viewModel.status == .opened ? self.notchSize.height : nil,
-                        alignment: .top,
-                    )
-                    .animation(self.viewModel.status == .opened ? self.openAnimation : self.closeAnimation, value: self.viewModel.status)
-                    .animation(self.openAnimation, value: self.notchSize) // Animate container size changes between content types
-                    .animation(.smooth, value: self.activityCoordinator.expandingActivity)
-                    .animation(.smooth, value: self.hasPendingPermission)
-                    .animation(.smooth, value: self.hasWaitingForInput)
-                    .animation(.smooth, value: self.accessibilityManager.shouldShowPermissionWarning)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: self.isBouncing)
-                    .animation(.smooth, value: self.clawdAlwaysVisible)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
-                            self.isHovering = hovering
-                        }
-                    }
-                    .onTapGesture {
-                        if self.viewModel.status != .opened {
-                            self.viewModel.notchOpen(reason: .click)
-                        }
-                    }
+                self.notchPanel
             }
         }
         .opacity(self.isVisible ? 1 : 0)
@@ -230,9 +179,20 @@ struct NotchView: View {
         }
     }
 
-    /// Width of the closed content (notch + any expansion)
-    private var closedContentWidth: CGFloat {
+    private var closedCoreWidth: CGFloat {
         self.closedNotchSize.width + self.closedLayout.totalExpansionWidth
+    }
+
+    private var closedPanelWidth: CGFloat {
+        self.closedCoreWidth + 2 * ModuleLayoutEngine.shapeEdgeMargin
+    }
+
+    private var currentCoreWidth: CGFloat? {
+        self.viewModel.status == .opened ? self.notchSize.width : (self.showClosedActivity ? self.closedCoreWidth : nil)
+    }
+
+    private var currentPanelWidth: CGFloat? {
+        self.viewModel.status == .opened ? self.notchSize.width : (self.showClosedActivity ? self.closedPanelWidth : nil)
     }
 
     // MARK: - Corner Radii
@@ -276,10 +236,6 @@ struct NotchView: View {
         self.closedLayout.hasAnyVisibleModule
     }
 
-    private var shouldShowTokenRingsMinimized: Bool {
-        AppSettings.tokenTrackingMode != .disabled && AppSettings.tokenShowRingsMinimized
-    }
-
     private var shouldShowTokenRingsExpanded: Bool {
         AppSettings.tokenTrackingMode != .disabled
     }
@@ -320,6 +276,51 @@ struct NotchView: View {
         }
     }
 
+    private var notchPanel: some View {
+        self.notchLayout
+            .frame(width: self.currentCoreWidth, alignment: .top)
+            .padding(
+                .horizontal,
+                self.viewModel.status == .opened
+                    ? cornerRadiusInsets.opened.top
+                    : ModuleLayoutEngine.shapeEdgeMargin,
+            )
+            .padding([.horizontal, .bottom], self.viewModel.status == .opened ? 12 : 0)
+            .background(.black)
+            .clipShape(self.currentNotchShape)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(.black)
+                    .frame(height: 1)
+                    .padding(.horizontal, self.topCornerRadius)
+            }
+            .shadow(
+                color: (self.viewModel.status == .opened || self.isHovering) ? .black.opacity(0.7) : .clear,
+                radius: 6,
+            )
+            .frame(width: self.currentPanelWidth, alignment: .top)
+            .frame(maxHeight: self.viewModel.status == .opened ? self.notchSize.height : nil, alignment: .top)
+            .animation(self.viewModel.status == .opened ? self.openAnimation : self.closeAnimation, value: self.viewModel.status)
+            .animation(self.openAnimation, value: self.notchSize) // Animate container size changes between content types
+            .animation(.smooth, value: self.activityCoordinator.expandingActivity)
+            .animation(.smooth, value: self.hasPendingPermission)
+            .animation(.smooth, value: self.hasWaitingForInput)
+            .animation(.smooth, value: self.accessibilityManager.shouldShowPermissionWarning)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: self.isBouncing)
+            .animation(.smooth, value: self.clawdAlwaysVisible)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+                    self.isHovering = hovering
+                }
+            }
+            .onTapGesture {
+                if self.viewModel.status != .opened {
+                    self.viewModel.notchOpen(reason: .click)
+                }
+            }
+    }
+
     // MARK: - Header Row (persists across states)
 
     private var headerRow: some View {
@@ -341,11 +342,11 @@ struct NotchView: View {
                         }
                     }
                 }
-                .frame(width: self.closedLayout.leftWidth, alignment: .leading)
+                .padding(.leading, ModuleLayoutEngine.outerEdgeInset)
+                .frame(width: self.closedLayout.symmetricSideWidth, alignment: .leading)
 
-                Spacer(minLength: 20)
-                    .frame(maxWidth: .infinity)
-                    .padding(.trailing, self.isBouncing ? 16 : 0)
+                Color.clear
+                    .frame(width: self.closedNotchSize.width, height: self.closedNotchSize.height)
 
                 HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
                     ForEach(self.closedLayout.rightModules) { entry in
@@ -361,8 +362,9 @@ struct NotchView: View {
                         }
                     }
                 }
-                .frame(width: self.closedLayout.rightWidth, alignment: .trailing)
-                .padding(.trailing, 4)
+                .padding(.trailing, ModuleLayoutEngine.outerEdgeInset)
+                .frame(width: self.closedLayout.symmetricSideWidth, alignment: .trailing)
+                .offset(x: self.isBouncing ? 16 : 0)
             } else {
                 Rectangle()
                     .fill(.clear)

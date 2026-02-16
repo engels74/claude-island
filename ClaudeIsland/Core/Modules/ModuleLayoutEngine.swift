@@ -25,6 +25,10 @@ struct ModuleLayout: Equatable {
     let rightWidth: CGFloat
     let totalExpansionWidth: CGFloat
     let hasAnyVisibleModule: Bool
+
+    var symmetricSideWidth: CGFloat {
+        max(self.leftWidth, self.rightWidth)
+    }
 }
 
 // MARK: - AnyNotchModule
@@ -48,7 +52,9 @@ final class ModuleLayoutEngine {
     // MARK: Internal
 
     static let interModuleSpacing: CGFloat = 4
-    static let sideInset: CGFloat = 6
+    static let sideInset: CGFloat = 8
+    static let outerEdgeInset: CGFloat = 6
+    static let shapeEdgeMargin: CGFloat = 20
 
     let registry: ModuleRegistry
 
@@ -88,10 +94,8 @@ final class ModuleLayoutEngine {
         let rightWidth = self.computeSideWidth(rightModules)
 
         let hasAny = !leftModules.isEmpty || !rightModules.isEmpty
-        let horizontalPadding: CGFloat = 2 * 14
-        let totalExpansion = hasAny
-            ? leftWidth + rightWidth + horizontalPadding
-            : 0
+        let maxSide = max(leftWidth, rightWidth)
+        let totalExpansion = hasAny ? maxSide * 2 : 0
 
         return ModuleLayout(
             leftModules: leftModules,
@@ -137,6 +141,6 @@ final class ModuleLayoutEngine {
         guard !modules.isEmpty else { return 0 }
         let modulesWidth = modules.reduce(0) { $0 + $1.width }
         let spacingWidth = CGFloat(modules.count - 1) * Self.interModuleSpacing
-        return modulesWidth + spacingWidth + Self.sideInset
+        return modulesWidth + spacingWidth + Self.sideInset + Self.outerEdgeInset
     }
 }

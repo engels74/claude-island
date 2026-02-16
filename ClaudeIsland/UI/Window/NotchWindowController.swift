@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import os.log
 import SwiftUI
 
 class NotchWindowController: NSWindowController {
@@ -16,6 +17,7 @@ class NotchWindowController: NSWindowController {
 
         let screenFrame = screen.frame
         let notchSize = screen.notchSize
+        Self.logNotchGeometry(for: screen)
 
         // Window covers full width at top, tall enough for largest content (chat view)
         let windowHeight: CGFloat = 750
@@ -110,7 +112,24 @@ class NotchWindowController: NSWindowController {
 
     // MARK: Private
 
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchGeometry")
+
     private let screen: NSScreen
     private var statusTask: Task<Void, Never>?
     private var bootAnimationTask: Task<Void, Never>?
+
+    private static func logNotchGeometry(for screen: NSScreen) {
+        let leftAuxWidth = screen.auxiliaryTopLeftArea?.width ?? 0
+        let rightAuxWidth = screen.auxiliaryTopRightArea?.width ?? 0
+        let baseWidth = screen.notchExclusionBaseWidth
+        let reservedWidth = screen.reservedNotchExclusionWidth
+        Self.logger.debug(
+            """
+            notch geometry: safeTop=\(screen.safeAreaInsets.top, privacy: .public), leftAux=\(leftAuxWidth, privacy: .public), rightAux=\(
+                rightAuxWidth,
+                privacy: .public,
+            ), baseWidth=\(baseWidth, privacy: .public), reservedWidth=\(reservedWidth, privacy: .public)
+            """,
+        )
+    }
 }

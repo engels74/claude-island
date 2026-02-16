@@ -8,7 +8,8 @@
 import AppKit
 
 extension NSScreen {
-    /// Returns the size of the notch on this screen (pixel-perfect using macOS APIs)
+    /// Returns the reserved notch exclusion size on this screen.
+    /// Width is intentionally conservative to guarantee closed-state modules remain outside the physical notch area.
     var notchSize: CGSize {
         guard safeAreaInsets.top > 0 else {
             // Fallback for non-notch displays (matches typical MacBook notch)
@@ -16,18 +17,29 @@ extension NSScreen {
         }
 
         let notchHeight = safeAreaInsets.top
-        let fullWidth = frame.width
+        return CGSize(
+            width: self.reservedNotchExclusionWidth,
+            height: notchHeight,
+        )
+    }
+
+    /// Conservatively reserved center width where closed-state content should never render.
+    var reservedNotchExclusionWidth: CGFloat {
+        let baseWidth = self.notchExclusionBaseWidth
+        return baseWidth + Self.notchSafetyPadding * 2
+    }
+
+    /// Base width before safety padding, derived from macOS top auxiliary areas.
+    var notchExclusionBaseWidth: CGFloat {
         let leftPadding = auxiliaryTopLeftArea?.width ?? 0
         let rightPadding = auxiliaryTopRightArea?.width ?? 0
 
         guard leftPadding > 0, rightPadding > 0 else {
-            // Fallback if auxiliary areas unavailable
-            return CGSize(width: 180, height: notchHeight)
+            // Fallback if auxiliary areas are unavailable on a notched display.
+            return 224
         }
 
-        // +4 to match boring.notch's calculation for proper alignment
-        let notchWidth = fullWidth - leftPadding - rightPadding + 4
-        return CGSize(width: notchWidth, height: notchHeight)
+        return max(0, frame.width - leftPadding - rightPadding)
     }
 
     /// Whether this is the built-in display
@@ -50,4 +62,6 @@ extension NSScreen {
     var hasPhysicalNotch: Bool {
         safeAreaInsets.top > 0
     }
+
+    private static let notchSafetyPadding: CGFloat = 12
 }

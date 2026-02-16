@@ -71,16 +71,7 @@ class NotchViewController: NSViewController {
                  .popping:
                 let notchRect = geometry.deviceNotchRect
                 let screenWidth = geometry.screenRect.width
-                let layout = vm.layoutEngine.computeLayout(
-                    notchSize: notchRect.size,
-                    isProcessing: NotchActivityCoordinator.shared.expandingActivity.show
-                        && NotchActivityCoordinator.shared.expandingActivity.type == .claude,
-                    hasPendingPermission: false,
-                    hasWaitingForInput: false,
-                    needsAccessibilityWarning: AccessibilityPermissionManager.shared.shouldShowPermissionWarning,
-                )
-                let expansionPadding = max(layout.totalExpansionWidth, 38)
-                let totalWidth = notchRect.width + expansionPadding
+                let totalWidth = self.closedPanelWidth(for: vm, notchRect: notchRect)
                 return CGRect(
                     x: (screenWidth - totalWidth) / 2,
                     y: windowHeight - notchRect.height - 5,
@@ -104,5 +95,26 @@ class NotchViewController: NSViewController {
             fatalError("hostingView accessed before loadView()")
         }
         return hostingView
+    }
+
+    /// Closed panel width in window coordinates.
+    /// Must stay in sync with NotchView's closed-state width calculation.
+    private func closedPanelWidth(for vm: NotchViewModel, notchRect: CGRect) -> CGFloat {
+        let layout = vm.layoutEngine.computeLayout(
+            notchSize: notchRect.size,
+            isProcessing: NotchActivityCoordinator.shared.expandingActivity.show
+                && NotchActivityCoordinator.shared.expandingActivity.type == .claude,
+            hasPendingPermission: false,
+            hasWaitingForInput: false,
+            needsAccessibilityWarning: AccessibilityPermissionManager.shared.shouldShowPermissionWarning,
+        )
+
+        guard layout.hasAnyVisibleModule else {
+            let idleCoreWidth = max(0, notchRect.width - 20)
+            return idleCoreWidth + 2 * ModuleLayoutEngine.shapeEdgeMargin
+        }
+
+        let coreWidth = notchRect.width + layout.totalExpansionWidth
+        return coreWidth + 2 * ModuleLayoutEngine.shapeEdgeMargin
     }
 }

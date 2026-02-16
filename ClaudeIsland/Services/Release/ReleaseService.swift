@@ -30,26 +30,66 @@ final class ReleaseService {
     private(set) var errorMessage: String?
 
     func fetchReleases() async {
-        isLoading = true
+        self.isLoading = true
         defer { isLoading = false }
 
-        if releases.isEmpty {
-            loadCachedReleases()
+        if self.releases.isEmpty {
+            self.loadCachedReleases()
         }
 
         do {
             let fetched = try await fetchFromGitHub()
-            releases = fetched
-            saveCachedReleases(fetched)
-            errorMessage = nil
+            self.releases = fetched
+            self.saveCachedReleases(fetched)
+            self.errorMessage = nil
         } catch is CancellationError {
             Self.logger.info("Release fetch cancelled")
         } catch {
             Self.logger.error("Failed to fetch releases: \(error.localizedDescription)")
-            if releases.isEmpty {
-                errorMessage = error.localizedDescription
+            if self.releases.isEmpty {
+                self.errorMessage = error.localizedDescription
             }
         }
+    }
+
+    func parseChanges(_ body: String) -> [String] {
+        let lines = body.components(separatedBy: "\n")
+
+        guard let whatsChangedIndex = lines.firstIndex(where: { $0.hasPrefix("## What's Changed") }) else {
+            return []
+        }
+
+        let prURLPattern = #/https://github\.com/[^/]+/[^/]+/pull/(\d+)/#
+
+        var results: [String] = []
+        var index = whatsChangedIndex + 1
+
+        while index < lines.count {
+            let line = lines[index]
+
+            if line.hasPrefix("**Full Changelog**") || line.hasPrefix("---") || line.hasPrefix("## ") {
+                break
+            }
+
+            if line.hasPrefix("* ") {
+                let stripped = String(line.dropFirst(2))
+                let cleaned = stripped.replacing(prURLPattern) { match in
+                    "#\(match.1)"
+                }
+                results.append(cleaned)
+            } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                let hasMoreItems = ((index + 1) < lines.count) && lines[index + 1].hasPrefix("* ")
+                if !hasMoreItems {
+                    break
+                }
+            } else {
+                break
+            }
+
+            index += 1
+        }
+
+        return results
     }
 
     // MARK: Private
@@ -100,56 +140,16 @@ final class ReleaseService {
         let githubReleases = try decoder.decode([GitHubRelease].self, from: data)
 
         return githubReleases.map { release in
-            let date = dateFormatter.date(from: release.publishedAt) ?? Date()
-            let changes = parseChanges(release.body ?? "")
+            let date = self.dateFormatter.date(from: release.publishedAt) ?? Date()
+            let changes = self.parseChanges(release.body ?? "")
 
             return ReleaseInfo(
                 id: release.tagName,
                 name: release.name,
                 publishedAt: date,
-                changes: changes
+                changes: changes,
             )
         }
-    }
-
-    func parseChanges(_ body: String) -> [String] {
-        let lines = body.components(separatedBy: "\n")
-
-        guard let whatsChangedIndex = lines.firstIndex(where: { $0.hasPrefix("## What's Changed") }) else {
-            return []
-        }
-
-        let prURLPattern = #/https://github\.com/[^/]+/[^/]+/pull/(\d+)/#
-
-        var results: [String] = []
-        var index = whatsChangedIndex + 1
-
-        while index < lines.count {
-            let line = lines[index]
-
-            if line.hasPrefix("**Full Changelog**") || line.hasPrefix("---") || line.hasPrefix("## ") {
-                break
-            }
-
-            if line.hasPrefix("* ") {
-                let stripped = String(line.dropFirst(2))
-                let cleaned = stripped.replacing(prURLPattern) { match in
-                    "#\(match.1)"
-                }
-                results.append(cleaned)
-            } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                let hasMoreItems = ((index + 1) < lines.count) && lines[index + 1].hasPrefix("* ")
-                if !hasMoreItems {
-                    break
-                }
-            } else {
-                break
-            }
-
-            index += 1
-        }
-
-        return results
     }
 
     // MARK: - Disk Cache
@@ -162,7 +162,7 @@ final class ReleaseService {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            releases = try decoder.decode([ReleaseInfo].self, from: data)
+            self.releases = try decoder.decode([ReleaseInfo].self, from: data)
             Self.logger.debug("Loaded \(self.releases.count) cached releases")
         } catch {
             Self.logger.warning("Failed to load cached releases: \(error.localizedDescription)")

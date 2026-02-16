@@ -49,8 +49,7 @@ struct TokenRingsModule: NotchModule {
                 showWeekly: display.showWeekly,
                 size: 16,
                 strokeWidth: 2,
-                showResetTime: AppSettings.tokenShowResetTime,
-                sessionResetTime: manager.sessionResetTime,
+                showResetTime: false,
             )
             .matchedGeometryEffect(id: "token-rings", in: namespace, isSource: isSourceNamespace),
         )
