@@ -47,6 +47,8 @@ final class ModuleLayoutEngine {
         self.registry = registry
         var config = AppSettings.moduleLayoutConfig
             ?? ModuleLayoutConfig.defaultConfig(from: registry.modules)
+        let registeredIDs = Set(registry.modules.map(\.id))
+        config.placements.removeAll { !registeredIDs.contains($0.id) }
         let knownIDs = Set(config.placements.map(\.id))
         for module in registry.modules where !knownIDs.contains(module.id) {
             config.placements.append(
