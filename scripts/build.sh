@@ -32,22 +32,22 @@ cd "$PROJECT_DIR"
 
 # Build with ad-hoc signing
 echo "Building..."
-xcodebuild build \
-    -scheme ClaudeIsland \
-    -configuration Release \
-    -derivedDataPath "$BUILD_DIR/DerivedData" \
-    CODE_SIGN_IDENTITY=- \
-    DEVELOPMENT_TEAM= \
-    COPY_PHASE_STRIP=YES \
-    STRIP_INSTALLED_PRODUCT=YES \
-    | xcpretty || xcodebuild build \
-    -scheme ClaudeIsland \
-    -configuration Release \
-    -derivedDataPath "$BUILD_DIR/DerivedData" \
-    CODE_SIGN_IDENTITY=- \
-    DEVELOPMENT_TEAM= \
-    COPY_PHASE_STRIP=YES \
+XCODEBUILD_OPTS=(
+    build
+    -scheme ClaudeIsland
+    -configuration Release
+    -derivedDataPath "$BUILD_DIR/DerivedData"
+    CODE_SIGN_IDENTITY=-
+    DEVELOPMENT_TEAM=
+    COPY_PHASE_STRIP=YES
     STRIP_INSTALLED_PRODUCT=YES
+)
+
+if command -v xcpretty >/dev/null 2>&1; then
+    xcodebuild "${XCODEBUILD_OPTS[@]}" | xcpretty
+else
+    xcodebuild "${XCODEBUILD_OPTS[@]}"
+fi
 
 # Copy app to expected location
 APP_OUTPUT="$BUILD_DIR/DerivedData/Build/Products/Release/Claude Island.app"
