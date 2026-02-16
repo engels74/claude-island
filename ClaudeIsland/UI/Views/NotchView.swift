@@ -325,7 +325,7 @@ struct NotchView: View {
 
     private var headerRow: some View {
         HStack(spacing: 0) {
-            if self.showClosedActivity || self.viewModel.status == .opened {
+            if self.viewModel.status == .opened {
                 HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
                     ForEach(self.closedLayout.leftModules) { entry in
                         if let module = self.viewModel.moduleRegistry.module(for: entry.id) {
@@ -335,7 +335,42 @@ struct NotchView: View {
                                 hasWaitingForInput: self.hasWaitingForInput,
                                 clawdColor: self.clawdColor,
                                 namespace: self.activityNamespace,
-                                isSourceNamespace: self.viewModel.status != .opened,
+                                isSourceNamespace: false,
+                            )
+                        }
+                    }
+                }
+                .padding(.leading, ModuleLayoutEngine.outerEdgeInset)
+
+                Spacer()
+
+                HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
+                    ForEach(self.closedLayout.rightModules) { entry in
+                        if let module = self.viewModel.moduleRegistry.module(for: entry.id) {
+                            module.makeBody(
+                                isProcessing: self.isProcessing,
+                                hasPendingPermission: self.hasPendingPermission,
+                                hasWaitingForInput: self.hasWaitingForInput,
+                                clawdColor: self.clawdColor,
+                                namespace: self.activityNamespace,
+                                isSourceNamespace: false,
+                            )
+                        }
+                    }
+                    self.menuToggleButton
+                }
+                .padding(.trailing, ModuleLayoutEngine.outerEdgeInset)
+            } else if self.showClosedActivity {
+                HStack(spacing: ModuleLayoutEngine.interModuleSpacing) {
+                    ForEach(self.closedLayout.leftModules) { entry in
+                        if let module = self.viewModel.moduleRegistry.module(for: entry.id) {
+                            module.makeBody(
+                                isProcessing: self.isProcessing,
+                                hasPendingPermission: self.hasPendingPermission,
+                                hasWaitingForInput: self.hasWaitingForInput,
+                                clawdColor: self.clawdColor,
+                                namespace: self.activityNamespace,
+                                isSourceNamespace: true,
                             )
                         }
                     }
@@ -355,13 +390,9 @@ struct NotchView: View {
                                 hasWaitingForInput: self.hasWaitingForInput,
                                 clawdColor: self.clawdColor,
                                 namespace: self.activityNamespace,
-                                isSourceNamespace: self.viewModel.status != .opened,
+                                isSourceNamespace: true,
                             )
                         }
-                    }
-
-                    if self.viewModel.status == .opened {
-                        self.menuToggleButton
                     }
                 }
                 .padding(.trailing, ModuleLayoutEngine.outerEdgeInset)
