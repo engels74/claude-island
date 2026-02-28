@@ -88,6 +88,7 @@ class NotchViewController: NSViewController {
     // MARK: Private
 
     private let viewModel: NotchViewModel
+    private let sessionMonitor = ClaudeSessionMonitor()
     private var hostingView: PassThroughHostingView<NotchView>?
 
     private var unwrappedHostingView: PassThroughHostingView<NotchView> {
@@ -104,8 +105,8 @@ class NotchViewController: NSViewController {
             notchSize: notchRect.size,
             isProcessing: NotchActivityCoordinator.shared.expandingActivity.show
                 && NotchActivityCoordinator.shared.expandingActivity.type == .claude,
-            hasPendingPermission: false,
-            hasWaitingForInput: false,
+            hasPendingPermission: self.sessionMonitor.instances.contains { $0.phase.isWaitingForApproval },
+            hasWaitingForInput: self.sessionMonitor.instances.contains { $0.phase == .waitingForInput },
             needsAccessibilityWarning: AccessibilityPermissionManager.shared.shouldShowPermissionWarning,
         )
 
