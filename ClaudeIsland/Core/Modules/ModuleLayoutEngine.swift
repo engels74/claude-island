@@ -56,6 +56,7 @@ final class ModuleLayoutEngine {
             )
         }
         self.config = config
+        AppSettings.moduleLayoutConfig = config
     }
 
     // MARK: Internal
