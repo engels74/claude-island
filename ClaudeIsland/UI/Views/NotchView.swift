@@ -43,6 +43,7 @@ struct NotchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .preferredColorScheme(.dark)
         .onAppear {
+            self.cachedClosedLayout = self.computeClosedLayout()
             self.sessionMonitor.startMonitoring()
             // On non-notched devices, keep visible so users have a target to interact with
             // Also keep visible if accessibility permission is missing (show warning)
@@ -59,10 +60,12 @@ struct NotchView: View {
         }
         .onChange(of: self.sessionMonitor.instances) { _, instances in
             self.viewModel.moduleRegistry.updateSessions(instances)
+            self.cachedClosedLayout = self.computeClosedLayout()
             self.handleProcessingChange()
             self.handleWaitingForInputChange(instances)
         }
         .onChange(of: self.accessibilityManager.shouldShowPermissionWarning) { _, shouldShow in
+            self.cachedClosedLayout = self.computeClosedLayout()
             // Keep notch visible while accessibility warning is shown
             if shouldShow {
                 self.isVisible = true
@@ -83,7 +86,11 @@ struct NotchView: View {
             for await _ in NotificationCenter.default.notifications(named: UserDefaults.didChangeNotification) {
                 self.clawdColor = AppSettings.clawdColor
                 self.clawdAlwaysVisible = AppSettings.clawdAlwaysVisible
+                self.cachedClosedLayout = self.computeClosedLayout()
             }
+        }
+        .onChange(of: self.activityCoordinator.expandingActivity) { _, _ in
+            self.cachedClosedLayout = self.computeClosedLayout()
         }
         .onChange(of: self.clawdAlwaysVisible) { _, newValue in
             if newValue {
@@ -110,6 +117,7 @@ struct NotchView: View {
     @State private var checkmarkHideTask: Task<Void, Never>?
     @State private var clawdColor: Color = AppSettings.clawdColor
     @State private var clawdAlwaysVisible: Bool = AppSettings.clawdAlwaysVisible
+    @State private var cachedClosedLayout: ModuleLayout = .empty
     @Namespace private var activityNamespace
 
     private var updateManager = UpdateManager.shared
@@ -223,13 +231,7 @@ struct NotchView: View {
     }
 
     private var closedLayout: ModuleLayout {
-        self.viewModel.layoutEngine.computeLayout(
-            notchSize: self.closedNotchSize,
-            isProcessing: self.isProcessing,
-            hasPendingPermission: self.hasPendingPermission,
-            hasWaitingForInput: self.hasWaitingForInput,
-            needsAccessibilityWarning: self.needsAccessibilityWarning,
-        )
+        self.cachedClosedLayout
     }
 
     private var showClosedActivity: Bool {
@@ -464,6 +466,16 @@ struct NotchView: View {
         // Removed .id() - was causing view recreation and performance issues
     }
 
+    private func computeClosedLayout() -> ModuleLayout {
+        self.viewModel.layoutEngine.computeLayout(
+            notchSize: self.closedNotchSize,
+            isProcessing: self.isProcessing,
+            hasPendingPermission: self.hasPendingPermission,
+            hasWaitingForInput: self.hasWaitingForInput,
+            needsAccessibilityWarning: self.needsAccessibilityWarning,
+        )
+    }
+
     // MARK: - Event Handlers
 
     private func handleProcessingChange() {
@@ -607,6 +619,7 @@ struct NotchView: View {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled else { return }
                 // Trigger a UI update to re-evaluate hasWaitingForInput
+                self.cachedClosedLayout = self.computeClosedLayout()
                 self.handleProcessingChange()
             }
         }
