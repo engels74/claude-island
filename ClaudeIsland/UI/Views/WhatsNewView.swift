@@ -135,8 +135,8 @@ struct WhatsNewView: View {
             .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onAppear {
-            Task { await self.releaseService.fetchReleases() }
+        .task {
+            await self.releaseService.fetchReleases()
         }
     }
 
