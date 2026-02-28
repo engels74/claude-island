@@ -168,6 +168,14 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.clawdAlwaysVisible) }
     }
 
+    // MARK: - Notch Auto-Expand
+
+    /// Whether the notch should auto-expand when new pending sessions arrive
+    static var notchAutoExpand: Bool {
+        get { defaults.bool(forKey: Keys.notchAutoExpand) }
+        set { defaults.set(newValue, forKey: Keys.notchAutoExpand) }
+    }
+
     // MARK: - Token Tracking Mode
 
     static var tokenTrackingMode: TokenTrackingMode {
@@ -245,6 +253,7 @@ enum AppSettings {
         static let soundSuppression = "soundSuppression"
         static let clawdColor = "clawdColor"
         static let clawdAlwaysVisible = "clawdAlwaysVisible"
+        static let notchAutoExpand = "notchAutoExpand"
         static let tokenTrackingMode = "tokenTrackingMode"
         static let tokenUseCLIOAuth = "tokenUseCliOAuth"
         static let tokenShowRingsMinimized = "tokenShowRingsMinimized"

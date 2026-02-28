@@ -57,6 +57,14 @@ struct NotchMenuView: View {
                         SuppressionPickerRow(suppressionSelector: self.suppressionSelector)
                         ClawdPickerRow(clawdSelector: self.clawdSelector)
 
+                        MenuToggleRow(
+                            icon: "arrow.up.left.and.arrow.down.right",
+                            label: "Notch Auto-Expand",
+                            isOn: self.notchAutoExpand,
+                        ) {
+                            self.notchAutoExpand.toggle()
+                        }
+
                         MenuRow(
                             icon: "rectangle.split.3x1",
                             label: "Notch Layout",
@@ -193,6 +201,9 @@ struct NotchMenuView: View {
     @State private var hookInstallTask: Task<Void, Never>?
     @State private var showWhatsNew = false
     @State private var showLayoutSettings = false
+    // swiftformat:disable:next wrapAttributes
+    @AppStorage("notchAutoExpand")
+    private var notchAutoExpand = false
     // swiftformat:disable:next wrapAttributes
     @AppStorage("verboseMode")
     private var verboseMode = false
