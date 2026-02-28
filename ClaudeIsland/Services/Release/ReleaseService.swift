@@ -99,6 +99,7 @@ final class ReleaseService {
     private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
 
     private static var cacheDirectoryURL: URL {
+        // swiftlint:disable:next force_unwrapping
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("com.engels74.ClaudeIsland")
     }
@@ -143,8 +144,9 @@ final class ReleaseService {
             let date = self.dateFormatter.date(from: release.publishedAt) ?? Date()
             let changes = self.parseChanges(release.body ?? "")
 
+            let version = release.tagName.hasPrefix("v") ? String(release.tagName.dropFirst()) : release.tagName
             return ReleaseInfo(
-                id: release.tagName,
+                id: version,
                 name: release.name,
                 publishedAt: date,
                 changes: changes,
