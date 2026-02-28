@@ -37,7 +37,7 @@ struct ReadyCheckmarkModule: NotchModule {
     ) -> AnyView {
         AnyView(
             ReadyForInputIndicatorIcon(size: 14, color: TerminalColors.green)
-                .matchedGeometryEffect(id: "spinner", in: namespace, isSource: true),
+                .matchedGeometryEffect(id: "spinner", in: namespace, isSource: isSourceNamespace),
         )
     }
     // swiftlint:enable function_parameter_count

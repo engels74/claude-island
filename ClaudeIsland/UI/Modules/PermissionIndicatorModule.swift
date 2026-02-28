@@ -37,7 +37,7 @@ struct PermissionIndicatorModule: NotchModule {
     ) -> AnyView {
         AnyView(
             PermissionIndicatorIcon(size: 14, color: clawdColor)
-                .matchedGeometryEffect(id: "status-indicator", in: namespace, isSource: true),
+                .matchedGeometryEffect(id: "status-indicator", in: namespace, isSource: isSourceNamespace),
         )
     }
     // swiftlint:enable function_parameter_count

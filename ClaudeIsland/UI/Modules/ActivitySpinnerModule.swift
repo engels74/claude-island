@@ -37,7 +37,7 @@ struct ActivitySpinnerModule: NotchModule {
     ) -> AnyView {
         AnyView(
             ProcessingSpinner()
-                .matchedGeometryEffect(id: "spinner", in: namespace, isSource: true),
+                .matchedGeometryEffect(id: "spinner", in: namespace, isSource: isSourceNamespace),
         )
     }
     // swiftlint:enable function_parameter_count
