@@ -964,7 +964,9 @@ struct ToolCallView: View {
 
     // MARK: Private
 
-    @AppStorage("verboseMode") private var verboseMode = false
+    // swiftformat:disable:next wrapAttributes
+    @AppStorage("verboseMode")
+    private var verboseMode = false
     @State private var pulseOpacity = 0.6
     @State private var isExpanded = false
     @State private var isHovering = false
@@ -1013,8 +1015,7 @@ struct ToolCallView: View {
     private var verboseToolName: String {
         let formatted = MCPToolFormatter.formatToolName(self.tool.name)
         if self.verboseMode {
-            let label = ToolStatusDisplay.verboseToolLabel(for: formatted, input: self.tool.input)
-            return label
+            return ToolStatusDisplay.verboseToolLabel(for: formatted, input: self.tool.input)
         }
         return formatted
     }

@@ -181,7 +181,9 @@ struct NotchMenuView: View {
     @State private var launchAtLogin = false
     @State private var hookInstallTask: Task<Void, Never>?
     @State private var showWhatsNew = false
-    @AppStorage("verboseMode") private var verboseMode = false
+    // swiftformat:disable:next wrapAttributes
+    @AppStorage("verboseMode")
+    private var verboseMode = false
 
     private var updateManager = UpdateManager.shared
 

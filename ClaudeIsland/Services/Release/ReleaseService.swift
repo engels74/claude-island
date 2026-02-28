@@ -58,26 +58,26 @@ final class ReleaseService {
 
     private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
 
-    private static var cacheDirectoryURL: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first! // swiftlint:disable:this force_unwrapping
-            .appendingPathComponent("com.engels74.ClaudeIsland")
-    }
-
-    private static var cacheFileURL: URL {
-        cacheDirectoryURL.appendingPathComponent("releases.json")
-    }
-
-    private let dateFormatter: ISO8601DateFormatter = {
+    private nonisolated static let dateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 
-    private let fractionalDateFormatter: ISO8601DateFormatter = {
+    private nonisolated static let fractionalDateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
+
+    private static var cacheDirectoryURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            .map { $0.appendingPathComponent("com.engels74.ClaudeIsland") }
+    }
+
+    private static var cacheFileURL: URL? {
+        cacheDirectoryURL.map { $0.appendingPathComponent("releases.json") }
+    }
 
     private func parseChanges(_ body: String) -> [String] {
         let lines = body.components(separatedBy: "\n")
@@ -146,8 +146,8 @@ final class ReleaseService {
         let githubReleases = try decoder.decode([GitHubRelease].self, from: data)
 
         return githubReleases.map { release in
-            let date = self.fractionalDateFormatter.date(from: release.publishedAt)
-                ?? self.dateFormatter.date(from: release.publishedAt)
+            let date = Self.fractionalDateFormatter.date(from: release.publishedAt)
+                ?? Self.dateFormatter.date(from: release.publishedAt)
                 ?? Date.distantPast
             let changes = self.parseChanges(release.body ?? "")
 
@@ -163,7 +163,7 @@ final class ReleaseService {
     // MARK: - Disk Cache
 
     private func loadCachedReleases() {
-        let fileURL = Self.cacheFileURL
+        guard let fileURL = Self.cacheFileURL else { return }
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         do {
@@ -178,8 +178,9 @@ final class ReleaseService {
     }
 
     private func saveCachedReleases(_ releases: [ReleaseInfo]) {
-        let directoryURL = Self.cacheDirectoryURL
-        let fileURL = Self.cacheFileURL
+        guard let directoryURL = Self.cacheDirectoryURL,
+              let fileURL = Self.cacheFileURL
+        else { return }
 
         do {
             try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
