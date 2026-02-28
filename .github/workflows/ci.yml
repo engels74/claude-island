@@ -50,7 +50,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: claude-island-dmg
           path: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
@@ -63,7 +63,7 @@ jobs:
 
     steps:
       - name: Download DMG artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: claude-island-dmg
 
@@ -102,7 +102,7 @@ jobs:
           } | tee virustotal-results.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload scan results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: virustotal-results
           path: virustotal-results.md

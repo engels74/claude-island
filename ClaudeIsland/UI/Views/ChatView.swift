@@ -860,11 +860,12 @@ struct ToolCallView: View {
                         }
                     }
 
-                // Tool name (formatted for MCP tools)
-                Text(MCPToolFormatter.formatToolName(self.tool.name))
+                // Tool name (formatted for MCP tools, verbose when enabled)
+                Text(self.verboseToolName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(self.textColor)
-                    .fixedSize()
+                    .lineLimit(1)
+                    .truncationMode(.middle)
 
                 if self.tool.name == "Task" && !self.tool.subagentTools.isEmpty {
                     let taskDesc = self.tool.input["description"] ?? "Running agent..."
@@ -903,6 +904,18 @@ struct ToolCallView: View {
                         .foregroundColor(.white.opacity(0.3))
                         .rotationEffect(.degrees(self.isExpanded ? 90 : 0))
                         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.isExpanded)
+                }
+            }
+
+            if self.verboseMode && self.tool.status != .running && self.tool.status != .waitingForApproval {
+                if let preview = self.outputPreview {
+                    Text(preview)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.35))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 12)
+                        .padding(.top, 2)
                 }
             }
 
@@ -951,6 +964,9 @@ struct ToolCallView: View {
 
     // MARK: Private
 
+    // swiftformat:disable:next wrapAttributes
+    @AppStorage("verboseMode")
+    private var verboseMode = false
     @State private var pulseOpacity = 0.6
     @State private var isExpanded = false
     @State private var isHovering = false
@@ -994,6 +1010,23 @@ struct ToolCallView: View {
 
     private var showContent: Bool {
         self.tool.name == "Edit" || self.isExpanded
+    }
+
+    private var verboseToolName: String {
+        let formatted = MCPToolFormatter.formatToolName(self.tool.name)
+        if self.verboseMode {
+            return ToolStatusDisplay.verboseToolLabel(for: formatted, input: self.tool.input)
+        }
+        return formatted
+    }
+
+    private var outputPreview: String? {
+        guard let result = self.tool.result, !result.isEmpty else { return nil }
+        let lines = result.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .prefix(3)
+            .map { String($0.prefix(80)) }
+        return lines.joined(separator: "\n")
     }
 
     private var agentDescription: String? {
@@ -1309,7 +1342,7 @@ struct ChatApprovalBar: View {
     let onDeny: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Tool info
             VStack(alignment: .leading, spacing: 2) {
                 Text(MCPToolFormatter.formatToolName(self.tool))
@@ -1319,47 +1352,49 @@ struct ChatApprovalBar: View {
                     Text(input)
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.5))
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .opacity(self.showContent ? 1 : 0)
             .offset(x: self.showContent ? 0 : -10)
 
-            Spacer()
+            // Buttons
+            HStack(spacing: 12) {
+                Spacer()
 
-            // Deny button
-            Button {
-                self.onDeny()
-            } label: {
-                Text("Deny")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.1))
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .opacity(self.showDenyButton ? 1 : 0)
-            .scaleEffect(self.showDenyButton ? 1 : 0.8)
+                // Deny button
+                Button {
+                    self.onDeny()
+                } label: {
+                    Text("Deny")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .opacity(self.showDenyButton ? 1 : 0)
+                .scaleEffect(self.showDenyButton ? 1 : 0.8)
 
-            // Allow button
-            Button {
-                self.onApprove()
-            } label: {
-                Text("Allow")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.95))
-                    .clipShape(Capsule())
+                // Allow button
+                Button {
+                    self.onApprove()
+                } label: {
+                    Text("Allow")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.95))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .opacity(self.showAllowButton ? 1 : 0)
+                .scaleEffect(self.showAllowButton ? 1 : 0.8)
             }
-            .buttonStyle(.plain)
-            .opacity(self.showAllowButton ? 1 : 0)
-            .scaleEffect(self.showAllowButton ? 1 : 0.8)
         }
-        .frame(minHeight: 44) // Consistent height with other bars
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.2))

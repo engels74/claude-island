@@ -291,6 +291,12 @@ nonisolated struct ToolStatusDisplay {
         return Self(text: self.completedStatusText(for: result), isRunning: false)
     }
 
+    static func verboseToolLabel(for toolName: String, input: [String: String]) -> String {
+        let inputPreview = self.verboseInputPreview(for: toolName, input: input)
+        guard let preview = inputPreview else { return toolName }
+        return "\(toolName)(\(preview))"
+    }
+
     // MARK: Private
 
     private static let simpleRunningStatus: [String: String] = [
@@ -382,5 +388,37 @@ nonisolated struct ToolStatusDisplay {
             "\(Int(result.durationSeconds))s" : "\(Int(result.durationSeconds * 1000))ms"
         let searchWord = result.results.count == 1 ? "search" : "searches"
         return "Did 1 \(searchWord) in \(time)"
+    }
+
+    private static func verboseInputPreview(for toolName: String, input: [String: String]) -> String? {
+        switch toolName {
+        case "Bash":
+            guard let command = input["command"] else { return nil }
+            let firstLine = command.components(separatedBy: "\n").first ?? command
+            return String(firstLine.prefix(60))
+        case "Read",
+             "Edit",
+             "Write":
+            return (input["file_path"] ?? input["path"]).map { self.shortenPath($0) }
+        case "Grep",
+             "Glob":
+            return input["pattern"].map { "\"\($0)\"" }
+        case "WebSearch":
+            return input["query"].map { "\"\(String($0.prefix(50)))\"" }
+        case "WebFetch":
+            return input["url"].map { String($0.prefix(50)) }
+        case "Task":
+            return nil
+        default:
+            return input.values.first.map { String($0.prefix(40)) }
+        }
+    }
+
+    private static func shortenPath(_ path: String) -> String {
+        let components = path.components(separatedBy: "/")
+        if components.count > 3 {
+            return ".../" + components.suffix(3).joined(separator: "/")
+        }
+        return path
     }
 }

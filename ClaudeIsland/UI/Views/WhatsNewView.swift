@@ -105,7 +105,7 @@ struct WhatsNewView: View {
                             }
                             .padding(.horizontal, 12)
 
-                            ForEach(release.changes, id: \.self) { change in
+                            ForEach(Array(release.changes.enumerated()), id: \.offset) { _, change in
                                 HStack(alignment: .top, spacing: 8) {
                                     Circle()
                                         .fill(Color.white.opacity(0.3))
@@ -135,8 +135,8 @@ struct WhatsNewView: View {
             .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onAppear {
-            Task { await self.releaseService.fetchReleases() }
+        .task {
+            await self.releaseService.fetchReleases()
         }
     }
 
@@ -151,6 +151,7 @@ struct WhatsNewView: View {
     }
 
     private func isInstalled(_ release: ReleaseInfo) -> Bool {
-        release.id == self.installedVersion
+        let version = release.id.hasPrefix("v") ? String(release.id.dropFirst()) : release.id
+        return version == self.installedVersion
     }
 }

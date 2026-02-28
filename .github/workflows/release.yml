@@ -159,7 +159,7 @@ jobs:
           echo "- Has Signature: ${{ steps.dmg-info.outputs.signature != '' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-dmg
           path: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload appcast artifact
         if: steps.sparkle-key.outputs.has_key == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: appcast
           path: releases/appcast/appcast.xml
@@ -187,7 +187,7 @@ jobs:
 
     steps:
       - name: Download DMG artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-dmg
 
@@ -247,7 +247,7 @@ jobs:
           echo "✅ VirusTotal results appended to release v$VERSION"
 
       - name: Upload scan results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: virustotal-results
           path: virustotal-results.md

@@ -231,6 +231,11 @@ enum AppSettings {
         }
     }
 
+    static var verboseMode: Bool {
+        get { defaults.bool(forKey: Keys.verboseMode) }
+        set { defaults.set(newValue, forKey: Keys.verboseMode) }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -246,6 +251,7 @@ enum AppSettings {
         static let tokenMinimizedRingDisplay = "tokenMinimizedRingDisplay"
         static let tokenShowResetTime = "tokenShowResetTime"
         static let moduleLayoutConfig = "moduleLayoutConfig"
+        static let verboseMode = "verboseMode"
     }
 
     private static let defaults = UserDefaults.standard

@@ -52,7 +52,34 @@ final class ReleaseService {
         }
     }
 
-    func parseChanges(_ body: String) -> [String] {
+    // MARK: Private
+
+    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ReleaseService")
+
+    private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
+
+    private nonisolated static let dateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private nonisolated static let fractionalDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static var cacheDirectoryURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            .map { $0.appendingPathComponent("com.engels74.ClaudeIsland") }
+    }
+
+    private static var cacheFileURL: URL? {
+        cacheDirectoryURL.map { $0.appendingPathComponent("releases.json") }
+    }
+
+    private func parseChanges(_ body: String) -> [String] {
         let lines = body.components(separatedBy: "\n")
 
         guard let whatsChangedIndex = lines.firstIndex(where: { $0.hasPrefix("## What's Changed") }) else {
@@ -92,28 +119,6 @@ final class ReleaseService {
         return results
     }
 
-    // MARK: Private
-
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ReleaseService")
-
-    private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
-
-    private static var cacheDirectoryURL: URL {
-        // swiftlint:disable:next force_unwrapping
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("com.engels74.ClaudeIsland")
-    }
-
-    private static var cacheFileURL: URL {
-        cacheDirectoryURL.appendingPathComponent("releases.json")
-    }
-
-    private let dateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     private func fetchFromGitHub() async throws -> [ReleaseInfo] {
         guard let url = URL(string: Self.releasesURL) else {
             throw URLError(.badURL)
@@ -141,12 +146,13 @@ final class ReleaseService {
         let githubReleases = try decoder.decode([GitHubRelease].self, from: data)
 
         return githubReleases.map { release in
-            let date = self.dateFormatter.date(from: release.publishedAt) ?? Date()
+            let date = Self.fractionalDateFormatter.date(from: release.publishedAt)
+                ?? Self.dateFormatter.date(from: release.publishedAt)
+                ?? Date.distantPast
             let changes = self.parseChanges(release.body ?? "")
 
-            let version = release.tagName.hasPrefix("v") ? String(release.tagName.dropFirst()) : release.tagName
             return ReleaseInfo(
-                id: version,
+                id: release.tagName,
                 name: release.name,
                 publishedAt: date,
                 changes: changes,
@@ -157,7 +163,7 @@ final class ReleaseService {
     // MARK: - Disk Cache
 
     private func loadCachedReleases() {
-        let fileURL = Self.cacheFileURL
+        guard let fileURL = Self.cacheFileURL else { return }
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         do {
@@ -172,8 +178,9 @@ final class ReleaseService {
     }
 
     private func saveCachedReleases(_ releases: [ReleaseInfo]) {
-        let directoryURL = Self.cacheDirectoryURL
-        let fileURL = Self.cacheFileURL
+        guard let directoryURL = Self.cacheDirectoryURL,
+              let fileURL = Self.cacheFileURL
+        else { return }
 
         do {
             try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
