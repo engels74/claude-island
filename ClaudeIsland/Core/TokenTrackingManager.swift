@@ -233,8 +233,7 @@ final class TokenTrackingManager {
                 } catch {
                     // Only invalidate cache for authentication rejections — transient errors
                     // should not wipe a valid token and re-trigger keychain prompts
-                    if let apiError = error as? APIServiceError,
-                       case let .httpError(statusCode) = apiError,
+                    if case let .httpError(statusCode) = error,
                        statusCode == 401 || statusCode == 403 {
                         self.deleteCLIOAuthCache()
                     }
