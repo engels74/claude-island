@@ -58,13 +58,13 @@ final class ReleaseService {
 
     private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
 
-    private nonisolated static let dateFormatter: ISO8601DateFormatter = {
+    private static let dateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 
-    private nonisolated static let fractionalDateFormatter: ISO8601DateFormatter = {
+    private static let fractionalDateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
