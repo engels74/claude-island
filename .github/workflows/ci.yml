@@ -68,7 +68,7 @@ jobs:
           name: claude-island-dmg
 
       - name: Scan with VirusTotal
-        uses: crazy-max/ghaction-virustotal@v4
+        uses: crazy-max/ghaction-virustotal@v5
         id: virustotal
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
