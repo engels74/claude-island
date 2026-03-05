@@ -83,4 +83,5 @@
 
 # Rules to disable (overly aggressive or conflict with project style)
 --disable andOperator
+--disable redundantSendable
 --disable wrapMultilineStatementBraces

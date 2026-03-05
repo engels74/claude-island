@@ -181,12 +181,18 @@ final class TokenTrackingManager {
 
     private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
 
-    private static let cliKeychainCooldownInterval: TimeInterval = 300
+    private static let cliKeychainCooldownInterval: TimeInterval = 3600
     private static let cliOAuthCacheAccount = "cli-oauth-cache"
+
+    private static let cliKeychainLastAttemptKey = "cliKeychainLastAttempt"
 
     private var refreshTask: Task<Void, Never>?
     private var periodicRefreshTask: Task<Void, Never>?
-    private var lastCLIKeychainAttempt: Date?
+
+    private var lastCLIKeychainAttempt: Date? {
+        get { UserDefaults.standard.object(forKey: Self.cliKeychainLastAttemptKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: Self.cliKeychainLastAttemptKey) }
+    }
 
     private func startPeriodicRefresh() {
         self.periodicRefreshTask?.cancel()
@@ -367,15 +373,14 @@ extension TokenTrackingManager {
     }
 
     private func getCLIOAuthToken() -> String? {
-        // Step 1: Try cached data first (own keychain — never prompts)
-        if let cachedData = self.loadCLIOAuthCache() {
-            if let token = self.extractOAuthToken(from: cachedData) {
-                Self.logger.debug("Using cached CLI OAuth token")
-                return token
-            }
-            // Cache exists but token is expired or invalid — delete it
-            Self.logger.debug("Cached CLI OAuth token expired or invalid, will re-read from CLI keychain")
-            self.deleteCLIOAuthCache()
+        // Step 1: Try cached data first (own keychain — never prompts).
+        // Use ignoreExpiry: the API will reject with 401/403 if truly invalid,
+        // which triggers cache invalidation in refreshFromAPI(). This avoids
+        // deleting the cache on local expiry and re-reading the CLI keychain (which prompts).
+        if let cachedData = self.loadCLIOAuthCache(),
+           let token = self.extractOAuthToken(from: cachedData, ignoreExpiry: true) {
+            Self.logger.debug("Using cached CLI OAuth token (expiry check deferred to API)")
+            return token
         }
 
         // Step 2: Rate-limit CLI keychain access to avoid repeated prompts
@@ -399,8 +404,10 @@ extension TokenTrackingManager {
         return self.extractOAuthToken(from: data)
     }
 
-    /// Parse CLI OAuth JSON data and return the access token if valid and not expired.
-    private func extractOAuthToken(from data: Data) -> String? {
+    /// Parse CLI OAuth JSON data and return the access token.
+    /// When `ignoreExpiry` is `true`, return the token even if locally expired —
+    /// the API will reject with 401/403 if truly invalid, triggering cache invalidation.
+    private func extractOAuthToken(from data: Data, ignoreExpiry: Bool = false) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             Self.logger.error("Failed to parse CLI OAuth Keychain data as JSON")
             return nil
@@ -421,7 +428,7 @@ extension TokenTrackingManager {
             return nil
         }
 
-        if self.isOAuthTokenExpired(expirySource) {
+        if !ignoreExpiry, self.isOAuthTokenExpired(expirySource) {
             return nil
         }
 
