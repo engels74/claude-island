@@ -242,6 +242,7 @@ final class TokenTrackingManager {
                     if case let .httpError(statusCode) = error,
                        statusCode == 401 || statusCode == 403 {
                         self.deleteCLIOAuthCache()
+                        self.lastCLIKeychainAttempt = nil
                     }
                     throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
                 }
