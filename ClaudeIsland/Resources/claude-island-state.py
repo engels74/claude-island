@@ -457,6 +457,7 @@ def handle_permission_response(response: PermissionResponse | None, /) -> None:
     """
     if not response:
         # No response or "ask" - let Claude Code show its normal UI
+        print("{}")
         return
 
     decision = response.get("decision", "ask")
