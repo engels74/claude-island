@@ -268,6 +268,50 @@ def get_claude_pid() -> int:
     return os.getppid()
 
 
+def _get_claude_pid_from(ancestor_pid: int, /) -> int:
+    """Walk process tree from a known ancestor to find the Claude Code PID.
+
+    Used by the forked child process where os.getpid()/os.getppid() are
+    unreliable because the parent has already exited and the child was
+    re-parented to launchd (PID 1).
+
+    Args:
+        ancestor_pid: A PID captured before fork (the original parent's parent)
+
+    Returns:
+        The PID of the Claude Code process, or ancestor_pid as fallback.
+    """
+    current_pid = ancestor_pid
+
+    for _ in range(10):
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(current_pid), "-o", "ppid=,comm="],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if result.returncode != 0:
+                break
+
+            parts = result.stdout.strip().split()
+            if len(parts) < 2:
+                break
+
+            ppid = int(parts[0])
+            command = parts[1].lower()
+
+            if command == "claude":
+                return current_pid
+
+            current_pid = ppid
+        except subprocess.TimeoutExpired, ValueError, OSError:
+            break
+
+    return ancestor_pid
+
+
 def _all_keys_are_strings(d: dict[object, object], /) -> bool:
     """Check if all keys in a dictionary are strings."""
     for key in d:
@@ -375,7 +419,16 @@ def _fork_and_send(
     The child becomes an orphan (adopted by launchd) and sends the event
     to ClaudeIsland.app best-effort.
     """
-    pid = os.fork()
+    # Capture ancestry before forking — once the parent exits, the child's
+    # ppid becomes 1 (launchd), making process-tree walks unreliable.
+    pre_fork_ppid = os.getppid()
+
+    try:
+        pid = os.fork()
+    except OSError:
+        # fork failed (e.g. EAGAIN) — exit silently, don't break hook aggregation
+        return
+
     if pid != 0:
         # Parent — exit immediately, no stdout
         return
@@ -391,8 +444,9 @@ def _fork_and_send(
             os.dup2(devnull, fd)
         os.close(devnull)
 
-        # Now do the expensive work
-        claude_pid = get_claude_pid()
+        # Now do the expensive work — start from pre-fork ancestor to avoid
+        # the race where our parent exits and we get re-parented to launchd.
+        claude_pid = _get_claude_pid_from(pre_fork_ppid)
         tty = get_tty(claude_pid)
         tty_valid = validate_tty(tty)
         session_active = is_session_active(claude_pid, tty)
