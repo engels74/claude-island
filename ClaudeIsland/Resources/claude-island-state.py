@@ -488,7 +488,7 @@ def handle_permission_response(response: PermissionResponse | None, /) -> None:
 
         case _decision:
             # "ask" or unknown - let Claude Code show its normal UI
-            pass
+            print("{}")
 
 
 def main() -> None:
@@ -519,6 +519,7 @@ def main() -> None:
 
     # Skip certain events
     if status == "skip":
+        print("{}")
         sys.exit(0)
 
     # Build state object
@@ -546,6 +547,11 @@ def main() -> None:
 
     # Send to socket (fire and forget for non-permission events)
     _ = send_event(state)
+
+    # Output empty JSON to signal "no modifications" to Claude Code.
+    # Prevents interference with other hooks' outputs (e.g., RTK's updatedInput)
+    # when multiple hooks run in parallel on the same event.
+    print("{}")
 
 
 if __name__ == "__main__":
