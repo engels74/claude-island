@@ -359,6 +359,67 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
         return None
 
 
+def _fork_and_send(
+    session_id: str,
+    cwd: str,
+    event: str,
+    data: HookEventData,
+    status: str,
+    extras: ToolExtras,
+    /,
+) -> None:
+    """Fork a child to do expensive PID/socket work; parent returns immediately.
+
+    The parent exits with no stdout so it doesn't interfere with other hooks'
+    (e.g. rtk) updatedInput in Claude Code's hook aggregation loop.
+    The child becomes an orphan (adopted by launchd) and sends the event
+    to ClaudeIsland.app best-effort.
+    """
+    pid = os.fork()
+    if pid != 0:
+        # Parent — exit immediately, no stdout
+        return
+
+    # ── Child process ──
+    try:
+        os.setsid()  # Detach from parent's process group
+
+        # Close inherited stdout/stderr/stdin so Claude Code sees EOF on the
+        # pipe and doesn't wait for us.
+        devnull = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(devnull, fd)
+        os.close(devnull)
+
+        # Now do the expensive work
+        claude_pid = get_claude_pid()
+        tty = get_tty(claude_pid)
+        tty_valid = validate_tty(tty)
+        session_active = is_session_active(claude_pid, tty)
+
+        state = SessionState(
+            session_id=session_id,
+            cwd=cwd,
+            event=event,
+            pid=claude_pid,
+            tty=tty,
+            tty_valid=tty_valid,
+            session_active=session_active,
+            status=status,
+            tool=extras.get("tool"),
+            tool_input=_normalize_tool_input(extras.get("tool_input")),
+            tool_use_id=extras.get("tool_use_id"),
+            notification_type=extras.get("notification_type"),
+            message=extras.get("message"),
+        )
+
+        _ = send_event(state)
+    except Exception:
+        pass
+    finally:
+        os._exit(0)
+
+
 def determine_status(
     event: str,
     data: HookEventData,
@@ -507,52 +568,42 @@ def main() -> None:
     event = data.get("hook_event_name", "")
     cwd = data.get("cwd", "")
 
-    # Get process info
-    claude_pid = get_claude_pid()
-    tty = get_tty(claude_pid)
-
-    # Validate session state
-    tty_valid = validate_tty(tty)
-    session_active = is_session_active(claude_pid, tty)
-
-    # Determine status and extra fields
+    # Determine status early (pure computation, no I/O)
     status, extras = determine_status(event, data)
 
-    # Skip certain events
+    # Skip certain events — exit immediately, no stdout
     if status == "skip":
-        print("{}")
         sys.exit(0)
 
-    # Build state object
-    state = SessionState(
-        session_id=session_id,
-        cwd=cwd,
-        event=event,
-        pid=claude_pid,
-        tty=tty,
-        tty_valid=tty_valid,
-        session_active=session_active,
-        status=status,
-        tool=extras.get("tool"),
-        tool_input=_normalize_tool_input(extras.get("tool_input")),
-        tool_use_id=extras.get("tool_use_id"),
-        notification_type=extras.get("notification_type"),
-        message=extras.get("message"),
-    )
-
-    # Handle permission requests specially
+    # Permission requests must be synchronous (we need to print the decision)
     if status == "waiting_for_approval":
+        claude_pid = get_claude_pid()
+        tty = get_tty(claude_pid)
+        state = SessionState(
+            session_id=session_id,
+            cwd=cwd,
+            event=event,
+            pid=claude_pid,
+            tty=tty,
+            tty_valid=validate_tty(tty),
+            session_active=is_session_active(claude_pid, tty),
+            status=status,
+            tool=extras.get("tool"),
+            tool_input=_normalize_tool_input(extras.get("tool_input")),
+            tool_use_id=extras.get("tool_use_id"),
+            notification_type=extras.get("notification_type"),
+            message=extras.get("message"),
+        )
         response = send_event(state)
         handle_permission_response(response)
         sys.exit(0)
 
-    # Send to socket (fire and forget for non-permission events)
-    _ = send_event(state)
-
-    # Output empty JSON to signal "no modifications" to Claude Code.
-    # Prevents interference with other hooks' outputs (e.g., RTK's updatedInput)
-    # when multiple hooks run in parallel on the same event.
-    print("{}")
+    # All other events: fork expensive work into background child.
+    # Parent exits immediately with no stdout so it doesn't overwrite
+    # other hooks' updatedInput in Claude Code's aggregation loop
+    # (workaround for Claude Code bug #15897).
+    _fork_and_send(session_id, cwd, event, data, status, extras)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
