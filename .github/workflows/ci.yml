@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Code Quality"]
     types: [completed]
@@ -10,7 +11,7 @@ jobs:
   build:
     name: Build DMG
     runs-on: macos-15
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -19,7 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
