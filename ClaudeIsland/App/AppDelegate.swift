@@ -100,7 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AppDelegate")
 
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?

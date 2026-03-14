@@ -66,7 +66,7 @@ nonisolated protocol ProcessExecuting: Sendable {
 nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
     // MARK: Lifecycle
 
-    private nonisolated init() {}
+    nonisolated private init() {}
 
     // MARK: Internal
 

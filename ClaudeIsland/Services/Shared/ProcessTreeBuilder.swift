@@ -51,7 +51,7 @@ nonisolated struct ProcessTree: Sendable {
 nonisolated struct ProcessTreeBuilder: Sendable {
     // MARK: Lifecycle
 
-    private nonisolated init() {}
+    nonisolated private init() {}
 
     // MARK: Internal
 
@@ -179,7 +179,7 @@ nonisolated struct ProcessTreeBuilder: Sendable {
     // MARK: Private
 
     /// Internal: Build the raw info dictionary
-    private nonisolated func buildInfoDict() -> [Int: ProcessInfo] {
+    nonisolated private func buildInfoDict() -> [Int: ProcessInfo] {
         guard let output = ProcessExecutor.shared.runSyncOrNil("/bin/ps", arguments: ["-eo", "pid,ppid,tty,comm"]) else {
             return [:]
         }

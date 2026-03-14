@@ -57,8 +57,8 @@ final class EventMonitor {
     // MARK: Private
 
     /// nonisolated(unsafe) allows deinit cleanup — safe because deinit has exclusive access
-    private nonisolated(unsafe) var globalMonitor: Any?
-    private nonisolated(unsafe) var localMonitor: Any?
+    nonisolated(unsafe) private var globalMonitor: Any?
+    nonisolated(unsafe) private var localMonitor: Any?
     private let mask: NSEvent.EventTypeMask
     private let handler: @Sendable (NSEvent) -> Void
 }

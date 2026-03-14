@@ -71,7 +71,7 @@ actor ClaudeAPIService {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ClaudeAPIService")
 
     private let baseURL = "https://claude.ai/api"
     private let oauthUsageURL = "https://api.anthropic.com/api/oauth/usage"

@@ -194,7 +194,7 @@ struct NotchMenuView: View {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchMenuView")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchMenuView")
 
     @State private var hooksInstalled = false
     @State private var launchAtLogin = false

@@ -20,7 +20,7 @@ import os
 struct TerminalFocuser: Sendable {
     // MARK: Lifecycle
 
-    private nonisolated init() {}
+    nonisolated private init() {}
 
     // MARK: Internal
 
@@ -90,14 +90,14 @@ struct TerminalFocuser: Sendable {
     // MARK: Private
 
     /// Logger for terminal focus operations
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TerminalFocuser")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TerminalFocuser")
 
     /// Activate a terminal app by PID and command
     /// - Parameters:
     ///   - terminalPID: The terminal's process ID
     ///   - command: The terminal's command/process name
     /// - Returns: true if the terminal was activated
-    private nonisolated func activateTerminal(terminalPID: Int, command: String) -> Bool {
+    nonisolated private func activateTerminal(terminalPID: Int, command: String) -> Bool {
         // Try to get the running app directly by PID
         if let app = NSRunningApplication(processIdentifier: pid_t(terminalPID)) {
             if app.activate() {
@@ -121,7 +121,7 @@ struct TerminalFocuser: Sendable {
     /// Find a running terminal app by matching the command name to known bundle identifiers
     /// - Parameter command: The terminal process command/name
     /// - Returns: The NSRunningApplication if found
-    private nonisolated func findRunningTerminalApp(command: String) -> NSRunningApplication? {
+    nonisolated private func findRunningTerminalApp(command: String) -> NSRunningApplication? {
         let lowerCommand = command.lowercased()
 
         // Map common terminal names to bundle identifiers

@@ -200,7 +200,6 @@ nonisolated extension HookEvent {
     nonisolated var shouldSyncFile: Bool {
         switch event {
         case "UserPromptSubmit",
-             "PreToolUse",
              "PostToolUse",
              "Stop":
             true

@@ -46,7 +46,7 @@ extension ConversationParser {
 
     // MARK: Private Helpers
 
-    private nonisolated static func parseCompletedToolIDs(from content: String) -> Set<String> {
+    nonisolated private static func parseCompletedToolIDs(from content: String) -> Set<String> {
         var completedToolIDs: Set<String> = []
 
         for line in content.components(separatedBy: "\n") where !line.isEmpty {
@@ -70,7 +70,7 @@ extension ConversationParser {
         return completedToolIDs
     }
 
-    private nonisolated static func parseToolUseBlocks(
+    nonisolated private static func parseToolUseBlocks(
         from content: String,
         completedToolIDs: Set<String>,
     ) -> [SubagentToolInfo] {
@@ -97,7 +97,7 @@ extension ConversationParser {
         return tools
     }
 
-    private nonisolated static func parseToolBlock(
+    nonisolated private static func parseToolBlock(
         _ block: [String: Any],
         seenToolIDs: inout Set<String>,
         completedToolIDs: Set<String>,
@@ -126,7 +126,7 @@ extension ConversationParser {
         )
     }
 
-    private nonisolated static func parseToolInput(_ inputDict: [String: Any]?) -> [String: String] {
+    nonisolated private static func parseToolInput(_ inputDict: [String: Any]?) -> [String: String] {
         guard let inputDict else { return [:] }
 
         var input: [String: String] = [:]

@@ -179,7 +179,7 @@ final class TokenTrackingManager {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
 
     private static let cliKeychainCooldownInterval: TimeInterval = 3600
     private static let cliOAuthCacheAccount = "cli-oauth-cache"

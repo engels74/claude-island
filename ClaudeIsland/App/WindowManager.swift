@@ -58,7 +58,7 @@ final class WindowManager {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Window")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Window")
 
     private var isInitialLaunch = true
     private var currentScreenFrame: NSRect?

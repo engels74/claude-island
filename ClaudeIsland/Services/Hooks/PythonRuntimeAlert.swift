@@ -42,7 +42,7 @@ enum PythonRuntimeAlert {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeAlert")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeAlert")
 
     private static func message(for reason: PythonRuntimeDetector.UnavailableReason) -> String {
         switch reason {

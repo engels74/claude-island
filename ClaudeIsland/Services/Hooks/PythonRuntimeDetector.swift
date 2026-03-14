@@ -84,7 +84,7 @@ actor PythonRuntimeDetector {
     // MARK: Private
 
     /// Logger for Python runtime detection
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeDetector")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "PythonRuntimeDetector")
 
     /// Cached detection result
     private var cachedRuntime: PythonRuntime?

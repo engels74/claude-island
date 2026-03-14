@@ -60,7 +60,7 @@
 --fragment false
 --conflictmarkers reject
 --shortoptionals always
---modifierorder
+--modifierorder nonisolated,override,acl,setterACL,dynamic,mutating,nonmutating,lazy,final,required,convenience,typeMethods,owned
 
 # Acronyms to preserve
 --acronyms ID,URL,UUID,HTTP,HTTPS,JSON,API,UI,MCP,PID,JSONL,SSH,TCP,IP,DNS,HTML,XML,CSS,JS,SDK,CLI,TLS,SSL

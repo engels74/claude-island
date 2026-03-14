@@ -112,7 +112,7 @@ class NotchWindowController: NSWindowController {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchGeometry")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "NotchGeometry")
 
     private let screen: NSScreen
     private var statusTask: Task<Void, Never>?

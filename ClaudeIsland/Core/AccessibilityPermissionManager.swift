@@ -189,7 +189,7 @@ final class AccessibilityPermissionManager {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AccessibilityPermission")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "AccessibilityPermission")
 
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
 

@@ -10,7 +10,7 @@ import os.log
 
 // MARK: - GitHubRelease
 
-private nonisolated struct GitHubRelease: Decodable {
+nonisolated private struct GitHubRelease: Decodable {
     let tagName: String
     let name: String
     let publishedAt: String
@@ -54,7 +54,7 @@ final class ReleaseService {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ReleaseService")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ReleaseService")
 
     private static let releasesURL = "https://api.github.com/repos/engels74/claude-island/releases"
 

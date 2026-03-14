@@ -133,7 +133,7 @@ enum HookInstaller {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
 
     /// Detect the best available Python runtime
     private static func detectPythonRuntime() async {
@@ -177,6 +177,10 @@ enum HookInstaller {
             )
         }
 
+        // Remove claude-island entries from deprecated hook events (e.g. PreToolUse)
+        // Preserves non-claude-island entries (e.g. rtk)
+        self.removeDeprecatedHookEntries(from: &hooks)
+
         json["hooks"] = hooks
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
@@ -198,7 +202,6 @@ enum HookInstaller {
 
         return [
             ("UserPromptSubmit", withoutMatcher),
-            ("PreToolUse", withMatcher),
             ("PostToolUse", withMatcher),
             ("PermissionRequest", withMatcherAndTimeout),
             ("Notification", withMatcher),
@@ -280,6 +283,53 @@ enum HookInstaller {
         }
 
         return (result, Set(matcherToFirstIndex.keys))
+    }
+
+    /// Remove claude-island entries from hook events we no longer register on.
+    /// Preserves non-claude-island entries (e.g. rtk's PreToolUse hooks).
+    private static func removeDeprecatedHookEntries(from hooks: inout [String: Any]) {
+        let activeEvents = Set(self.buildHookConfigurations(command: "").map(\.0))
+        let deprecatedEvents = ["PreToolUse"]
+
+        for event in deprecatedEvents where !activeEvents.contains(event) {
+            guard var entries = hooks[event] as? [[String: Any]] else { continue }
+
+            // Remove legacy direct format entries
+            entries.removeAll { self.isLegacyDirectEntry($0) }
+
+            // For modern wrapped format: remove claude-island hooks from each entry,
+            // but preserve entries that have non-claude-island hooks
+            var indicesToRemove = [Int]()
+            for i in entries.indices {
+                guard var entryHooks = entries[i]["hooks"] as? [[String: Any]] else { continue }
+                let hadClaudeIsland = entryHooks.contains { hook in
+                    (hook["command"] as? String)?.contains("claude-island-state.py") == true
+                }
+                guard hadClaudeIsland else { continue }
+
+                entryHooks.removeAll { hook in
+                    (hook["command"] as? String)?.contains("claude-island-state.py") == true
+                }
+
+                if entryHooks.isEmpty {
+                    indicesToRemove.append(i)
+                } else {
+                    entries[i]["hooks"] = entryHooks
+                }
+            }
+
+            for index in indicesToRemove.reversed() {
+                entries.remove(at: index)
+            }
+
+            if entries.isEmpty {
+                hooks.removeValue(forKey: event)
+                Self.logger.info("Removed deprecated claude-island hook entries from \(event)")
+            } else {
+                hooks[event] = entries
+                Self.logger.info("Cleaned claude-island from \(event), preserved \(entries.count) other entry(ies)")
+            }
+        }
     }
 
     /// Check if hooks array contains a claude-island hook

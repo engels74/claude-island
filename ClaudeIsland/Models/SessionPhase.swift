@@ -180,7 +180,7 @@ nonisolated enum SessionPhase: Sendable {
     }
 
     /// Valid transitions from each phase
-    private nonisolated static func allowedTransitions(from phase: Self) -> [PhaseKey] {
+    nonisolated private static func allowedTransitions(from phase: Self) -> [PhaseKey] {
         switch phase {
         case .idle:
             // Note: .waitingForInput is allowed for history loading where we discover actual state

@@ -181,7 +181,7 @@ enum ToolEventProcessor {
 
     // MARK: Private
 
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ToolEvents")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ToolEvents")
 
     // MARK: - Private Helpers
 

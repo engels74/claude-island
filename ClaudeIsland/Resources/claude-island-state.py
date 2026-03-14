@@ -268,50 +268,6 @@ def get_claude_pid() -> int:
     return os.getppid()
 
 
-def _get_claude_pid_from(ancestor_pid: int, /) -> int:
-    """Walk process tree from a known ancestor to find the Claude Code PID.
-
-    Used by the forked child process where os.getpid()/os.getppid() are
-    unreliable because the parent has already exited and the child was
-    re-parented to launchd (PID 1).
-
-    Args:
-        ancestor_pid: A PID captured before fork (the original parent's parent)
-
-    Returns:
-        The PID of the Claude Code process, or ancestor_pid as fallback.
-    """
-    current_pid = ancestor_pid
-
-    for _ in range(10):
-        try:
-            result = subprocess.run(
-                ["ps", "-p", str(current_pid), "-o", "ppid=,comm="],
-                capture_output=True,
-                text=True,
-                timeout=2,
-                check=False,
-            )
-            if result.returncode != 0:
-                break
-
-            parts = result.stdout.strip().split()
-            if len(parts) < 2:
-                break
-
-            ppid = int(parts[0])
-            command = parts[1].lower()
-
-            if command == "claude":
-                return current_pid
-
-            current_pid = ppid
-        except subprocess.TimeoutExpired, ValueError, OSError:
-            break
-
-    return ancestor_pid
-
-
 def _all_keys_are_strings(d: dict[object, object], /) -> bool:
     """Check if all keys in a dictionary are strings."""
     for key in d:
@@ -403,77 +359,6 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
         return None
 
 
-def _fork_and_send(
-    session_id: str,
-    cwd: str,
-    event: str,
-    data: HookEventData,
-    status: str,
-    extras: ToolExtras,
-    /,
-) -> None:
-    """Fork a child to do expensive PID/socket work; parent returns immediately.
-
-    The parent exits with no stdout so it doesn't interfere with other hooks'
-    (e.g. rtk) updatedInput in Claude Code's hook aggregation loop.
-    The child becomes an orphan (adopted by launchd) and sends the event
-    to ClaudeIsland.app best-effort.
-    """
-    # Capture ancestry before forking — once the parent exits, the child's
-    # ppid becomes 1 (launchd), making process-tree walks unreliable.
-    pre_fork_ppid = os.getppid()
-
-    try:
-        pid = os.fork()
-    except OSError:
-        # fork failed (e.g. EAGAIN) — exit silently, don't break hook aggregation
-        return
-
-    if pid != 0:
-        # Parent — exit immediately, no stdout
-        return
-
-    # ── Child process ──
-    try:
-        os.setsid()  # Detach from parent's process group
-
-        # Close inherited stdout/stderr/stdin so Claude Code sees EOF on the
-        # pipe and doesn't wait for us.
-        devnull = os.open(os.devnull, os.O_RDWR)
-        for fd in (0, 1, 2):
-            os.dup2(devnull, fd)
-        os.close(devnull)
-
-        # Now do the expensive work — start from pre-fork ancestor to avoid
-        # the race where our parent exits and we get re-parented to launchd.
-        claude_pid = _get_claude_pid_from(pre_fork_ppid)
-        tty = get_tty(claude_pid)
-        tty_valid = validate_tty(tty)
-        session_active = is_session_active(claude_pid, tty)
-
-        state = SessionState(
-            session_id=session_id,
-            cwd=cwd,
-            event=event,
-            pid=claude_pid,
-            tty=tty,
-            tty_valid=tty_valid,
-            session_active=session_active,
-            status=status,
-            tool=extras.get("tool"),
-            tool_input=_normalize_tool_input(extras.get("tool_input")),
-            tool_use_id=extras.get("tool_use_id"),
-            notification_type=extras.get("notification_type"),
-            message=extras.get("message"),
-        )
-
-        _ = send_event(state)
-    except Exception:
-        pass
-    finally:
-        os._exit(0)
-
-
 def determine_status(
     event: str,
     data: HookEventData,
@@ -496,13 +381,10 @@ def determine_status(
             return "processing", {}
 
         case "PreToolUse":
-            extras: ToolExtras = {}
-            if tool := data.get("tool_name"):
-                extras["tool"] = tool
-            extras["tool_input"] = _normalize_tool_input(data.get("tool_input"))
-            if tool_use_id := data.get("tool_use_id"):
-                extras["tool_use_id"] = tool_use_id
-            return "running_tool", extras
+            # No longer registered on PreToolUse (removed to prevent rtk interference,
+            # see Claude Code bug #15897). If called from a stale hook registration,
+            # skip harmlessly.
+            return "skip", {}
 
         case "PostToolUse":
             extras_post: ToolExtras = {}
@@ -519,6 +401,8 @@ def determine_status(
             }
             if tool := data.get("tool_name"):
                 extras_perm["tool"] = tool
+            if tool_use_id := data.get("tool_use_id"):
+                extras_perm["tool_use_id"] = tool_use_id
             return "waiting_for_approval", extras_perm
 
         case "Notification":
@@ -625,39 +509,38 @@ def main() -> None:
     # Determine status early (pure computation, no I/O)
     status, extras = determine_status(event, data)
 
-    # Skip certain events — exit immediately, no stdout
+    # Skip certain events (e.g. stale PreToolUse registration)
     if status == "skip":
+        print("{}")
         sys.exit(0)
 
-    # Permission requests must be synchronous (we need to print the decision)
+    # Resolve PID, TTY, build state
+    claude_pid = get_claude_pid()
+    tty = get_tty(claude_pid)
+    state = SessionState(
+        session_id=session_id,
+        cwd=cwd,
+        event=event,
+        pid=claude_pid,
+        tty=tty,
+        tty_valid=validate_tty(tty),
+        session_active=is_session_active(claude_pid, tty),
+        status=status,
+        tool=extras.get("tool"),
+        tool_input=_normalize_tool_input(extras.get("tool_input")),
+        tool_use_id=extras.get("tool_use_id"),
+        notification_type=extras.get("notification_type"),
+        message=extras.get("message"),
+    )
+
+    # Send to ClaudeIsland.app
+    response = send_event(state)
+
+    # Permission requests return the decision; all others print empty JSON
     if status == "waiting_for_approval":
-        claude_pid = get_claude_pid()
-        tty = get_tty(claude_pid)
-        state = SessionState(
-            session_id=session_id,
-            cwd=cwd,
-            event=event,
-            pid=claude_pid,
-            tty=tty,
-            tty_valid=validate_tty(tty),
-            session_active=is_session_active(claude_pid, tty),
-            status=status,
-            tool=extras.get("tool"),
-            tool_input=_normalize_tool_input(extras.get("tool_input")),
-            tool_use_id=extras.get("tool_use_id"),
-            notification_type=extras.get("notification_type"),
-            message=extras.get("message"),
-        )
-        response = send_event(state)
         handle_permission_response(response)
-        sys.exit(0)
-
-    # All other events: fork expensive work into background child.
-    # Parent exits immediately with no stdout so it doesn't overwrite
-    # other hooks' updatedInput in Claude Code's aggregation loop
-    # (workaround for Claude Code bug #15897).
-    _fork_and_send(session_id, cwd, event, data, status, extras)
-    sys.exit(0)
+    else:
+        print("{}")
 
 
 if __name__ == "__main__":

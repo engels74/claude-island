@@ -50,11 +50,11 @@ actor JSONLInterruptWatcher {
     // MARK: Private
 
     /// Logger for interrupt watcher
-    private nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "Interrupt")
 
     /// Patterns that indicate an interrupt occurred
     /// We check for is_error:true combined with interrupt content
-    private nonisolated static let interruptContentPatterns = [
+    nonisolated private static let interruptContentPatterns = [
         "Interrupted by user",
         "interrupted by user",
         "user doesn't want to proceed",
@@ -218,7 +218,7 @@ actor JSONLInterruptWatcher {
         }
     }
 
-    private nonisolated func isInterruptLine(_ line: some StringProtocol) -> Bool {
+    nonisolated private func isInterruptLine(_ line: some StringProtocol) -> Bool {
         if line.contains("\"type\":\"user\"") {
             if line.contains("[Request interrupted by user]") ||
                 line.contains("[Request interrupted by user for tool use]") {

@@ -27,7 +27,7 @@ final class ScreenObserver {
     // MARK: Private
 
     /// nonisolated(unsafe) allows deinit cleanup — safe because deinit has exclusive access
-    private nonisolated(unsafe) var observer: Any?
+    nonisolated(unsafe) private var observer: Any?
     private let onScreenChange: () -> Void
     private var debounceTask: Task<Void, Never>?
 

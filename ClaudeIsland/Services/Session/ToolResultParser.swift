@@ -44,7 +44,7 @@ enum ToolResultParser {
 
     // MARK: Private
 
-    private nonisolated static func parseMCPResult(toolName: String, data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseMCPResult(toolName: String, data: [String: Any]) -> ToolResultData {
         let parts = toolName.dropFirst(5).split(separator: "_", maxSplits: 2)
         let serverName = !parts.isEmpty ? String(parts[0]) : "unknown"
         let mcpToolName = parts.count > 1 ? String(parts[1].dropFirst()) : toolName
@@ -57,7 +57,7 @@ enum ToolResultParser {
         return .mcp(MCPResult(serverName: serverName, toolName: mcpToolName, rawResultJSON: jsonString))
     }
 
-    private nonisolated static func parseGenericResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseGenericResult(_ data: [String: Any]) -> ToolResultData {
         let content = data["content"] as? String ??
             data["stdout"] as? String ??
             data["result"] as? String
@@ -66,7 +66,7 @@ enum ToolResultParser {
 
     // MARK: - Individual Tool Result Parsers
 
-    private nonisolated static func parseReadResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseReadResult(_ data: [String: Any]) -> ToolResultData {
         if let fileData = data["file"] as? [String: Any] {
             return .read(ReadResult(
                 filePath: fileData["filePath"] as? String ?? "",
@@ -85,7 +85,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseEditResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseEditResult(_ data: [String: Any]) -> ToolResultData {
         var patches: [PatchHunk]?
         if let patchArray = data["structuredPatch"] as? [[String: Any]] {
             patches = patchArray.compactMap { patch -> PatchHunk? in
@@ -117,7 +117,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseWriteResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseWriteResult(_ data: [String: Any]) -> ToolResultData {
         let typeStr = data["type"] as? String ?? "create"
         let writeType: WriteResult.WriteType = typeStr == "overwrite" ? .overwrite : .create
 
@@ -150,7 +150,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseBashResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseBashResult(_ data: [String: Any]) -> ToolResultData {
         .bash(BashResult(
             stdout: data["stdout"] as? String ?? "",
             stderr: data["stderr"] as? String ?? "",
@@ -161,7 +161,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseGrepResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseGrepResult(_ data: [String: Any]) -> ToolResultData {
         let modeStr = data["mode"] as? String ?? "files_with_matches"
         let mode: GrepResult.Mode = switch modeStr {
         case "content": .content
@@ -179,7 +179,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseGlobResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseGlobResult(_ data: [String: Any]) -> ToolResultData {
         .glob(GlobResult(
             filenames: data["filenames"] as? [String] ?? [],
             durationMs: data["durationMs"] as? Int ?? 0,
@@ -188,7 +188,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseTodoWriteResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseTodoWriteResult(_ data: [String: Any]) -> ToolResultData {
         func parseTodos(_ array: [[String: Any]]?) -> [TodoItem] {
             guard let array else { return [] }
             return array.compactMap { item -> TodoItem? in
@@ -211,7 +211,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseTaskResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseTaskResult(_ data: [String: Any]) -> ToolResultData {
         .task(TaskResult(
             agentID: data["agentId"] as? String ?? "",
             status: data["status"] as? String ?? "unknown",
@@ -223,7 +223,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseWebFetchResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseWebFetchResult(_ data: [String: Any]) -> ToolResultData {
         .webFetch(WebFetchResult(
             url: data["url"] as? String ?? "",
             code: data["code"] as? Int ?? 0,
@@ -234,7 +234,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseWebSearchResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseWebSearchResult(_ data: [String: Any]) -> ToolResultData {
         var results: [SearchResultItem] = []
         if let resultsArray = data["results"] as? [[String: Any]] {
             results = resultsArray.compactMap { item -> SearchResultItem? in
@@ -258,7 +258,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseAskUserQuestionResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseAskUserQuestionResult(_ data: [String: Any]) -> ToolResultData {
         var questions: [QuestionItem] = []
         if let questionsArray = data["questions"] as? [[String: Any]] {
             questions = questionsArray.compactMap { questionData -> QuestionItem? in
@@ -292,7 +292,7 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseBashOutputResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseBashOutputResult(_ data: [String: Any]) -> ToolResultData {
         .bashOutput(BashOutputResult(
             shellID: data["shellId"] as? String ?? "",
             status: data["status"] as? String ?? "",
@@ -306,14 +306,14 @@ enum ToolResultParser {
         ))
     }
 
-    private nonisolated static func parseKillShellResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseKillShellResult(_ data: [String: Any]) -> ToolResultData {
         .killShell(KillShellResult(
             shellID: data["shell_id"] as? String ?? data["shellId"] as? String ?? "",
             message: data["message"] as? String ?? "",
         ))
     }
 
-    private nonisolated static func parseExitPlanModeResult(_ data: [String: Any]) -> ToolResultData {
+    nonisolated private static func parseExitPlanModeResult(_ data: [String: Any]) -> ToolResultData {
         .exitPlanMode(ExitPlanModeResult(
             filePath: data["filePath"] as? String,
             plan: data["plan"] as? String,

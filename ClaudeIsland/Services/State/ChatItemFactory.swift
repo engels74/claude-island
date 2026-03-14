@@ -69,7 +69,7 @@ enum ChatItemFactory {
 
     // MARK: - Private Helpers
 
-    private nonisolated static func createTextItem(
+    nonisolated private static func createTextItem(
         text: String,
         message: ChatMessage,
         blockIndex: Int,
@@ -85,7 +85,7 @@ enum ChatItemFactory {
         }
     }
 
-    private nonisolated static func createToolUseItem(
+    nonisolated private static func createToolUseItem(
         tool: ToolUseBlock,
         message: ChatMessage,
         context: inout ItemCreationContext,
@@ -121,7 +121,7 @@ enum ChatItemFactory {
         )
     }
 
-    private nonisolated static func createThinkingItem(
+    nonisolated private static func createThinkingItem(
         text: String,
         message: ChatMessage,
         blockIndex: Int,
@@ -132,7 +132,7 @@ enum ChatItemFactory {
         return ChatHistoryItem(id: itemID, type: .thinking(text), timestamp: message.timestamp)
     }
 
-    private nonisolated static func createInterruptedItem(
+    nonisolated private static func createInterruptedItem(
         message: ChatMessage,
         blockIndex: Int,
         existingIDs: Set<String>,
