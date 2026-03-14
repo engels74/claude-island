@@ -341,12 +341,12 @@ actor ConversationParser {
     }
 
     /// Check file existence off-actor
-    private nonisolated static func fileExists(path: String) -> Bool {
+    nonisolated private static func fileExists(path: String) -> Bool {
         FileManager.default.fileExists(atPath: path)
     }
 
     /// Get file info (existence, modification date, size) off-actor
-    private nonisolated static func getFileInfo(path: String) -> FileInfo {
+    nonisolated private static func getFileInfo(path: String) -> FileInfo {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: path),
               let attrs = try? fileManager.attributesOfItem(atPath: path)
@@ -361,7 +361,7 @@ actor ConversationParser {
     }
 
     /// Read file content off-actor
-    private nonisolated static func readFileContent(path: String) -> String? {
+    nonisolated private static func readFileContent(path: String) -> String? {
         guard let data = FileManager.default.contents(atPath: path) else {
             return nil
         }
@@ -369,7 +369,7 @@ actor ConversationParser {
     }
 
     /// Read the tail of a large file off-actor (last 2 MB)
-    private nonisolated static func readLargeFileTail(path: String) -> String? {
+    nonisolated private static func readLargeFileTail(path: String) -> String? {
         guard let fileHandle = FileHandle(forReadingAtPath: path) else {
             return nil
         }
@@ -400,7 +400,7 @@ actor ConversationParser {
     }
 
     /// Read new content from file since last offset (off-actor)
-    private nonisolated static func readIncrementalContent(filePath: String, lastOffset: UInt64) -> IncrementalReadResult {
+    nonisolated private static func readIncrementalContent(filePath: String, lastOffset: UInt64) -> IncrementalReadResult {
         guard let fileHandle = FileHandle(forReadingAtPath: filePath) else {
             return IncrementalReadResult(content: nil, newFileSize: 0, needsReset: false)
         }
