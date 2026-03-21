@@ -636,14 +636,19 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         var nosigpipe: Int32 = 1
         setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, socklen_t(MemoryLayout<Int32>.size))
 
+        // Capture queue-protected handler while on the serial queue.
+        // handleClient runs on clientQueue (concurrent), so reading self.eventHandler
+        // there would race with start/stop which write it on the serial queue.
+        let handler = eventHandler
+
         // Dispatch client handling off the accept queue to prevent head-of-line blocking.
         // readClientData polls for up to 200ms — running it here would block new connections.
         clientQueue.async { [weak self] in
-            self?.handleClient(clientSocket)
+            self?.handleClient(clientSocket, eventHandler: handler)
         }
     }
 
-    nonisolated private func handleClient(_ clientSocket: Int32) {
+    nonisolated private func handleClient(_ clientSocket: Int32, eventHandler: HookEventHandler?) {
         let flags = fcntl(clientSocket, F_GETFL)
         _ = fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK)
 
@@ -660,7 +665,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         processEventActions(event)
 
         if event.expectsResponse {
-            handlePermissionRequest(event: event, clientSocket: clientSocket)
+            handlePermissionRequest(event: event, clientSocket: clientSocket, eventHandler: eventHandler)
         } else {
             close(clientSocket)
             eventHandler?(event)
@@ -717,7 +722,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
     }
 
-    nonisolated private func handlePermissionRequest(event: HookEvent, clientSocket: Int32) {
+    nonisolated private func handlePermissionRequest(event: HookEvent, clientSocket: Int32, eventHandler: HookEventHandler?) {
         guard let toolUseID = resolveToolUseID(for: event) else {
             Self.logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - no cache hit")
             close(clientSocket)
@@ -851,14 +856,16 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                 )
 
             var writeSuccess = false
+            var writeErrno: Int32 = 0
             data.withUnsafeBytes { bytes in
                 guard let baseAddress = bytes.baseAddress else {
                     Self.logger.error("Failed to get data buffer address")
                     return
                 }
                 let writeResult = write(pending.clientSocket, baseAddress, data.count)
+                writeErrno = errno
                 if writeResult < 0 {
-                    Self.logger.error("Write failed with errno: \(errno)")
+                    Self.logger.error("Write failed with errno: \(writeErrno)")
                 } else {
                     Self.logger.debug("Write succeeded: \(writeResult) bytes")
                     writeSuccess = true
@@ -867,7 +874,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
             // Skip close if write failed with EBADF — the fd is already invalid
             // and may have been reused by another thread
-            if writeSuccess || errno != EBADF {
+            if writeSuccess || writeErrno != EBADF {
                 close(pending.clientSocket)
             }
 
@@ -917,14 +924,16 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                 )
 
             var writeSuccess = false
+            var writeErrno: Int32 = 0
             data.withUnsafeBytes { bytes in
                 guard let baseAddress = bytes.baseAddress else {
                     Self.logger.error("Failed to get data buffer address")
                     return
                 }
                 let writeResult = write(pending.clientSocket, baseAddress, data.count)
+                writeErrno = errno
                 if writeResult < 0 {
-                    Self.logger.error("Write failed with errno: \(errno)")
+                    Self.logger.error("Write failed with errno: \(writeErrno)")
                 } else {
                     Self.logger.debug("Write succeeded: \(writeResult) bytes")
                     writeSuccess = true
@@ -933,7 +942,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
             // Skip close if write failed with EBADF — the fd is already invalid
             // and may have been reused by another thread
-            if writeSuccess || errno != EBADF {
+            if writeSuccess || writeErrno != EBADF {
                 close(pending.clientSocket)
             }
 

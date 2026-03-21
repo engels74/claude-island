@@ -259,7 +259,11 @@ actor SessionStore {
     /// to avoid a race between stream termination and registration.
     /// If the stream already terminated (onTermination fired first), skip insertion to prevent a leak.
     private func registerContinuation(_ continuation: AsyncStream<[SessionState]>.Continuation, id: UUID) {
-        let alreadyTerminated = self.terminatedStreamIDs.withLock { $0.contains(id) }
+        // Atomically check-and-remove: if terminated, clean up and bail out.
+        // We remove the ID here (not in removeContinuation) to avoid a race where
+        // the deregister task runs first, clears the ID, and then this method
+        // no longer sees it — which would insert a leaked continuation.
+        let alreadyTerminated = self.terminatedStreamIDs.withLock { $0.remove(id) != nil }
         if alreadyTerminated {
             continuation.finish()
             return
@@ -271,10 +275,11 @@ actor SessionStore {
     }
 
     /// Remove a continuation when the stream terminates.
-    /// Also cleans up the terminated-IDs set since the ID is no longer needed.
+    /// The terminated-IDs set is cleaned up by `registerContinuation` (not here)
+    /// to prevent a race where this method runs before registration and clears
+    /// the termination signal prematurely.
     private func removeContinuation(id: UUID) {
         self.sessionsContinuations.removeValue(forKey: id)
-        self.terminatedStreamIDs.withLock { $0.remove(id) }
     }
 
     // MARK: - Published State (for UI)
