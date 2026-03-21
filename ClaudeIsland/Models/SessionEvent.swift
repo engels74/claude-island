@@ -192,6 +192,8 @@ nonisolated extension HookEvent {
     }
 
     /// Whether this is a tool-related event
+    /// Note: PreToolUse is kept here defensively — we don't currently register for it
+    /// (see anthropics/claude-code#15897) but it will actively match again once re-registered.
     nonisolated var isToolEvent: Bool {
         event == "PreToolUse" || event == "PostToolUse" || event == "PermissionRequest"
     }

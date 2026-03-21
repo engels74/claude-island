@@ -700,6 +700,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         // Note: PreToolUse cache population was removed — we no longer register
         // on PreToolUse (Claude Code bug #15897). The cache infrastructure remains
         // as a fallback for resolveToolUseID() if PermissionRequest lacks tool_use_id.
+        // TODO(anthropics/claude-code#15897): Restore `if event.event == "PreToolUse" { cacheToolUseID(event:) }`
+        // once upstream fixes parallel hook updatedInput aggregation.
         if event.event == "SessionEnd" {
             cleanupCache(sessionID: event.sessionID)
         }

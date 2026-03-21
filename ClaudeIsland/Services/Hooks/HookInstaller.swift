@@ -177,6 +177,7 @@ enum HookInstaller {
             )
         }
 
+        // TODO(anthropics/claude-code#15897): Remove this cleanup call once PreToolUse is re-registered.
         // Remove claude-island entries from deprecated hook events (e.g. PreToolUse)
         // Preserves non-claude-island entries (e.g. rtk)
         self.removeDeprecatedHookEntries(from: &hooks)
@@ -200,6 +201,8 @@ enum HookInstaller {
             ["matcher": "manual", "hooks": hookEntry],
         ]
 
+        // TODO(anthropics/claude-code#15897): Re-add ("PreToolUse", withMatcher) once upstream
+        // fixes parallel hook updatedInput aggregation. Removed to prevent rtk interference.
         return [
             ("UserPromptSubmit", withoutMatcher),
             ("PostToolUse", withMatcher),
@@ -287,6 +290,7 @@ enum HookInstaller {
 
     /// Remove claude-island entries from hook events we no longer register on.
     /// Preserves non-claude-island entries (e.g. rtk's PreToolUse hooks).
+    /// TODO(anthropics/claude-code#15897): Remove this method once PreToolUse is re-registered.
     private static func removeDeprecatedHookEntries(from hooks: inout [String: Any]) {
         let activeEvents = Set(self.buildHookConfigurations(command: "").map(\.0))
         let deprecatedEvents = ["PreToolUse"]
