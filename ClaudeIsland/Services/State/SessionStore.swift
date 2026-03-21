@@ -10,6 +10,7 @@
 
 import Foundation
 import os.log
+import Synchronization
 
 // Central state manager for all Claude sessions
 // Uses Swift actor for thread-safe state mutations
@@ -44,6 +45,11 @@ actor SessionStore {
     var statusCheckTask: Task<Void, Never>?
     let statusCheckInterval: Duration = .seconds(3)
 
+    /// Tracks stream IDs whose onTermination has fired before registerContinuation ran.
+    /// Prevents a leaked continuation when the consumer cancels before registration completes.
+    /// Must be nonisolated (accessed from the nonisolated onTermination handler) — Mutex is inherently Sendable.
+    nonisolated let terminatedStreamIDs = Mutex<Set<UUID>>([])
+
     /// Create a new stream of session state changes.
     /// Yields the current sessions immediately, then yields on every subsequent state change.
     /// Multiple subscribers are supported — each call returns an independent stream.
@@ -52,8 +58,11 @@ actor SessionStore {
         let (stream, continuation) = AsyncStream.makeStream(of: [SessionState].self, bufferingPolicy: .bufferingNewest(1))
         // Set onTermination synchronously (before any Task) to avoid a race where
         // the stream terminates before registerContinuation installs the handler.
+        // Mark terminated FIRST (synchronous, via Mutex) so registerContinuation sees it.
         continuation.onTermination = { [weak self] _ in
-            Task(name: "session-stream-deregister") { await self?.removeContinuation(id: id) }
+            guard let self else { return }
+            self.terminatedStreamIDs.withLock { $0.insert(id) }
+            Task(name: "session-stream-deregister") { await self.removeContinuation(id: id) }
         }
         Task(name: "session-stream-register") {
             await self.registerContinuation(continuation, id: id)
@@ -229,19 +238,43 @@ actor SessionStore {
     private var eventAuditTrail: [AuditEntry] = []
     private let maxAuditEntries = 100
 
+    /// Extract string-representable values from a JSONValue dictionary
+    private static func extractToolInput(from hookInput: [String: JSONValue]?) -> [String: String] {
+        guard let hookInput else { return [:] }
+        var input: [String: String] = [:]
+        for (key, value) in hookInput {
+            if let str = value.stringValue {
+                input[key] = str
+            } else if let num = value.intValue {
+                input[key] = String(num)
+            } else if let bool = value.boolValue {
+                input[key] = bool ? "true" : "false"
+            }
+        }
+        return input
+    }
+
     /// Register a continuation and yield the current state.
     /// The `id` and `onTermination` are set by `sessionsStream()` before calling this method
     /// to avoid a race between stream termination and registration.
+    /// If the stream already terminated (onTermination fired first), skip insertion to prevent a leak.
     private func registerContinuation(_ continuation: AsyncStream<[SessionState]>.Continuation, id: UUID) {
+        let alreadyTerminated = self.terminatedStreamIDs.withLock { $0.contains(id) }
+        if alreadyTerminated {
+            continuation.finish()
+            return
+        }
         self.sessionsContinuations[id] = continuation
         // Yield current state immediately (replaces CurrentValueSubject's initial value behavior)
         let currentSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
         continuation.yield(currentSessions)
     }
 
-    /// Remove a continuation when the stream terminates
+    /// Remove a continuation when the stream terminates.
+    /// Also cleans up the terminated-IDs set since the ID is no longer needed.
     private func removeContinuation(id: UUID) {
         self.sessionsContinuations.removeValue(forKey: id)
+        self.terminatedStreamIDs.withLock { $0.remove(id) }
     }
 
     // MARK: - Published State (for UI)
@@ -301,7 +334,6 @@ actor SessionStore {
         }
 
         self.processToolTracking(event: event, session: &session)
-        trackSubagent(event: event, session: &session)
 
         if event.event == "Stop" || event.event == "UserPromptSubmit" {
             session.toolTracker.inProgress.removeAll()
@@ -337,6 +369,13 @@ actor SessionStore {
             if let toolUseID = event.toolUseID, let toolName = event.tool {
                 session.toolTracker.startTool(id: toolUseID, name: toolName)
 
+                // Track subagent state when a Task tool starts
+                if toolName == "Task" {
+                    let description = event.toolInput?["description"]?.stringValue
+                    session.subagentState.startTask(taskToolID: toolUseID, description: description)
+                    Self.logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
+                }
+
                 // Skip creating top-level placeholder for subagent tools
                 // They'll appear under their parent Task instead
                 let isSubagentTool = session.subagentState.hasActiveSubagent && toolName != "Task"
@@ -346,19 +385,7 @@ actor SessionStore {
 
                 let toolExists = session.chatItems.contains { $0.id == toolUseID }
                 if !toolExists {
-                    var input: [String: String] = [:]
-                    if let hookInput = event.toolInput {
-                        for (key, value) in hookInput {
-                            if let str = value.stringValue {
-                                input[key] = str
-                            } else if let num = value.intValue {
-                                input[key] = String(num)
-                            } else if let bool = value.boolValue {
-                                input[key] = bool ? "true" : "false"
-                            }
-                        }
-                    }
-
+                    let input = Self.extractToolInput(from: event.toolInput)
                     let placeholderItem = ChatHistoryItem(
                         id: toolUseID,
                         type: .toolCall(ToolCallItem(

@@ -87,8 +87,7 @@ Permission approvals flow back: SwiftUI → ToolApprovalHandler → TmuxControll
 | Session | `ConversationParser` (actor) | Parses JSONL chat files with incremental sync |
 | Session | `ClaudeSessionMonitor` (@Observable) | MainActor bridge from SessionStore to SwiftUI |
 | Session | `AgentFileWatcher` | Monitors subagent directory for Task tool state |
-| State | `SessionStore` (actor) | Central state management, event processing |
-| State | `ToolEventProcessor` | Tool-specific state transitions |
+| State | `SessionStore` (actor) | Central state management, event processing, tool-specific state transitions |
 | Tmux | `TmuxController` / `ToolApprovalHandler` | Sends approval/denial decisions to terminal |
 | TokenTracking | `ClaudeAPIService` | Fetches token usage quota |
 | Update | `NotchUserDriver` | Custom Sparkle UI for in-notch update notifications |

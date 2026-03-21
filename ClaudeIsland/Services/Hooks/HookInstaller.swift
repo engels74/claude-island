@@ -37,8 +37,11 @@ enum HookInstaller {
         )
 
         if let bundled = Bundle.main.url(forResource: "claude-island-state", withExtension: "py") {
-            try? FileManager.default.removeItem(at: pythonScript)
-            try? FileManager.default.copyItem(at: bundled, to: pythonScript)
+            do {
+                try FileManager.default.atomicCopy(from: bundled, to: pythonScript)
+            } catch {
+                Self.logger.error("Failed to install hook script: \(error.localizedDescription)")
+            }
             try? FileManager.default.setAttributes(
                 [.posixPermissions: 0o755],
                 ofItemAtPath: pythonScript.path,
@@ -127,7 +130,11 @@ enum HookInstaller {
             withJSONObject: json,
             options: [.prettyPrinted, .sortedKeys],
         ) {
-            try? data.write(to: settings)
+            do {
+                try FileManager.default.atomicWrite(data, to: settings)
+            } catch {
+                Self.logger.error("Failed to write settings.json during uninstall: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -185,7 +192,11 @@ enum HookInstaller {
         json["hooks"] = hooks
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: settingsURL)
+            do {
+                try FileManager.default.atomicWrite(data, to: settingsURL)
+            } catch {
+                Self.logger.error("Failed to write settings.json: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -404,5 +415,45 @@ enum HookInstaller {
             return true
         }
         return false
+    }
+}
+
+// MARK: - FileManager Atomic Operations
+
+extension FileManager {
+    /// Atomically write data to a file using write-to-temp + rename.
+    /// Uses `replaceItemAt` when the target exists, `moveItem` for first-time creation.
+    func atomicWrite(_ data: Data, to destination: URL) throws {
+        let directory = destination.deletingLastPathComponent()
+        let tempURL = directory.appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).tmp")
+        try data.write(to: tempURL)
+        do {
+            if fileExists(atPath: destination.path) {
+                _ = try replaceItemAt(destination, withItemAt: tempURL)
+            } else {
+                try moveItem(at: tempURL, to: destination)
+            }
+        } catch {
+            try? removeItem(at: tempURL)
+            throw error
+        }
+    }
+
+    /// Atomically replace a file with a copy of the source using copy-to-temp + rename.
+    /// Uses `replaceItemAt` when the target exists, `moveItem` for first-time creation.
+    func atomicCopy(from source: URL, to destination: URL) throws {
+        let directory = destination.deletingLastPathComponent()
+        let tempURL = directory.appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).tmp")
+        try copyItem(at: source, to: tempURL)
+        do {
+            if fileExists(atPath: destination.path) {
+                _ = try replaceItemAt(destination, withItemAt: tempURL)
+            } else {
+                try moveItem(at: tempURL, to: destination)
+            }
+        } catch {
+            try? removeItem(at: tempURL)
+            throw error
+        }
     }
 }

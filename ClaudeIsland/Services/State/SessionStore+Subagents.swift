@@ -12,29 +12,6 @@ import os
 // MARK: - Subagent Event Handlers
 
 extension SessionStore {
-    /// Track subagent activity from hook events
-    func trackSubagent(event: HookEvent, session: inout SessionState) {
-        switch event.event {
-        case "PreToolUse":
-            if event.tool == "Task", let toolUseID = event.toolUseID {
-                let description = event.toolInput?["description"]?.stringValue
-                session.subagentState.startTask(taskToolID: toolUseID, description: description)
-                Self.logger.debug("Started Task subagent tracking: \(toolUseID.prefix(12), privacy: .public)")
-            }
-
-        case "PostToolUse":
-            if event.tool == "Task" {
-                Self.logger.debug("PostToolUse for Task received (subagent still running)")
-            }
-
-        case "SubagentStop":
-            Self.logger.debug("SubagentStop received")
-
-        default:
-            break
-        }
-    }
-
     /// Handle subagent started event
     func handleSubagentStarted(sessionID: String, taskToolID: String) {
         guard var session = sessions[sessionID] else { return }
