@@ -206,12 +206,17 @@ nonisolated extension HookResponse: Codable {
 // MARK: - PendingPermission
 
 /// Pending permission request waiting for user decision
-nonisolated struct PendingPermission: Sendable {
+/// `@unchecked Sendable` because `DispatchSourceRead` is not `Sendable`,
+/// but instances are only accessed within the `permissionsState` Mutex.
+nonisolated struct PendingPermission: @unchecked Sendable {
     let sessionID: String
     let toolUseID: String
     let clientSocket: Int32
     let event: HookEvent
     let receivedAt: Date
+    /// Monitors the client socket for EOF (Python process exit).
+    /// Cancelled on normal response, timeout, or cleanup.
+    var disconnectSource: DispatchSourceRead?
 }
 
 /// Callback for hook events
@@ -276,14 +281,15 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
         unlink(Self.socketPath)
 
-        // Clean up pending permissions - collect sockets outside the lock
-        let socketsToClose = permissionsState.withLock { state -> [Int32] in
-            let sockets = state.pendingPermissions.values.map(\.clientSocket)
+        // Clean up pending permissions — cancel disconnect sources and close sockets
+        let permissionsToClose = permissionsState.withLock { state -> [PendingPermission] in
+            let permissions = Array(state.pendingPermissions.values)
             state.pendingPermissions.removeAll()
-            return sockets
+            return permissions
         }
-        for socket in socketsToClose {
-            close(socket)
+        for pending in permissionsToClose {
+            pending.disconnectSource?.cancel()
+            close(pending.clientSocket)
         }
     }
 
@@ -523,6 +529,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         guard let pending else { return }
+        pending.disconnectSource?.cancel()
         Self.logger
             .debug(
                 "Tool completed externally, closing socket for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)"
@@ -546,17 +553,18 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     nonisolated private func cleanupPendingPermissions(sessionID: String) {
-        let socketsToClose = permissionsState.withLock { state -> [(String, Int32)] in
+        let permissionsToClose = permissionsState.withLock { state -> [(String, PendingPermission)] in
             let matching = state.pendingPermissions.filter { $0.value.sessionID == sessionID }
             for (toolUseID, _) in matching {
                 state.pendingPermissions.removeValue(forKey: toolUseID)
             }
-            return matching.map { ($0.key, $0.value.clientSocket) }
+            return matching.map { ($0.key, $0.value) }
         }
 
-        for (toolUseID, socket) in socketsToClose {
+        for (toolUseID, pending) in permissionsToClose {
+            pending.disconnectSource?.cancel()
             Self.logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
-            close(socket)
+            close(pending.clientSocket)
         }
     }
 
@@ -761,19 +769,59 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     nonisolated private func storePendingPermission(event: HookEvent, toolUseID: String, clientSocket: Int32) {
-        let pending = PendingPermission(
+        var pending = PendingPermission(
             sessionID: event.sessionID,
             toolUseID: toolUseID,
             clientSocket: clientSocket,
             event: event,
             receivedAt: Date()
         )
+
+        // Monitor the client socket for EOF — when Python exits (timeout or crash),
+        // the socket closes and we can clean up immediately instead of waiting 300s.
+        let readSource = DispatchSource.makeReadSource(fileDescriptor: clientSocket, queue: queue)
+        readSource.setEventHandler { [weak self] in
+            // Verify it's actually EOF by peeking — the source also fires for readable data.
+            var peek: UInt8 = 0
+            let bytesRead = recv(clientSocket, &peek, 1, MSG_PEEK | MSG_DONTWAIT)
+            if bytesRead == 0 {
+                // EOF — remote end closed
+                self?.handlePermissionSocketDisconnect(toolUseID: toolUseID, sessionID: event.sessionID)
+            }
+            // bytesRead > 0: unexpected data on socket; ignore (should not happen).
+            // bytesRead < 0: EAGAIN/EWOULDBLOCK spurious wake; ignore.
+        }
+        readSource.setCancelHandler {} // No-op; socket is closed by the permission cleanup path
+        readSource.resume()
+        pending.disconnectSource = readSource
+
         permissionsState.withLock { state in
             state.pendingPermissions[toolUseID] = pending
         }
 
         // Schedule timeout cleanup to prevent FD leak if Claude dies
         schedulePermissionTimeout(toolUseID: toolUseID, sessionID: event.sessionID)
+    }
+
+    /// Called when the read source detects the Python hook script closed its socket end.
+    /// Cleans up the stale permission immediately instead of waiting for the 300s timeout.
+    nonisolated private func handlePermissionSocketDisconnect(toolUseID: String, sessionID: String) {
+        let pending = permissionsState.withLock { state -> PendingPermission? in
+            guard let existing = state.pendingPermissions[toolUseID],
+                  existing.sessionID == sessionID
+            else {
+                return nil
+            }
+            state.pendingPermissions.removeValue(forKey: toolUseID)
+            Self.markPermissionResponded(in: &state, toolUseID: toolUseID, maxCount: maxRespondedPermissions)
+            return existing
+        }
+
+        guard let pending else { return }
+        pending.disconnectSource?.cancel()
+        Self.logger.info("Python socket closed for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) — cleaning up stale permission")
+        close(pending.clientSocket)
+        permissionFailureHandler?(sessionID, toolUseID)
     }
 
     nonisolated private func schedulePermissionTimeout(toolUseID: String, sessionID: String) {
@@ -809,6 +857,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         guard case let .timedOut(pending, age) = result else { return }
+        pending.disconnectSource?.cancel()
         Self.logger.warning("Permission timed out after \(Int(age))s for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
         close(pending.clientSocket)
 
@@ -843,6 +892,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             Self.logger.debug("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public)")
             return
         case let .found(pending):
+            pending.disconnectSource?.cancel()
+
             let response = HookResponse(decision: decision, reason: reason)
             guard let data = try? JSONEncoder().encode(response) else {
                 close(pending.clientSocket)
@@ -910,6 +961,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             Self.logger.debug("Permission already responded for session: \(sessionID.prefix(8), privacy: .public) - skipping duplicate")
             return
         case let .found(pending):
+            pending.disconnectSource?.cancel()
+
             let response = HookResponse(decision: decision, reason: reason)
             guard let data = try? JSONEncoder().encode(response) else {
                 close(pending.clientSocket)

@@ -241,6 +241,12 @@ actor ConversationParser {
         self.incrementalState[sessionID]?.structuredResults ?? [:]
     }
 
+    /// Batch accessor: returns (completedToolIDs, toolResults, structuredResults) in a single actor hop
+    func historyMetadata(for sessionID: String) -> (Set<String>, [String: ToolResult], [String: ToolResultData]) {
+        let state = self.incrementalState[sessionID]
+        return (state?.completedToolIDs ?? [], state?.toolResults ?? [:], state?.structuredResults ?? [:])
+    }
+
     /// Reset incremental state for a session (call when reloading)
     func resetState(for sessionID: String) {
         self.incrementalState.removeValue(forKey: sessionID)

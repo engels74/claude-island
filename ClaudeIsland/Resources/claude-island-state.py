@@ -92,7 +92,7 @@ ToolInputType = dict[str, str | int | bool | list[str] | None]
 
 SOCKET_PATH = Path("/tmp/claude-island.sock")
 CONNECT_TIMEOUT_SECONDS = 5  # Fast-fail if app is unresponsive
-PERMISSION_RECV_TIMEOUT_SECONDS = 120  # User interaction time for permission decisions
+PERMISSION_RECV_TIMEOUT_SECONDS = 300  # Must match Swift's permissionTimeoutSeconds
 
 
 @dataclass(slots=True, frozen=True)

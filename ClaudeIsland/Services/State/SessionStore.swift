@@ -352,7 +352,6 @@ actor SessionStore {
         }
 
         self.sessions[sessionID] = session
-        self.publishState()
 
         if event.shouldSyncFile {
             self.scheduleFileSync(sessionID: sessionID, cwd: event.cwd)
@@ -489,12 +488,18 @@ actor SessionStore {
     /// This is the authoritative handler for tool completions - ensures consistent state updates
     private func processToolCompleted(sessionID: String, toolUseID: String, result: ToolCompletionResult) async {
         guard var session = sessions[sessionID] else { return }
+        self.applyToolCompleted(session: &session, toolUseID: toolUseID, result: result)
+        self.sessions[sessionID] = session
+    }
 
+    /// Apply tool completion state mutations directly to a session without publishing.
+    /// Used by both `processToolCompleted` (single event) and `emitToolCompletionEvents` (batch loop)
+    /// to avoid redundant `publishState()` calls — the caller is responsible for publishing.
+    private func applyToolCompleted(session: inout SessionState, toolUseID: String, result: ToolCompletionResult) {
         // Check if this tool is already completed (avoid duplicate processing)
         if let existingItem = session.chatItems.first(where: { $0.id == toolUseID }),
            case let .toolCall(tool) = existingItem.type,
            tool.status == .success || tool.status == .error || tool.status == .interrupted {
-            // Already completed, skip
             return
         }
 
@@ -536,8 +541,6 @@ actor SessionStore {
                 }
             }
         }
-
-        self.sessions[sessionID] = session
     }
 
     /// Find the next tool waiting for approval (excluding a specific tool ID)
@@ -693,7 +696,7 @@ actor SessionStore {
 
         self.sessions[payload.sessionID] = session
 
-        await self.emitToolCompletionEvents(
+        self.emitToolCompletionEvents(
             sessionID: payload.sessionID,
             session: session,
             completedToolIDs: payload.completedToolIDs,
@@ -806,18 +809,22 @@ actor SessionStore {
         }
     }
 
-    /// Emit toolCompleted events for tools that have results in JSONL but aren't marked complete yet
+    /// Apply tool completion state for tools that have results in JSONL but aren't marked complete yet.
+    /// Applies all completions directly via `applyToolCompleted` instead of recursive `process()` calls,
+    /// so the outer `process(.fileUpdated)` publishes state exactly once after all completions are applied.
     private func emitToolCompletionEvents(
         sessionID: String,
-        session: SessionState,
+        session _: SessionState,
         completedToolIDs: Set<String>,
         toolResults: [String: ConversationParser.ToolResult],
         structuredResults: [String: ToolResultData],
-    ) async {
+    ) {
+        guard var session = sessions[sessionID] else { return }
+
         for item in session.chatItems {
             guard case let .toolCall(tool) = item.type else { continue }
 
-            // Only emit for tools that are running or waiting but have results in JSONL
+            // Only apply for tools that are running or waiting but have results in JSONL
             guard tool.status == .running || tool.status == .waitingForApproval else { continue }
             guard completedToolIDs.contains(item.id) else { continue }
 
@@ -826,9 +833,10 @@ actor SessionStore {
                 structuredResult: structuredResults[item.id],
             )
 
-            // Process the completion event (this will update state and phase consistently)
-            await self.process(.toolCompleted(sessionID: sessionID, toolUseID: item.id, result: result))
+            self.applyToolCompleted(session: &session, toolUseID: item.id, result: result)
         }
+
+        self.sessions[sessionID] = session
     }
 
     private func updateToolStatus(in session: inout SessionState, toolID: String, status: ToolStatus) {
@@ -906,20 +914,21 @@ actor SessionStore {
     // MARK: - History Loading
 
     private func loadHistoryFromFile(sessionID: String, cwd: String) async {
-        // Parse file asynchronously
-        let messages = await ConversationParser.shared.parseFullConversation(
+        // Run the two heavy file I/O calls in parallel (independent data paths)
+        async let messagesTask = ConversationParser.shared.parseFullConversation(
             sessionID: sessionID,
             cwd: cwd,
         )
-        let completedTools = await ConversationParser.shared.completedToolIDs(for: sessionID)
-        let toolResults = await ConversationParser.shared.toolResults(for: sessionID)
-        let structuredResults = await ConversationParser.shared.structuredResults(for: sessionID)
+        async let conversationInfoTask = ConversationParser.shared.parse(
+            sessionID: sessionID,
+            cwd: cwd,
+        )
 
-        // Also parse conversationInfo (summary, lastMessage, etc.)
-        let conversationInfo = await ConversationParser.shared.parse(
-            sessionID: sessionID,
-            cwd: cwd,
-        )
+        let messages = await messagesTask
+        // Batch the 3 lightweight dict lookups into a single actor hop
+        let (completedTools, toolResults, structuredResults) =
+            await ConversationParser.shared.historyMetadata(for: sessionID)
+        let conversationInfo = await conversationInfoTask
 
         // Process loaded history
         await self.process(.historyLoaded(HistoryLoadedPayload(
