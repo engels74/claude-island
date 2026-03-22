@@ -115,8 +115,12 @@ struct NotchMenuView: View {
                             AppDelegate.shared?.cancelHookInstallTask()
 
                             if self.hooksInstalled {
-                                HookInstaller.uninstall()
-                                self.hooksInstalled = false
+                                self.hookInstallTask = Task(name: "uninstall-hooks") { @MainActor in
+                                    await HookInstaller.uninstall()
+                                    if !Task.isCancelled {
+                                        self.hooksInstalled = HookInstaller.isInstalled()
+                                    }
+                                }
                             } else {
                                 self.hookInstallTask = Task(name: "install-hooks") { @MainActor in
                                     await HookInstaller.installIfNeeded()

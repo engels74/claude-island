@@ -74,7 +74,7 @@ actor SessionStore {
     // MARK: - Event Processing
 
     /// Process any session event - the ONLY way to mutate state
-    func process(_ event: SessionEvent) async { // swiftlint:disable:this cyclomatic_complexity
+    func process(_ event: SessionEvent) async {
         Self.logger.debug("Processing: \(String(describing: event), privacy: .public)")
 
         // Record to audit trail
@@ -127,10 +127,6 @@ actor SessionStore {
 
         case let .subagentStopped(sessionID, taskToolID):
             handleSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
-
-        case .agentFileUpdated:
-            // No longer used - subagent tools are populated from JSONL completion
-            break
         }
 
         self.publishState()
@@ -628,13 +624,18 @@ actor SessionStore {
     // MARK: - File Update Processing
 
     private func processFileUpdate(_ payload: FileUpdatePayload) async {
-        guard var session = sessions[payload.sessionID] else { return }
-
-        // Update conversationInfo from JSONL (summary, lastMessage, etc.)
+        // Phase 1: Perform all async work BEFORE reading session state.
+        // This prevents holding a stale session copy across suspension points,
+        // which would overwrite concurrent state changes from hook events.
         let conversationInfo = await ConversationParser.shared.parse(
             sessionID: payload.sessionID,
-            cwd: session.cwd,
+            cwd: payload.cwd,
         )
+
+        // Phase 2: Re-read session after await to get the freshest state,
+        // then apply all parsed data synchronously (no suspension points).
+        guard var session = sessions[payload.sessionID] else { return }
+
         session.conversationInfo = conversationInfo
 
         // Handle /clear reconciliation - remove items that no longer exist in parser state
@@ -682,7 +683,9 @@ actor SessionStore {
 
         session.toolTracker.lastSyncTime = Date()
 
-        await self.populateSubagentToolsFromAgentFiles(
+        // Populate subagent tools synchronously using the nonisolated static method
+        // (no actor hop needed, avoids suspension points while holding session copy)
+        self.populateSubagentToolsSync(
             session: &session,
             cwd: payload.cwd,
             structuredResults: payload.structuredResults,
@@ -748,12 +751,13 @@ actor SessionStore {
         session.toolTracker = context.toolTracker
     }
 
-    /// Populate subagent tools for Task tools using their agent JSONL files
-    private func populateSubagentToolsFromAgentFiles(
+    /// Populate subagent tools for Task tools using their agent JSONL files.
+    /// Uses the nonisolated static parser to avoid suspension points while holding a session copy.
+    private func populateSubagentToolsSync(
         session: inout SessionState,
         cwd: String,
         structuredResults: [String: ToolResultData],
-    ) async {
+    ) {
         for i in 0 ..< session.chatItems.count {
             guard case var .toolCall(tool) = session.chatItems[i].type,
                   tool.name == "Task",
@@ -771,7 +775,8 @@ actor SessionStore {
                 session.subagentState.agentDescriptions[taskResult.agentID] = description
             }
 
-            let subagentToolInfos = await ConversationParser.shared.parseSubagentTools(
+            // Use the nonisolated static method directly — no actor hop, no suspension point
+            let subagentToolInfos = ConversationParser.parseSubagentToolsSync(
                 agentID: taskResult.agentID,
                 cwd: cwd,
             )

@@ -54,9 +54,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApplication.shared.setActivationPolicy(.accessory)
 
-        // Wire up agent file watcher bridge so subagent tool updates reach SessionStore
-        AgentFileWatcherBridge.shared.setup()
-
         // Check accessibility permission on launch
         self.checkAccessibilityPermission()
 

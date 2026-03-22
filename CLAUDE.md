@@ -87,7 +87,7 @@ The notch UI uses a pluggable module system. `NotchModule` protocol defines visi
 - `ClaudeIsland/Models/` — `SessionState`, `SessionPhase`, `SessionEvent`, `ChatMessage`, `JSONValue`
 - `ClaudeIsland/Services/Hooks/` — `HookInstaller`, `HookSocketServer`, Python runtime detection
 - `ClaudeIsland/Services/State/` — `SessionStore` (actor), subagent tracking, periodic checks
-- `ClaudeIsland/Services/Session/` — `ConversationParser` (JSONL parsing), `AgentFileWatcher`, `ClaudeSessionMonitor`
+- `ClaudeIsland/Services/Session/` — `ConversationParser` (JSONL parsing), `ClaudeSessionMonitor`
 - `ClaudeIsland/Services/Window/` — `TerminalFocuser`, `YabaiController`, `WindowFinder`
 - `ClaudeIsland/Services/Tmux/` — tmux integration (session matching, path finding, tool approval)
 - `ClaudeIsland/UI/Views/` — `NotchView`, `ChatView`, `ClaudeInstancesView`, tool result views

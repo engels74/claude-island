@@ -5,6 +5,7 @@
 //  Auto-installs Claude Code hooks on app launch
 //
 
+import Darwin
 import Foundation
 import os.log
 
@@ -61,7 +62,7 @@ enum HookInstaller {
         if case .unavailable? = self.detectedRuntime {
             return
         }
-        self.updateSettings(at: settings)
+        await self.updateSettings(at: settings)
     }
 
     /// Check if hooks are currently installed
@@ -89,7 +90,7 @@ enum HookInstaller {
     }
 
     /// Uninstall hooks from settings.json and remove script
-    static func uninstall() {
+    static func uninstall() async {
         let claudeDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude")
         let hooksDir = claudeDir.appendingPathComponent("hooks")
@@ -98,42 +99,30 @@ enum HookInstaller {
 
         try? FileManager.default.removeItem(at: pythonScript)
 
-        guard let data = try? Data(contentsOf: settings),
-              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var hooks = json["hooks"] as? [String: Any]
-        else {
-            return
-        }
+        await self.withLockedSettings(at: settings) { json in
+            guard var hooks = json["hooks"] as? [String: Any] else {
+                return
+            }
 
-        for (event, value) in hooks {
-            if var entries = value as? [[String: Any]] {
-                // Remove both modern wrapped format and legacy direct format entries
-                entries.removeAll { entry in
-                    self.containsClaudeIslandCommand(entry)
-                }
+            for (event, value) in hooks {
+                if var entries = value as? [[String: Any]] {
+                    // Remove both modern wrapped format and legacy direct format entries
+                    entries.removeAll { entry in
+                        self.containsClaudeIslandCommand(entry)
+                    }
 
-                if entries.isEmpty {
-                    hooks.removeValue(forKey: event)
-                } else {
-                    hooks[event] = entries
+                    if entries.isEmpty {
+                        hooks.removeValue(forKey: event)
+                    } else {
+                        hooks[event] = entries
+                    }
                 }
             }
-        }
 
-        if hooks.isEmpty {
-            json.removeValue(forKey: "hooks")
-        } else {
-            json["hooks"] = hooks
-        }
-
-        if let data = try? JSONSerialization.data(
-            withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys],
-        ) {
-            do {
-                try FileManager.default.atomicWrite(data, to: settings)
-            } catch {
-                Self.logger.error("Failed to write settings.json during uninstall: \(error.localizedDescription)")
+            if hooks.isEmpty {
+                json.removeValue(forKey: "hooks")
+            } else {
+                json["hooks"] = hooks
             }
         }
     }
@@ -141,6 +130,37 @@ enum HookInstaller {
     // MARK: Private
 
     nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+
+    /// Perform a locked read-modify-write on a settings JSON file.
+    /// Uses a sidecar `.lock` file with non-blocking `flock` + async retry loop.
+    /// Falls back to unlocked access if the lock cannot be acquired.
+    private static func withLockedSettings(
+        at settingsURL: URL,
+        body: (inout [String: Any]) -> Void,
+    ) async {
+        let maxRetries = 5
+        let fd = open(settingsURL.path + ".lock", O_CREAT | O_WRONLY, 0o644)
+
+        guard fd >= 0 else {
+            FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
+            return
+        }
+        defer {
+            flock(fd, LOCK_UN)
+            close(fd)
+        }
+
+        var locked = false
+        for _ in 1 ... maxRetries {
+            if flock(fd, LOCK_EX | LOCK_NB) == 0 { locked = true; break }
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        }
+        if !locked {
+            Self.logger.warning("Could not acquire settings lock after \(maxRetries) retries; proceeding without lock")
+        }
+
+        FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
+    }
 
     /// Detect the best available Python runtime
     private static func detectPythonRuntime() async {
@@ -153,7 +173,7 @@ enum HookInstaller {
         }
     }
 
-    private static func updateSettings(at settingsURL: URL) {
+    private static func updateSettings(at settingsURL: URL) async {
         guard let runtime = detectedRuntime,
               let command = PythonRuntimeDetector.shared.getCommand(
                   for: "~/.claude/hooks/claude-island-state.py",
@@ -166,37 +186,25 @@ enum HookInstaller {
 
         Self.logger.info("Using hook command: \(command)")
 
-        var json: [String: Any] = [:]
-        if let data = try? Data(contentsOf: settingsURL),
-           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            json = existing
-        }
+        await self.withLockedSettings(at: settingsURL) { json in
+            var hooks = json["hooks"] as? [String: Any] ?? [:]
+            let hookEvents = self.buildHookConfigurations(command: command)
 
-        var hooks = json["hooks"] as? [String: Any] ?? [:]
-        let hookEvents = self.buildHookConfigurations(command: command)
-
-        for (event, config) in hookEvents {
-            hooks[event] = self.updateOrAddHookEntries(
-                existing: hooks[event] as? [[String: Any]],
-                config: config,
-                command: command,
-                eventName: event,
-            )
-        }
-
-        // TODO(anthropics/claude-code#15897): Remove this cleanup call once PreToolUse is re-registered.
-        // Remove claude-island entries from deprecated hook events (e.g. PreToolUse)
-        // Preserves non-claude-island entries (e.g. rtk)
-        self.removeDeprecatedHookEntries(from: &hooks)
-
-        json["hooks"] = hooks
-
-        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
-            do {
-                try FileManager.default.atomicWrite(data, to: settingsURL)
-            } catch {
-                Self.logger.error("Failed to write settings.json: \(error.localizedDescription)")
+            for (event, config) in hookEvents {
+                hooks[event] = self.updateOrAddHookEntries(
+                    existing: hooks[event] as? [[String: Any]],
+                    config: config,
+                    command: command,
+                    eventName: event,
+                )
             }
+
+            // TODO(anthropics/claude-code#15897): Remove this cleanup call once PreToolUse is re-registered.
+            // Remove claude-island entries from deprecated hook events (e.g. PreToolUse)
+            // Preserves non-claude-island entries (e.g. rtk)
+            self.removeDeprecatedHookEntries(from: &hooks)
+
+            json["hooks"] = hooks
         }
     }
 
@@ -420,7 +428,28 @@ enum HookInstaller {
 
 // MARK: - FileManager Atomic Operations
 
+private let settingsIOLogger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+
 extension FileManager {
+    /// Read a JSON file, apply a mutation via `body`, and atomic-write it back.
+    func readModifyWriteJSON(at fileURL: URL, body: (inout [String: Any]) -> Void) {
+        var json: [String: Any] = [:]
+        if let data = try? Data(contentsOf: fileURL),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            json = existing
+        }
+
+        body(&json)
+
+        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+            do {
+                try self.atomicWrite(data, to: fileURL)
+            } catch {
+                settingsIOLogger.error("Failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// Atomically write data to a file using write-to-temp + rename.
     /// Uses `replaceItemAt` when the target exists, `moveItem` for first-time creation.
     func atomicWrite(_ data: Data, to destination: URL) throws {

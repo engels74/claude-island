@@ -59,9 +59,6 @@ nonisolated enum SessionEvent: Sendable {
     /// A Task (subagent) tool has stopped
     case subagentStopped(sessionID: String, taskToolID: String)
 
-    /// Agent file was updated with new subagent tools (from AgentFileWatcher)
-    case agentFileUpdated(sessionID: String, taskToolID: String, tools: [SubagentToolInfo])
-
     // MARK: - Clear Events (from JSONL detection)
 
     /// User issued /clear command - reset UI state while keeping session alive
@@ -230,8 +227,7 @@ nonisolated extension SessionEvent {
              let .subagentStarted(sessionID, _),
              let .subagentToolExecuted(sessionID, _),
              let .subagentToolCompleted(sessionID, _, _),
-             let .subagentStopped(sessionID, _),
-             let .agentFileUpdated(sessionID, _, _):
+             let .subagentStopped(sessionID, _):
             sessionID
         case let .fileUpdated(payload):
             payload.sessionID
@@ -276,8 +272,6 @@ nonisolated extension SessionEvent: CustomStringConvertible {
             "subagentToolCompleted(session: \(sessionID.prefix(8)), tool: \(toolID.prefix(12)), status: \(status))"
         case let .subagentStopped(sessionID, taskToolID):
             "subagentStopped(session: \(sessionID.prefix(8)), task: \(taskToolID.prefix(12)))"
-        case let .agentFileUpdated(sessionID, taskToolID, tools):
-            "agentFileUpdated(session: \(sessionID.prefix(8)), task: \(taskToolID.prefix(12)), tools: \(tools.count))"
         }
     }
 }

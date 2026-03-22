@@ -91,7 +91,8 @@ class SessionStateDict(TypedDict):
 ToolInputType = dict[str, str | int | bool | list[str] | None]
 
 SOCKET_PATH = Path("/tmp/claude-island.sock")
-TIMEOUT_SECONDS = 300  # 5 minutes for permission decisions
+CONNECT_TIMEOUT_SECONDS = 5  # Fast-fail if app is unresponsive
+PERMISSION_RECV_TIMEOUT_SECONDS = 120  # User interaction time for permission decisions
 
 
 @dataclass(slots=True, frozen=True)
@@ -346,10 +347,11 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
     """
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(TIMEOUT_SECONDS)
+            sock.settimeout(CONNECT_TIMEOUT_SECONDS)
             sock.connect(str(SOCKET_PATH))
             sock.sendall(json.dumps(state.to_dict()).encode())
             if state.status == "waiting_for_approval":
+                sock.settimeout(PERMISSION_RECV_TIMEOUT_SECONDS)
                 if response := sock.recv(4096):
                     parsed = cast(object, json.loads(response.decode()))
                     if is_permission_response(parsed):
