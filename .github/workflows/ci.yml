@@ -6,12 +6,22 @@ on:
     workflows: ["Code Quality"]
     types: [completed]
     branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   build:
     name: Build DMG
     runs-on: macos-15
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      github.event.workflow_run.conclusion == 'success'
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -27,6 +37,20 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Verify Swift version
+        run: |
+          swift --version
+          SWIFT_VERSION=$(swift --version 2>&1 | sed -n 's/.*Apple Swift version \([0-9]*\.[0-9]*\).*/\1/p')
+          if [[ -z "$SWIFT_VERSION" ]]; then
+            echo "::error::Could not detect Swift version from 'swift --version' output"
+            exit 1
+          fi
+          echo "Detected Swift $SWIFT_VERSION"
+          if [[ "$(echo "$SWIFT_VERSION < 6.2" | bc)" -eq 1 ]]; then
+            echo "::error::Swift 6.2+ required. Found $SWIFT_VERSION"
+            exit 1
+          fi
+
       - name: Build with ad-hoc signing
         run: ./scripts/build.sh
 
@@ -34,14 +58,26 @@ jobs:
         run: brew install create-dmg || true
 
       - name: Setup Sparkle key
+        id: sparkle-key
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          mkdir -p .sparkle-keys
-          echo "$SPARKLE_PRIVATE_KEY" > .sparkle-keys/eddsa_private_key
+          if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            mkdir -p .sparkle-keys
+            echo "$SPARKLE_PRIVATE_KEY" > .sparkle-keys/eddsa_private_key
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "::warning::SPARKLE_PRIVATE_KEY not set -- Sparkle signing will be skipped."
+          fi
 
       - name: Create DMG and sign with Sparkle
-        run: ./scripts/create-release.sh --skip-notarization --skip-github --skip-website
+        run: |
+          SPARKLE_FLAG=""
+          if [ "${{ steps.sparkle-key.outputs.has_key }}" != "true" ]; then
+            SPARKLE_FLAG="--skip-sparkle"
+          fi
+          ./scripts/create-release.sh --skip-notarization --skip-github --skip-website $SPARKLE_FLAG
 
       - name: Get version
         id: version
@@ -49,6 +85,7 @@ jobs:
           VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" \
             "build/export/Claude Island.app/Contents/Info.plist")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Built version: $VERSION"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v7
@@ -61,6 +98,9 @@ jobs:
     name: VirusTotal Scan
     needs: build
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'pull_request' &&
+      vars.HAS_VT_KEY == 'true'
 
     steps:
       - name: Download DMG artifact
@@ -79,27 +119,19 @@ jobs:
 
       - name: Create scan results summary
         run: |
-          # Build the markdown content
           {
-            echo "## 🛡️ VirusTotal Scan Results"
+            echo "## VirusTotal Scan Results"
             echo ""
             echo "**Scan completed:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             echo ""
-            echo "### Analysis Reports"
-            echo ""
             echo "| File | Report |"
             echo "|------|--------|"
-            # Output format is comma-separated "filename=url" pairs
             IFS=',' read -ra PAIRS <<< "${{ steps.virustotal.outputs.analysis }}"
             for pair in "${PAIRS[@]}"; do
               filename="${pair%%=*}"
               url="${pair#*=}"
-              echo "| 📦 \`${filename}\` | [View VirusTotal Report](${url}) |"
+              echo "| \`${filename}\` | [View Report](${url}) |"
             done
-            echo ""
-            echo "---"
-            echo ""
-            echo "_Click the links above to view full analysis on VirusTotal._"
           } | tee virustotal-results.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload scan results
