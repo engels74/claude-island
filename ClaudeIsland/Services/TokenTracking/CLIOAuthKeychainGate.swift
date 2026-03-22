@@ -78,6 +78,8 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
     ]
 
     private func nonInteractivePreflight() -> PreflightResult {
+        var worstResult: PreflightResult = .notFound
+
         for candidate in Self.candidates {
             let context = LAContext()
             context.interactionNotAllowed = true
@@ -108,34 +110,37 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
 
             case errSecInteractionNotAllowed:
                 Self.logger.debug("Preflight: would prompt (service: \(candidate.service, privacy: .public))")
-                return .wouldPrompt
+                worstResult = .wouldPrompt
 
             case errSecItemNotFound:
                 Self.logger.debug("Preflight: not found (service: \(candidate.service, privacy: .public))")
-                continue
 
             case errSecUserCanceled,
                  errSecAuthFailed:
                 Self.logger.warning(
                     "Preflight: denied (status: \(status), service: \(candidate.service, privacy: .public))",
                 )
-                return .denied
+                worstResult = .denied
 
             default:
                 if status == -25293 {
                     Self.logger.warning(
                         "Preflight: no access for item (service: \(candidate.service, privacy: .public))",
                     )
-                    return .denied
+                    worstResult = .denied
+                } else {
+                    Self.logger.debug(
+                        "Preflight: status \(status) (service: \(candidate.service, privacy: .public))",
+                    )
                 }
-                Self.logger.debug("Preflight: status \(status) (service: \(candidate.service, privacy: .public))")
-                continue
             }
         }
-        return .notFound
+        return worstResult
     }
 
     private func readCLIKeychain() -> Data? {
+        var anyDenied = false
+
         for candidate in Self.candidates {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
@@ -159,13 +164,17 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
                 Self.logger.warning(
                     "Direct read: denied (status: \(status), service: \(candidate.service, privacy: .public))",
                 )
-                self.enterCooldown()
-                return nil
+                anyDenied = true
+                continue
             }
 
             Self.logger.debug(
                 "Direct read: status \(status) (service: \(candidate.service, privacy: .public))",
             )
+        }
+
+        if anyDenied {
+            self.enterCooldown()
         }
         return nil
     }

@@ -19,10 +19,11 @@ extension TokenTrackingManager {
     /// Tier 2: Own keychain cache (never prompts)
     /// Tier 3: CLI keychain via CLIOAuthKeychainGate (may prompt on user-initiated)
     func resolveOAuthToken(interaction: InteractionContext) -> String? {
-        // Step 0: Invalidate memory cache if credential file changed on disk
+        // Step 0: Invalidate tier-1 and tier-2 caches if credential file changed on disk
         if self.checkCredentialFileChanged() {
-            Self.cacheLogger.debug("Credential file changed, invalidating memory cache")
+            Self.cacheLogger.info("Credential file changed, invalidating memory and keychain caches")
             Self.memoryCache.withLock { $0.clear() }
+            self.deleteCLIOAuthCache()
         }
 
         // Tier 1: Memory cache (Mutex-protected, 30-min TTL)
