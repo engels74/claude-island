@@ -139,7 +139,7 @@ enum HookInstaller {
         body: (inout [String: Any]) -> Void,
     ) async {
         let maxRetries = 5
-        let fd = open(settingsURL.path + ".lock", O_CREAT | O_WRONLY, 0o644)
+        let fd = open(settingsURL.path + ".lock", O_CREAT | O_WRONLY | O_CLOEXEC, 0o644)
 
         guard fd >= 0 else {
             FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
@@ -432,21 +432,44 @@ private let settingsIOLogger = Logger(subsystem: "com.engels74.ClaudeIsland", ca
 
 extension FileManager {
     /// Read a JSON file, apply a mutation via `body`, and atomic-write it back.
+    /// Skips the write if `body` made no changes or the result is an empty object with no existing file.
     func readModifyWriteJSON(at fileURL: URL, body: (inout [String: Any]) -> Void) {
+        let fileExisted = fileExists(atPath: fileURL.path)
         var json: [String: Any] = [:]
-        if let data = try? Data(contentsOf: fileURL),
+        let originalData: Data?
+        if fileExisted,
+           let data = try? Data(contentsOf: fileURL),
            let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             json = existing
+            originalData = data
+        } else {
+            originalData = nil
         }
 
         body(&json)
 
-        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
-            do {
-                try self.atomicWrite(data, to: fileURL)
-            } catch {
-                settingsIOLogger.error("Failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)")
-            }
+        // Don't create a new file just to write an empty object
+        if !fileExisted, json.isEmpty {
+            return
+        }
+
+        guard let newData = try? JSONSerialization.data(
+            withJSONObject: json,
+            options: [.prettyPrinted, .sortedKeys],
+        )
+        else {
+            return
+        }
+
+        // Skip write if content is unchanged
+        if let originalData, newData == originalData {
+            return
+        }
+
+        do {
+            try self.atomicWrite(newData, to: fileURL)
+        } catch {
+            settingsIOLogger.error("Failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)")
         }
     }
 
