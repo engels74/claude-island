@@ -256,7 +256,15 @@ final class TokenTrackingManager {
                     if case let .rateLimited(retryAfter) = error {
                         self.retryAfterOverride = retryAfter
                         // Don't invalidate caches — token is valid, just rate-limited
-                        let interval = retryAfter ?? self.currentRefreshInterval
+                        // When retryAfter is nil, use post-increment failure count so the
+                        // message matches the actual backoff used by startPeriodicRefresh
+                        let interval: TimeInterval
+                        if let retryAfter {
+                            interval = retryAfter
+                        } else {
+                            let nextFailures = self.consecutiveFailures + 1
+                            interval = min(120.0 * pow(2.0, Double(nextFailures - 1)), 1800)
+                        }
                         let message = if interval >= 60 {
                             "Rate limited, retrying in \(Int(interval / 60))m"
                         } else {

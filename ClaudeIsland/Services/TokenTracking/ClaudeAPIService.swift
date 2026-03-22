@@ -88,7 +88,7 @@ actor ClaudeAPIService {
         }
 
         // Try integer seconds first
-        if let seconds = TimeInterval(value) {
+        if let seconds = TimeInterval(value), seconds > 0 {
             return seconds
         }
 
