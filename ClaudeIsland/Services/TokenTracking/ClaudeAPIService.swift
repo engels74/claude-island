@@ -42,7 +42,7 @@ actor ClaudeAPIService {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(oauthToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("claude-code/2.1.5", forHTTPHeaderField: "User-Agent")
+        await request.setValue(CLIVersionDetector.shared.userAgent(), forHTTPHeaderField: "User-Agent")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.httpMethod = "GET"
         request.timeoutInterval = 30
@@ -62,6 +62,11 @@ actor ClaudeAPIService {
         }
 
         guard httpResponse.statusCode == 200 else {
+            Self.logResponseDetails(statusCode: httpResponse.statusCode, data: data, headers: httpResponse.allHeaderFields)
+            if httpResponse.statusCode == 429 {
+                let retryAfter = Self.parseRetryAfter(httpResponse.allHeaderFields)
+                throw APIServiceError.rateLimited(retryAfter: retryAfter)
+            }
             Self.logger.error("OAuth usage request failed with status \(httpResponse.statusCode)")
             throw APIServiceError.httpError(statusCode: httpResponse.statusCode)
         }
@@ -75,6 +80,39 @@ actor ClaudeAPIService {
 
     private let baseURL = "https://claude.ai/api"
     private let oauthUsageURL = "https://api.anthropic.com/api/oauth/usage"
+
+    /// Parse the `Retry-After` header as integer seconds or HTTP-date
+    nonisolated private static func parseRetryAfter(_ headers: [AnyHashable: Any]) -> TimeInterval? {
+        guard let value = headers["Retry-After"] as? String ?? headers["retry-after"] as? String else {
+            return nil
+        }
+
+        // Try integer seconds first
+        if let seconds = TimeInterval(value) {
+            return seconds
+        }
+
+        // Try HTTP-date format (e.g., "Sun, 22 Mar 2026 18:00:00 GMT")
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        if let date = formatter.date(from: value) {
+            let interval = date.timeIntervalSinceNow
+            return interval > 0 ? interval : nil
+        }
+
+        return nil
+    }
+
+    /// Log truncated response body and status code at debug level for non-200 responses
+    nonisolated private static func logResponseDetails(statusCode: Int, data: Data, headers: [AnyHashable: Any]) {
+        let bodyPreview = if let bodyString = String(data: data, encoding: .utf8) {
+            String(bodyString.prefix(500))
+        } else {
+            "<binary data, \(data.count) bytes>"
+        }
+        Self.logger.debug("Response \(statusCode): \(bodyPreview)")
+    }
 
     private func fetchOrganizationID(sessionKey: String) async throws(APIServiceError) -> String {
         guard let url = URL(string: "\(self.baseURL)/organizations") else {
@@ -235,6 +273,7 @@ enum APIServiceError: Error, LocalizedError, Sendable {
     case parsingFailed
     case unauthorized
     case cancelled
+    case rateLimited(retryAfter: TimeInterval?)
 
     // MARK: Internal
 
@@ -252,6 +291,12 @@ enum APIServiceError: Error, LocalizedError, Sendable {
             "Unauthorized - session key may be expired"
         case .cancelled:
             "Request was cancelled"
+        case let .rateLimited(retryAfter):
+            if let retryAfter {
+                "Rate limited by API (retry after \(Int(retryAfter))s)"
+            } else {
+                "Rate limited by API"
+            }
         }
     }
 }

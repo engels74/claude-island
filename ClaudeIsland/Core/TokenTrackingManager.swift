@@ -34,6 +34,7 @@ final class TokenTrackingManager {
 
     private init() {
         self.migrateSessionKeyFromDefaults()
+        UserDefaults.standard.removeObject(forKey: "cliKeychainLastAttempt")
         self.startPeriodicRefresh()
     }
 
@@ -91,10 +92,17 @@ final class TokenTrackingManager {
                 try await self.refreshFromAPI(interaction: interaction)
             }
             self.lastError = nil
+            self.consecutiveFailures = 0
+            self.retryAfterOverride = nil
             Self.logger.debug("Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
         } catch {
+            self.consecutiveFailures += 1
             Self.logger.error("Token tracking refresh failed: \(error.errorDescription ?? "unknown", privacy: .public)")
             self.lastError = error.errorDescription
+            let interval = self.currentRefreshInterval
+            if interval > 60 {
+                Self.logger.info("Backing off, next refresh in \(interval)s")
+            }
         }
     }
 
@@ -192,14 +200,23 @@ final class TokenTrackingManager {
 
     private var refreshTask: Task<Void, Never>?
     private var periodicRefreshTask: Task<Void, Never>?
+    private var consecutiveFailures = 0
+    private var retryAfterOverride: TimeInterval?
+
+    private var currentRefreshInterval: TimeInterval {
+        if let override = self.retryAfterOverride { return override }
+        guard self.consecutiveFailures > 0 else { return 60 }
+        // Exponential backoff: 2min, 4min, 8min, 16min, capped at 30min
+        let backoff = 120.0 * pow(2.0, Double(self.consecutiveFailures - 1))
+        return min(backoff, 1800)
+    }
 
     private func startPeriodicRefresh() {
         self.periodicRefreshTask?.cancel()
         self.periodicRefreshTask = Task(name: "token-refresh") { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-
-                let interval: TimeInterval = 60
+                let interval = self?.currentRefreshInterval ?? 60
                 try? await Task.sleep(for: .seconds(interval))
             }
         }
@@ -236,10 +253,20 @@ final class TokenTrackingManager {
                     self.updateFromAPIResponse(response)
                     return
                 } catch {
-                    // Only invalidate cache for authentication rejections — transient errors
-                    // should not wipe a valid token and re-trigger keychain prompts
-                    if case let .httpError(statusCode) = error,
-                       statusCode == 401 || statusCode == 403 {
+                    if case let .rateLimited(retryAfter) = error {
+                        self.retryAfterOverride = retryAfter
+                        // Don't invalidate caches — token is valid, just rate-limited
+                        let interval = retryAfter ?? self.currentRefreshInterval
+                        let message = if interval >= 60 {
+                            "Rate limited, retrying in \(Int(interval / 60))m"
+                        } else {
+                            "Rate limited, retrying in \(Int(interval))s"
+                        }
+                        throw TokenTrackingError.apiError(message)
+                    } else if case let .httpError(statusCode) = error,
+                              statusCode == 401 || statusCode == 403 {
+                        // Only invalidate cache for authentication rejections — transient errors
+                        // should not wipe a valid token and re-trigger keychain prompts
                         self.invalidateOAuthCaches()
                     }
                     throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
