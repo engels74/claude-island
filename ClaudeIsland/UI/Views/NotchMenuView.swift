@@ -752,7 +752,7 @@ struct TokenTrackingRow: View {
         .onChange(of: self.tokenMode) { _, newValue in
             AppSettings.tokenTrackingMode = newValue
             Task(name: "token-refresh") {
-                await self.tokenTrackingManager.refresh()
+                await self.tokenTrackingManager.refresh(interaction: .userInitiated)
             }
         }
     }
@@ -769,7 +769,7 @@ struct TokenTrackingRow: View {
             .onChange(of: self.useCLIOAuth) { _, newValue in
                 AppSettings.tokenUseCLIOAuth = newValue
                 Task(name: "token-refresh") {
-                    await self.tokenTrackingManager.refresh()
+                    await self.tokenTrackingManager.refresh(interaction: .userInitiated)
                 }
             }
 
@@ -785,7 +785,7 @@ struct TokenTrackingRow: View {
                         .onSubmit {
                             self.tokenTrackingManager.saveSessionKey(self.sessionKey.isEmpty ? nil : self.sessionKey)
                             Task(name: "token-refresh") {
-                                await self.tokenTrackingManager.refresh()
+                                await self.tokenTrackingManager.refresh(interaction: .userInitiated)
                             }
                         }
                 }

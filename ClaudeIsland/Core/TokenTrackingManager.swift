@@ -8,6 +8,13 @@
 import Foundation
 import os.log
 
+// MARK: - InteractionContext
+
+enum InteractionContext: Sendable {
+    case userInitiated
+    case background
+}
+
 // MARK: - UsageMetric
 
 struct UsageMetric: Equatable, Sendable {
@@ -59,7 +66,7 @@ final class TokenTrackingManager {
         AppSettings.tokenTrackingMode != .disabled
     }
 
-    func refresh() async {
+    func refresh(interaction: InteractionContext = .background) async {
         Self.logger.debug("refresh() called, isEnabled: \(self.isEnabled), mode: \(String(describing: AppSettings.tokenTrackingMode))")
 
         guard self.isEnabled else {
@@ -81,7 +88,7 @@ final class TokenTrackingManager {
 
             case .api:
                 Self.logger.debug("Using API mode for refresh")
-                try await self.refreshFromAPI()
+                try await self.refreshFromAPI(interaction: interaction)
             }
             self.lastError = nil
             Self.logger.debug("Refresh complete - session: \(self.sessionPercentage)%, weekly: \(self.weeklyPercentage)%")
@@ -122,7 +129,7 @@ final class TokenTrackingManager {
         // Try to update existing item first to avoid deleting before a successful write
         let updateAttributes: [String: Any] = [
             kSecValueData as String: valueData,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
 
@@ -138,7 +145,7 @@ final class TokenTrackingManager {
             }
             var addQuery = baseQuery
             addQuery[kSecValueData as String] = valueData
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             if addStatus == errSecSuccess {
                 return true
@@ -181,18 +188,10 @@ final class TokenTrackingManager {
 
     nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "TokenTrackingManager")
 
-    private static let cliKeychainCooldownInterval: TimeInterval = 3600
     private static let cliOAuthCacheAccount = "cli-oauth-cache"
-
-    private static let cliKeychainLastAttemptKey = "cliKeychainLastAttempt"
 
     private var refreshTask: Task<Void, Never>?
     private var periodicRefreshTask: Task<Void, Never>?
-
-    private var lastCLIKeychainAttempt: Date? {
-        get { UserDefaults.standard.object(forKey: Self.cliKeychainLastAttemptKey) as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: Self.cliKeychainLastAttemptKey) }
-    }
 
     private func startPeriodicRefresh() {
         self.periodicRefreshTask?.cancel()
@@ -224,13 +223,13 @@ final class TokenTrackingManager {
         }
     }
 
-    private func refreshFromAPI() async throws(TokenTrackingError) {
-        Self.logger.debug("refreshFromAPI called")
+    private func refreshFromAPI(interaction: InteractionContext) async throws(TokenTrackingError) {
+        Self.logger.debug("refreshFromAPI called (interaction: \(String(describing: interaction)))")
         let apiService = ClaudeAPIService.shared
 
         if AppSettings.tokenUseCLIOAuth {
             Self.logger.debug("CLI OAuth mode enabled, checking for token...")
-            if let oauthToken = self.getCLIOAuthToken() {
+            if let oauthToken = self.resolveOAuthToken(interaction: interaction) {
                 Self.logger.debug("Found OAuth token, fetching usage...")
                 do {
                     let response = try await apiService.fetchUsage(oauthToken: oauthToken)
@@ -241,8 +240,7 @@ final class TokenTrackingManager {
                     // should not wipe a valid token and re-trigger keychain prompts
                     if case let .httpError(statusCode) = error,
                        statusCode == 401 || statusCode == 403 {
-                        self.deleteCLIOAuthCache()
-                        self.lastCLIKeychainAttempt = nil
+                        self.invalidateOAuthCaches()
                     }
                     throw TokenTrackingError.apiError(error.errorDescription ?? "API request failed")
                 }
@@ -288,7 +286,7 @@ final class TokenTrackingManager {
 extension TokenTrackingManager {
     /// Save CLI OAuth JSON blob to Claude Island's own keychain (never prompts).
     @discardableResult
-    private func saveCLIOAuthCache(_ data: Data) -> Bool {
+    func saveCLIOAuthCache(_ data: Data) -> Bool {
         let service = "com.engels74.ClaudeIsland"
         let account = Self.cliOAuthCacheAccount
 
@@ -300,7 +298,7 @@ extension TokenTrackingManager {
 
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
 
@@ -317,7 +315,7 @@ extension TokenTrackingManager {
             }
             var addQuery = baseQuery
             addQuery[kSecValueData as String] = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             if addStatus == errSecSuccess {
                 Self.logger.debug("Saved CLI OAuth cache to Keychain")
@@ -332,7 +330,7 @@ extension TokenTrackingManager {
     }
 
     /// Load cached CLI OAuth JSON blob (never prompts).
-    private func loadCLIOAuthCache() -> Data? {
+    func loadCLIOAuthCache() -> Data? {
         let service = "com.engels74.ClaudeIsland"
         let account = Self.cliOAuthCacheAccount
 
@@ -355,7 +353,7 @@ extension TokenTrackingManager {
     }
 
     /// Delete the cached CLI OAuth data.
-    private func deleteCLIOAuthCache() {
+    func deleteCLIOAuthCache() {
         let service = "com.engels74.ClaudeIsland"
         let account = Self.cliOAuthCacheAccount
 
@@ -373,42 +371,10 @@ extension TokenTrackingManager {
         }
     }
 
-    private func getCLIOAuthToken() -> String? {
-        // Step 1: Try cached data first (own keychain — never prompts).
-        // Use ignoreExpiry: the API will reject with 401/403 if truly invalid,
-        // which triggers cache invalidation in refreshFromAPI(). This avoids
-        // deleting the cache on local expiry and re-reading the CLI keychain (which prompts).
-        if let cachedData = self.loadCLIOAuthCache(),
-           let token = self.extractOAuthToken(from: cachedData, ignoreExpiry: true) {
-            Self.logger.debug("Using cached CLI OAuth token (expiry check deferred to API)")
-            return token
-        }
-
-        // Step 2: Rate-limit CLI keychain access to avoid repeated prompts
-        if let lastAttempt = self.lastCLIKeychainAttempt,
-           Date().timeIntervalSince(lastAttempt) < Self.cliKeychainCooldownInterval {
-            Self.logger.debug("CLI keychain access rate-limited, skipping")
-            return nil
-        }
-        self.lastCLIKeychainAttempt = Date()
-
-        // Step 3: Read from CLI keychain (may prompt once)
-        guard let data = self.findCLIKeychainData() else {
-            Self.logger.error("CLI OAuth token not found in any Keychain entry")
-            return nil
-        }
-
-        // Step 4: Cache the raw data for future use (own keychain — never prompts)
-        self.saveCLIOAuthCache(data)
-
-        // Step 5: Extract and return token
-        return self.extractOAuthToken(from: data)
-    }
-
     /// Parse CLI OAuth JSON data and return the access token.
     /// When `ignoreExpiry` is `true`, return the token even if locally expired —
     /// the API will reject with 401/403 if truly invalid, triggering cache invalidation.
-    private func extractOAuthToken(from data: Data, ignoreExpiry: Bool = false) -> String? {
+    func extractOAuthToken(from data: Data, ignoreExpiry: Bool = false) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             Self.logger.error("Failed to parse CLI OAuth Keychain data as JSON")
             return nil
@@ -434,35 +400,6 @@ extension TokenTrackingManager {
         }
 
         return accessToken
-    }
-
-    private func findCLIKeychainData() -> Data? {
-        let candidates: [(service: String, account: String)] = [
-            ("Claude Code-credentials", NSUserName()),
-            ("claude-cli", "oauth-tokens"),
-        ]
-
-        for candidate in candidates {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: candidate.service,
-                kSecAttrAccount as String: candidate.account,
-                kSecReturnData as String: true,
-                kSecMatchLimit as String: kSecMatchLimitOne,
-            ]
-
-            var result: AnyObject?
-            let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-            if status == errSecSuccess, let data = result as? Data {
-                Self.logger.debug("Found CLI credentials in Keychain (service: \(candidate.service, privacy: .public))")
-                return data
-            } else {
-                Self.logger.debug("No credentials at service: \(candidate.service, privacy: .public) (status: \(status))")
-            }
-        }
-
-        return nil
     }
 
     /// Returns `true` if the token is expired and should not be used.
