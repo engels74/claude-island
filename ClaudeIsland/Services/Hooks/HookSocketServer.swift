@@ -266,6 +266,15 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
     }
 
+    /// Update event handlers without restarting the server.
+    /// Called after window recreation so new ClaudeSessionMonitor closures replace stale ones.
+    nonisolated func updateEventHandler(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler? = nil) {
+        queue.async { [weak self] in
+            self?.eventHandler = onEvent
+            self?.permissionFailureHandler = onPermissionFailure
+        }
+    }
+
     /// Stop the socket server
     nonisolated func stop() {
         // All state mutations must happen on the queue to avoid races

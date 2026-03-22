@@ -374,7 +374,7 @@ final class NotchViewModel {
             guard !Task.isCancelled else { return }
 
             // Convert to CGEvent coordinate system (screen coordinates with Y from top-left)
-            guard let screen = NSScreen.main else { return }
+            guard let screen = NSScreen.screens.first else { return }
             let screenHeight = screen.frame.height
             let cgPoint = CGPoint(x: location.x, y: screenHeight - location.y)
 

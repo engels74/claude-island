@@ -107,6 +107,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let userDriver: NotchUserDriver
 
     private func handleScreenChange() {
+        let screens = NSScreen.screens
+        Self.logger.info("Screen config changed: \(screens.count, privacy: .public) screen(s)")
+        for (index, screen) in screens.enumerated() {
+            let id = screen.deviceDescription[
+                NSDeviceDescriptionKey("NSScreenNumber"),
+            ] as? CGDirectDisplayID ?? 0
+            let name = screen.localizedName
+            let frame = screen.frame
+            let builtin = screen.isBuiltinDisplay
+            let notch = screen.hasPhysicalNotch
+            Self.logger.info(
+                "  [\(index, privacy: .public)] \(name, privacy: .public) id=\(id, privacy: .public) frame=\(frame.debugDescription, privacy: .public) builtin=\(builtin, privacy: .public) notch=\(notch, privacy: .public)",
+            )
+        }
         _ = self.windowManager?.setupNotchWindow()
     }
 

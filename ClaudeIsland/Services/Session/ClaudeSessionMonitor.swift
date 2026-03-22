@@ -43,20 +43,24 @@ final class ClaudeSessionMonitor {
     // MARK: - Monitoring Lifecycle
 
     func startMonitoring() {
-        HookSocketServer.shared.start(
-            onEvent: { [weak self] event in
-                // HookSocketServer calls this callback on its internal socket queue.
-                // Single MainActor hop handles all event processing.
-                Task(name: "hook-event") { @MainActor [weak self] in
-                    await self?.handleHookEvent(event)
-                }
-            },
-            onPermissionFailure: { [weak self] sessionID, toolUseID in
-                Task(name: "permission-failure") { @MainActor [weak self] in
-                    await self?.handlePermissionFailure(sessionID: sessionID, toolUseID: toolUseID)
-                }
-            },
-        )
+        let onEvent: HookEventHandler = { [weak self] event in
+            // HookSocketServer calls this callback on its internal socket queue.
+            // Single MainActor hop handles all event processing.
+            Task(name: "hook-event") { @MainActor [weak self] in
+                await self?.handleHookEvent(event)
+            }
+        }
+
+        let onPermissionFailure: PermissionFailureHandler = { [weak self] sessionID, toolUseID in
+            Task(name: "permission-failure") { @MainActor [weak self] in
+                await self?.handlePermissionFailure(sessionID: sessionID, toolUseID: toolUseID)
+            }
+        }
+
+        HookSocketServer.shared.start(onEvent: onEvent, onPermissionFailure: onPermissionFailure)
+        // After window recreation, the server is already running so start() is a no-op.
+        // Always update handlers so this monitor's closures replace any stale ones.
+        HookSocketServer.shared.updateEventHandler(onEvent: onEvent, onPermissionFailure: onPermissionFailure)
 
         // Start periodic session status check
         Task(name: "start-periodic-check") {

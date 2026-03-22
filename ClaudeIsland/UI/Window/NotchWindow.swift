@@ -105,7 +105,7 @@ class NotchPanel: NSPanel {
 
     private func repostMouseEvent(_ event: NSEvent, at screenLocation: NSPoint) {
         // Convert to CGEvent coordinate system (Y from top of screen)
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.screens.first else { return }
         let screenHeight = screen.frame.height
         let cgPoint = CGPoint(x: screenLocation.x, y: screenHeight - screenLocation.y)
 

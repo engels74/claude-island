@@ -28,15 +28,26 @@ final class WindowManager {
             return nil
         }
 
-        // Skip recreation if screen hasn't meaningfully changed (same frame AND same display)
         let screenDisplayID = self.displayID(of: screen)
+        let logID = screenDisplayID ?? 0
+        let name = screen.localizedName
+        let frame = screen.frame
+        Self.logger.info(
+            "Selected screen: \(name, privacy: .public) id=\(logID, privacy: .public) frame=\(frame.debugDescription, privacy: .public)",
+        )
+
+        // Skip recreation if screen hasn't meaningfully changed (same frame AND same display)
         if let existingController = windowController,
            let existingFrame = currentScreenFrame,
            existingFrame == screen.frame,
-           currentDisplayID == screenDisplayID {
+           let existingDisplayID = currentDisplayID,
+           let newDisplayID = screenDisplayID,
+           existingDisplayID == newDisplayID {
             Self.logger.debug("Screen unchanged, skipping window recreation")
             return existingController
         }
+
+        Self.logger.info("Recreating notch window for display \(logID, privacy: .public)")
 
         // Only animate on initial app launch, not on screen changes
         let shouldAnimate = self.isInitialLaunch

@@ -52,10 +52,7 @@ extension NSScreen {
 
     /// The built-in display (with notch on newer MacBooks)
     static var builtin: NSScreen? {
-        if let builtin = screens.first(where: { $0.isBuiltinDisplay }) {
-            return builtin
-        }
-        return NSScreen.main
+        screens.first { $0.isBuiltinDisplay }
     }
 
     /// Whether this screen has a physical notch (camera housing)
