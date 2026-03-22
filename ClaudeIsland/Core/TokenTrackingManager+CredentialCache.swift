@@ -54,13 +54,16 @@ extension TokenTrackingManager {
             return nil
         }
 
-        // Cache the raw data in our own keychain (never prompts on future reads)
-        self.saveCLIOAuthCache(data)
-
-        // Extract token and populate memory cache
-        guard let token = self.extractOAuthToken(from: data) else {
+        // Extract token first — only cache if the blob contains a valid token
+        // Use ignoreExpiry (same as tier-2): the API will reject 401/403 if truly invalid,
+        // which triggers invalidateOAuthCaches() in refreshFromAPI()
+        guard let token = self.extractOAuthToken(from: data, ignoreExpiry: true) else {
+            Self.cacheLogger.debug("Tier 3: CLI keychain data did not contain a valid token, skipping cache")
             return nil
         }
+
+        // Cache the validated data in our own keychain (never prompts on future reads)
+        self.saveCLIOAuthCache(data)
         Self.memoryCache.withLock { $0.store(token: token) }
         Self.cacheLogger.debug("Tier 3: Resolved OAuth token from CLI keychain, cached in all tiers")
         return token
@@ -114,25 +117,32 @@ extension TokenTrackingManager {
         let path = NSHomeDirectory() + "/.claude/.credentials.json"
         let fileManager = FileManager.default
 
-        guard let attrs = try? fileManager.attributesOfItem(atPath: path),
-              let modDate = attrs[.modificationDate] as? Date
-        else {
-            // File doesn't exist or can't be read — not a change trigger
-            return false
-        }
+        let attrs = try? fileManager.attributesOfItem(atPath: path)
+        let modDate = attrs?[.modificationDate] as? Date
 
         return Self.memoryCache.withLock { cache in
-            guard let storedModDate = cache.credentialFileModDate else {
-                // First check — record the date, don't treat as change
-                cache.credentialFileModDate = modDate
+            if let modDate {
+                // File exists
+                guard let storedModDate = cache.credentialFileModDate else {
+                    // First check — record the date, don't treat as change
+                    cache.credentialFileModDate = modDate
+                    return false
+                }
+
+                if modDate != storedModDate {
+                    cache.credentialFileModDate = modDate
+                    return true // File changed
+                }
+                return false
+            } else {
+                // File doesn't exist or can't be read
+                if cache.credentialFileModDate != nil {
+                    // File was previously tracked but is now gone (e.g. CLI logout) — treat as change
+                    cache.credentialFileModDate = nil
+                    return true
+                }
                 return false
             }
-
-            if modDate != storedModDate {
-                cache.credentialFileModDate = modDate
-                return true // File changed
-            }
-            return false
         }
     }
 }
