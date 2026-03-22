@@ -48,6 +48,7 @@ actor SessionStore {
     /// Tracks stream IDs whose onTermination has fired before registerContinuation ran.
     /// Prevents a leaked continuation when the consumer cancels before registration completes.
     /// Must be nonisolated (accessed from the nonisolated onTermination handler) — Mutex is inherently Sendable.
+    /// Cleaned up in two places: `registerContinuation` (early termination) and `removeContinuation` (normal termination).
     nonisolated let terminatedStreamIDs = Mutex<Set<UUID>>([])
 
     /// Create a new stream of session state changes.
@@ -275,11 +276,17 @@ actor SessionStore {
     }
 
     /// Remove a continuation when the stream terminates.
-    /// The terminated-IDs set is cleaned up by `registerContinuation` (not here)
-    /// to prevent a race where this method runs before registration and clears
-    /// the termination signal prematurely.
+    /// Also cleans up `terminatedStreamIDs` when the continuation was registered (normal flow).
+    /// When the continuation was NOT registered (early termination race), the ID stays in
+    /// `terminatedStreamIDs` so `registerContinuation` can detect the termination and bail out.
     private func removeContinuation(id: UUID) {
-        self.sessionsContinuations.removeValue(forKey: id)
+        let wasRegistered = self.sessionsContinuations.removeValue(forKey: id) != nil
+        // Only clean up terminatedStreamIDs if the continuation was registered.
+        // If it wasn't registered, the ID must stay so registerContinuation
+        // can detect early termination and avoid inserting a leaked continuation.
+        if wasRegistered {
+            self.terminatedStreamIDs.withLock { $0.remove(id) }
+        }
     }
 
     // MARK: - Published State (for UI)
