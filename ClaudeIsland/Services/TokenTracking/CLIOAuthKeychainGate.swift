@@ -123,17 +123,16 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
                 )
                 anyDenied = true
 
+            case errSecNoAccessForItem:
+                Self.logger.warning(
+                    "Preflight: no access for item (service: \(candidate.service, privacy: .public))",
+                )
+                anyDenied = true
+
             default:
-                if status == -25293 {
-                    Self.logger.warning(
-                        "Preflight: no access for item (service: \(candidate.service, privacy: .public))",
-                    )
-                    anyDenied = true
-                } else {
-                    Self.logger.debug(
-                        "Preflight: status \(status) (service: \(candidate.service, privacy: .public))",
-                    )
-                }
+                Self.logger.debug(
+                    "Preflight: status \(status) (service: \(candidate.service, privacy: .public))",
+                )
             }
         }
         return anyDenied ? .denied : worstResult
@@ -161,7 +160,7 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
                 return data
             }
 
-            if status == errSecUserCanceled || status == errSecAuthFailed || status == -25293 {
+            if status == errSecUserCanceled || status == errSecAuthFailed || status == errSecNoAccessForItem {
                 Self.logger.warning(
                     "Direct read: denied (status: \(status), service: \(candidate.service, privacy: .public))",
                 )
