@@ -792,16 +792,25 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                 Self.logger.warning("Socket error (errno: \(errno)) for tool:\(toolUseID.prefix(12), privacy: .public) — cleaning up")
                 self?.handlePermissionSocketDisconnect(toolUseID: toolUseID, sessionID: event.sessionID)
             }
-            // bytesRead > 0: unexpected data on socket; ignore (should not happen).
+            if bytesRead > 0 {
+                // Unexpected data on socket — drain it to prevent tight wakeup loop.
+                // MSG_PEEK left data in buffer; a real recv() consumes it so the source
+                // doesn't immediately re-fire.
+                var drain = [UInt8](repeating: 0, count: 4096)
+                _ = recv(clientSocket, &drain, drain.count, MSG_DONTWAIT)
+                Self.logger.warning("Unexpected data on permission socket for tool:\(toolUseID.prefix(12), privacy: .public) — drained")
+            }
             // bytesRead < 0 with EAGAIN/EWOULDBLOCK: spurious wake; ignore.
         }
         readSource.setCancelHandler {} // No-op; socket is closed by the permission cleanup path
-        readSource.resume()
         pending.disconnectSource = readSource
 
+        // Store in dictionary BEFORE resuming the dispatch source — the source fires on `queue`
+        // while this method runs on `clientQueue`, so an immediate EOF would race with insertion.
         permissionsState.withLock { state in
             state.pendingPermissions[toolUseID] = pending
         }
+        readSource.resume()
 
         // Schedule timeout cleanup to prevent FD leak if Claude dies
         schedulePermissionTimeout(toolUseID: toolUseID, sessionID: event.sessionID)
