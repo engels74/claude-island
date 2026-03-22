@@ -35,7 +35,9 @@ jobs:
             exit 1
           fi
           echo "Detected Swift $SWIFT_VERSION"
-          if [[ "$(echo "$SWIFT_VERSION < 6.2" | bc)" -eq 1 ]]; then
+          SWIFT_MAJOR=$(echo "$SWIFT_VERSION" | cut -d. -f1)
+          SWIFT_MINOR=$(echo "$SWIFT_VERSION" | cut -d. -f2)
+          if [[ "$SWIFT_MAJOR" -lt 6 ]] || { [[ "$SWIFT_MAJOR" -eq 6 ]] && [[ "$SWIFT_MINOR" -lt 2 ]]; }; then
             echo "::error::Swift 6.2+ required. Found $SWIFT_VERSION"
             exit 1
           fi
