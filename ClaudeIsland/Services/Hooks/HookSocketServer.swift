@@ -787,9 +787,13 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             if bytesRead == 0 {
                 // EOF — remote end closed
                 self?.handlePermissionSocketDisconnect(toolUseID: toolUseID, sessionID: event.sessionID)
+            } else if bytesRead < 0, errno != EAGAIN, errno != EWOULDBLOCK {
+                // Fatal error (EBADF, ECONNRESET, etc.) — socket is dead, clean up immediately
+                Self.logger.warning("Socket error (errno: \(errno)) for tool:\(toolUseID.prefix(12), privacy: .public) — cleaning up")
+                self?.handlePermissionSocketDisconnect(toolUseID: toolUseID, sessionID: event.sessionID)
             }
             // bytesRead > 0: unexpected data on socket; ignore (should not happen).
-            // bytesRead < 0: EAGAIN/EWOULDBLOCK spurious wake; ignore.
+            // bytesRead < 0 with EAGAIN/EWOULDBLOCK: spurious wake; ignore.
         }
         readSource.setCancelHandler {} // No-op; socket is closed by the permission cleanup path
         readSource.resume()

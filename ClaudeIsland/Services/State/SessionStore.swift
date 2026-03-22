@@ -914,21 +914,20 @@ actor SessionStore {
     // MARK: - History Loading
 
     private func loadHistoryFromFile(sessionID: String, cwd: String) async {
-        // Run the two heavy file I/O calls in parallel (independent data paths)
-        async let messagesTask = ConversationParser.shared.parseFullConversation(
+        // Both methods are actor-isolated on ConversationParser.shared, so they
+        // serialize on the actor's executor despite the async let syntax.
+        // Sequential calls are clearer since no actual parallelism occurs.
+        let messages = await ConversationParser.shared.parseFullConversation(
             sessionID: sessionID,
             cwd: cwd,
         )
-        async let conversationInfoTask = ConversationParser.shared.parse(
-            sessionID: sessionID,
-            cwd: cwd,
-        )
-
-        let messages = await messagesTask
-        // Batch the 3 lightweight dict lookups into a single actor hop
+        // historyMetadata reads incrementalState populated by parseFullConversation above
         let (completedTools, toolResults, structuredResults) =
             await ConversationParser.shared.historyMetadata(for: sessionID)
-        let conversationInfo = await conversationInfoTask
+        let conversationInfo = await ConversationParser.shared.parse(
+            sessionID: sessionID,
+            cwd: cwd,
+        )
 
         // Process loaded history
         await self.process(.historyLoaded(HistoryLoadedPayload(
