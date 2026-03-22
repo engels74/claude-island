@@ -78,6 +78,7 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
     ]
 
     private func nonInteractivePreflight() -> PreflightResult {
+        var anyDenied = false
         var worstResult: PreflightResult = .notFound
 
         for candidate in Self.candidates {
@@ -120,14 +121,14 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
                 Self.logger.warning(
                     "Preflight: denied (status: \(status), service: \(candidate.service, privacy: .public))",
                 )
-                worstResult = .denied
+                anyDenied = true
 
             default:
                 if status == -25293 {
                     Self.logger.warning(
                         "Preflight: no access for item (service: \(candidate.service, privacy: .public))",
                     )
-                    worstResult = .denied
+                    anyDenied = true
                 } else {
                     Self.logger.debug(
                         "Preflight: status \(status) (service: \(candidate.service, privacy: .public))",
@@ -135,7 +136,7 @@ nonisolated struct CLIOAuthKeychainGate: Sendable {
                 }
             }
         }
-        return worstResult
+        return anyDenied ? .denied : worstResult
     }
 
     private func readCLIKeychain() -> Data? {

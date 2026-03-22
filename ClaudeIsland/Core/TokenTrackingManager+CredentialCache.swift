@@ -24,6 +24,7 @@ extension TokenTrackingManager {
             Self.cacheLogger.info("Credential file changed, invalidating memory and keychain caches")
             Self.memoryCache.withLock { $0.clear() }
             self.deleteCLIOAuthCache()
+            CLIOAuthKeychainGate.shared.clearCooldown()
         }
 
         // Tier 1: Memory cache (Mutex-protected, 30-min TTL)
