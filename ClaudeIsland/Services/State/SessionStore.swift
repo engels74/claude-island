@@ -62,7 +62,7 @@ actor SessionStore {
         // Mark terminated FIRST (synchronous, via Mutex) so registerContinuation sees it.
         continuation.onTermination = { [weak self] _ in
             guard let self else { return }
-            self.terminatedStreamIDs.withLock { $0.insert(id) }
+            _ = self.terminatedStreamIDs.withLock { $0.insert(id) }
             Task(name: "session-stream-deregister") { await self.removeContinuation(id: id) }
         }
         Task(name: "session-stream-register") {
@@ -281,7 +281,7 @@ actor SessionStore {
         // If it wasn't registered, the ID must stay so registerContinuation
         // can detect early termination and avoid inserting a leaked continuation.
         if wasRegistered {
-            self.terminatedStreamIDs.withLock { $0.remove(id) }
+            _ = self.terminatedStreamIDs.withLock { $0.remove(id) }
         }
     }
 

@@ -111,7 +111,7 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
             // Extract exit code from TerminationStatus enum
             let exitCode: Int32 = switch result.terminationStatus {
             case let .exited(code): code
-            case let .unhandledException(code): code
+            case let .signaled(code): code
             }
 
             let processResult = ProcessResult(
