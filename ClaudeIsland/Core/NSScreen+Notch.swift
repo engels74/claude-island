@@ -1,5 +1,5 @@
 //
-//  Ext+NSScreen.swift
+//  NSScreen+Notch.swift
 //  ClaudeIsland
 //
 //  Extensions for NSScreen to detect notch and built-in display

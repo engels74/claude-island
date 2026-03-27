@@ -187,7 +187,7 @@ struct ChatView: View {
     // MARK: - Keyboard Event Monitoring
 
     /// Logger for image paste operations
-    private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ChatView")
+    nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ChatView")
 
     @State private var inputText = ""
     @State private var history: [ChatHistoryItem] = []

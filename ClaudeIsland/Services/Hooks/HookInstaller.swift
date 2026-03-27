@@ -426,9 +426,14 @@ enum HookInstaller {
     }
 }
 
-// MARK: - FileManager Atomic Operations
+// MARK: - SettingsIO
 
-private let settingsIOLogger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+/// Logger holder for the FileManager extension (extensions on external types cannot have stored static properties)
+private enum SettingsIO {
+    nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "HookInstaller")
+}
+
+// MARK: - FileManager Atomic Operations
 
 extension FileManager {
     /// Read a JSON file, apply a mutation via `body`, and atomic-write it back.
@@ -469,7 +474,7 @@ extension FileManager {
         do {
             try self.atomicWrite(newData, to: fileURL)
         } catch {
-            settingsIOLogger.error("Failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)")
+            SettingsIO.logger.error("Failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)")
         }
     }
 
