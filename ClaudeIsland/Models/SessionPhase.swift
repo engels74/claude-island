@@ -94,10 +94,8 @@ nonisolated enum SessionPhase: Sendable {
 
     // MARK: Internal
 
-    // swiftlint:disable attributes
-
     /// Whether this phase indicates the session needs user attention
-    @inline(always) var needsAttention: Bool {
+    var needsAttention: Bool {
         switch self {
         case .waitingForApproval,
              .waitingForInput:
@@ -108,7 +106,7 @@ nonisolated enum SessionPhase: Sendable {
     }
 
     /// Whether this phase indicates active processing
-    @inline(always) var isActive: Bool {
+    var isActive: Bool {
         switch self {
         case .processing,
              .compacting:
@@ -119,14 +117,12 @@ nonisolated enum SessionPhase: Sendable {
     }
 
     /// Whether this is a waitingForApproval phase
-    @inline(always) nonisolated var isWaitingForApproval: Bool {
+    nonisolated var isWaitingForApproval: Bool {
         if case .waitingForApproval = self {
             return true
         }
         return false
     }
-
-    // swiftlint:enable attributes
 
     /// Extract tool name if waiting for approval
     var approvalToolName: String? {
