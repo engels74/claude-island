@@ -136,6 +136,8 @@ struct NotchMenuView: View {
 
                         ClaudeCommandRow()
 
+                        ProjectsSettingsView()
+
                         AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
                         MenuToggleRow(
