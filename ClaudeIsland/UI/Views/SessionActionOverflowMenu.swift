@@ -10,12 +10,11 @@ import SwiftUI
 // MARK: - SessionActionOverflowMenu
 
 struct SessionActionOverflowMenu: View {
+    // MARK: Internal
+
     let session: SessionState
     let actions: [SessionActionType]
     let onDismiss: () -> Void
-
-    @State private var confirmingDelete = false
-    @State private var showCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -32,55 +31,21 @@ struct SessionActionOverflowMenu: View {
                 .fill(Color.black.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                )
+                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5),
+                ),
         )
         .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
     }
 
-    private func isActionAvailable(_ action: SessionActionType) -> Bool {
-        switch action {
-        case .chat: true
-        case .focus: self.session.pid != nil
-        case .archive: self.session.phase == .idle || self.session.phase == .waitingForInput
-        case .copyAttach: self.session.isInTmux
-        case .delete: self.session.isInTmux
-        case .pinProject: true
-        case .assignShortcut: true
-        }
-    }
+    // MARK: Private
 
-    @ViewBuilder
-    private func actionRow(_ action: SessionActionType) -> some View {
-        switch action {
-        case .chat:
-            self.menuButton(icon: "bubble.left", label: "Chat") { self.onDismiss() }
-        case .focus:
-            self.menuButton(icon: "terminal", label: "Focus Terminal") { self.onDismiss() }
-        case .archive:
-            self.menuButton(icon: "archivebox", label: "Archive") { self.onDismiss() }
-        case .copyAttach:
-            self.copyAttachRow
-        case .delete:
-            self.deleteRow
-        case .pinProject:
-            self.menuButton(icon: "star", label: "Pin Project") {
-                ProjectStore.shared.addPinned(path: self.session.cwd)
-                self.onDismiss()
-            }
-        case .assignShortcut:
-            self.menuButton(icon: "keyboard", label: "Assign Shortcut") { self.onDismiss() }
-        }
-    }
-
-    private func menuButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
-        OverflowMenuButton(icon: icon, label: label, action: action)
-    }
+    @State private var confirmingDelete = false
+    @State private var showCopied = false
 
     private var copyAttachRow: some View {
         OverflowMenuButton(
             icon: self.showCopied ? "checkmark" : "doc.on.clipboard",
-            label: self.showCopied ? "Copied!" : "Copy Attach"
+            label: self.showCopied ? "Copied!" : "Copy Attach",
         ) {
             if let tmuxName = self.session.tmuxSessionName {
                 NSPasteboard.general.clearContents()
@@ -134,17 +99,56 @@ struct SessionActionOverflowMenu: View {
             }
         }
     }
+
+    @ViewBuilder
+    private func actionRow(_ action: SessionActionType) -> some View {
+        switch action {
+        case .chat:
+            self.menuButton(icon: "bubble.left", label: "Chat") { self.onDismiss() }
+        case .focus:
+            self.menuButton(icon: "terminal", label: "Focus Terminal") { self.onDismiss() }
+        case .archive:
+            self.menuButton(icon: "archivebox", label: "Archive") { self.onDismiss() }
+        case .copyAttach:
+            self.copyAttachRow
+        case .delete:
+            self.deleteRow
+        case .pinProject:
+            self.menuButton(icon: "star", label: "Pin Project") {
+                ProjectStore.shared.addPinned(path: self.session.cwd)
+                self.onDismiss()
+            }
+        case .assignShortcut:
+            self.menuButton(icon: "keyboard", label: "Assign Shortcut") { self.onDismiss() }
+        }
+    }
+
+    private func menuButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        OverflowMenuButton(icon: icon, label: label, action: action)
+    }
+
+    private func isActionAvailable(_ action: SessionActionType) -> Bool {
+        switch action {
+        case .chat: true
+        case .focus: self.session.pid != nil
+        case .archive: self.session.phase == .idle || self.session.phase == .waitingForInput
+        case .copyAttach: self.session.isInTmux
+        case .delete: self.session.isInTmux
+        case .pinProject: true
+        case .assignShortcut: true
+        }
+    }
 }
 
 // MARK: - OverflowMenuButton
 
 private struct OverflowMenuButton: View {
+    // MARK: Internal
+
     let icon: String
     let label: String
     var isDestructive = false
     let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: self.action) {
@@ -164,10 +168,14 @@ private struct OverflowMenuButton: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(self.isHovered ? Color.white.opacity(0.08) : Color.clear),
             )
         }
         .buttonStyle(.plain)
         .onHover { self.isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }

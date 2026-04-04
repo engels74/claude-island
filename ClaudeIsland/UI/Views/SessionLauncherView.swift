@@ -33,16 +33,16 @@ struct SessionLauncherView: View {
 
     // MARK: Private
 
+    private enum Field: Hashable {
+        case prompt
+        case name
+    }
+
     @State private var prompt = ""
     @State private var sessionName = ""
     @State private var selectedDirectory: String = AppSettings.lastUsedDirectory ?? FileManager.default.homeDirectoryForCurrentUser.path
     @State private var showNameField = false
     @FocusState private var focusedField: Field?
-
-    private enum Field: Hashable {
-        case prompt
-        case name
-    }
 
     private var resolvedSessionName: String {
         if !self.sessionName.isEmpty {
@@ -63,11 +63,6 @@ struct SessionLauncherView: View {
         AppSettings.claudeCommandTemplate
             .replacingOccurrences(of: "{{name}}", with: self.resolvedSessionName)
             .replacingOccurrences(of: "{{dir}}", with: self.selectedDirectory)
-    }
-
-    private func submit() {
-        let trimmedPrompt = self.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.onSubmit(trimmedPrompt, self.resolvedSessionName, self.selectedDirectory)
     }
 
     // MARK: - Prompt Field
@@ -128,10 +123,7 @@ struct SessionLauncherView: View {
     // MARK: - Directory Picker
 
     private var directoryPicker: some View {
-        DirectoryPickerView(
-            selectedPath: self.$selectedDirectory,
-            onSubmit: { self.submit() }
-        )
+        DirectoryPickerView(selectedPath: self.$selectedDirectory) { self.submit() }
     }
 
     // MARK: - Bottom Bar
@@ -156,5 +148,10 @@ struct SessionLauncherView: View {
             .background(Color.white.opacity(0.9))
             .clipShape(Capsule())
         }
+    }
+
+    private func submit() {
+        let trimmedPrompt = self.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.onSubmit(trimmedPrompt, self.resolvedSessionName, self.selectedDirectory)
     }
 }

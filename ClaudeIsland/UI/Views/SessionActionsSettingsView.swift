@@ -10,9 +10,7 @@ import SwiftUI
 // MARK: - SessionActionsSettingsView
 
 struct SessionActionsSettingsView: View {
-    @State private var isExpanded = false
-    @State private var isHovered = false
-    @State private var actionOrder: [SessionActionType] = AppSettings.sessionActionOrder
+    // MARK: Internal
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,7 +39,7 @@ struct SessionActionsSettingsView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -99,7 +97,7 @@ struct SessionActionsSettingsView: View {
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(index < 3 ? Color.white.opacity(0.04) : Color.clear)
+                                .fill(index < 3 ? Color.white.opacity(0.04) : Color.clear),
                         )
                     }
                 }
@@ -110,7 +108,11 @@ struct SessionActionsSettingsView: View {
         }
     }
 
-    // MARK: - Private
+    // MARK: Private
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var actionOrder: [SessionActionType] = AppSettings.sessionActionOrder
 
     private func moveUp(_ index: Int) {
         guard index > 0 else { return }

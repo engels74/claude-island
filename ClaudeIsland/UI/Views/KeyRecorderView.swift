@@ -11,38 +11,11 @@ import SwiftUI
 // MARK: - KeyRecorderView
 
 struct KeyRecorderView: View {
+    // MARK: Internal
+
     @Binding var combo: KeyCombo?
+
     var onChanged: ((KeyCombo?) -> Void)?
-
-    @State private var isRecording = false
-    @State private var showReserved = false
-    @State private var monitor: Any?
-
-    private static let reservedCombos: Set<KeyCombo> = {
-        let cmd = NSEvent.ModifierFlags.command.rawValue
-        let cmdShift = NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue
-        let ctrl = NSEvent.ModifierFlags.control.rawValue
-
-        return [
-            KeyCombo(keyCode: 12, modifiers: cmd),
-            KeyCombo(keyCode: 4, modifiers: cmd),
-            KeyCombo(keyCode: 46, modifiers: cmd),
-            KeyCombo(keyCode: 49, modifiers: cmd),
-            KeyCombo(keyCode: 13, modifiers: cmd),
-            KeyCombo(keyCode: 8, modifiers: cmd),
-            KeyCombo(keyCode: 9, modifiers: cmd),
-            KeyCombo(keyCode: 7, modifiers: cmd),
-            KeyCombo(keyCode: 0, modifiers: cmd),
-            KeyCombo(keyCode: 6, modifiers: cmd),
-            KeyCombo(keyCode: 6, modifiers: cmdShift),
-            KeyCombo(keyCode: 45, modifiers: cmd),
-            KeyCombo(keyCode: 12, modifiers: cmdShift),
-            KeyCombo(keyCode: 126, modifiers: ctrl),
-            KeyCombo(keyCode: 125, modifiers: ctrl),
-            KeyCombo(keyCode: 123, modifiers: ctrl),
-            KeyCombo(keyCode: 124, modifiers: ctrl),
-        ]
-    }()
 
     var body: some View {
         HStack(spacing: 4) {
@@ -76,9 +49,9 @@ struct KeyRecorderView: View {
                                     self.isRecording
                                         ? Color.blue.opacity(0.6)
                                         : (self.showReserved ? Color.red.opacity(0.6) : Color.clear),
-                                    lineWidth: 1.5
-                                )
-                        )
+                                    lineWidth: 1.5,
+                                ),
+                        ),
                 )
             }
             .buttonStyle(.plain)
@@ -106,6 +79,38 @@ struct KeyRecorderView: View {
             self.removeMonitor()
         }
     }
+
+    // MARK: Private
+
+    private static let reservedCombos: Set<KeyCombo> = {
+        let cmd = NSEvent.ModifierFlags.command.rawValue
+        let cmdShift = NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue
+        let ctrl = NSEvent.ModifierFlags.control.rawValue
+
+        return [
+            KeyCombo(keyCode: 12, modifiers: cmd),
+            KeyCombo(keyCode: 4, modifiers: cmd),
+            KeyCombo(keyCode: 46, modifiers: cmd),
+            KeyCombo(keyCode: 49, modifiers: cmd),
+            KeyCombo(keyCode: 13, modifiers: cmd),
+            KeyCombo(keyCode: 8, modifiers: cmd),
+            KeyCombo(keyCode: 9, modifiers: cmd),
+            KeyCombo(keyCode: 7, modifiers: cmd),
+            KeyCombo(keyCode: 0, modifiers: cmd),
+            KeyCombo(keyCode: 6, modifiers: cmd),
+            KeyCombo(keyCode: 6, modifiers: cmdShift),
+            KeyCombo(keyCode: 45, modifiers: cmd),
+            KeyCombo(keyCode: 12, modifiers: cmdShift),
+            KeyCombo(keyCode: 126, modifiers: ctrl),
+            KeyCombo(keyCode: 125, modifiers: ctrl),
+            KeyCombo(keyCode: 123, modifiers: ctrl),
+            KeyCombo(keyCode: 124, modifiers: ctrl),
+        ]
+    }()
+
+    @State private var isRecording = false
+    @State private var showReserved = false
+    @State private var monitor: Any?
 
     // MARK: - Event Monitor
 

@@ -48,7 +48,7 @@ final class ProjectStore {
                 displayName: URL(fileURLWithPath: normalized).lastPathComponent,
                 lastUsedAt: Date(),
                 isPinned: false,
-                pinnedAt: nil
+                pinnedAt: nil,
             )
             self.entries.append(entry)
         }
@@ -93,7 +93,7 @@ final class ProjectStore {
             displayName: URL(fileURLWithPath: normalized).lastPathComponent,
             lastUsedAt: Date(),
             isPinned: true,
-            pinnedAt: Date()
+            pinnedAt: Date(),
         )
         self.entries.append(entry)
         self.save()

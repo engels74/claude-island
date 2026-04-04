@@ -82,73 +82,8 @@ actor SessionStore {
     /// Process any session event - the ONLY way to mutate state
     func process(_ event: SessionEvent) async {
         Self.logger.debug("Processing: \(String(describing: event), privacy: .public)")
-
-        // Record to audit trail
         self.recordAuditEntry(event: event)
-
-        switch event {
-        case let .hookReceived(hookEvent):
-            await self.processHookEvent(hookEvent)
-
-        case let .permissionApproved(sessionID, toolUseID):
-            await self.processPermissionApproved(sessionID: sessionID, toolUseID: toolUseID)
-
-        case let .permissionDenied(sessionID, toolUseID, reason):
-            await self.processPermissionDenied(sessionID: sessionID, toolUseID: toolUseID, reason: reason)
-
-        case let .permissionSocketFailed(sessionID, toolUseID):
-            await self.processSocketFailure(sessionID: sessionID, toolUseID: toolUseID)
-
-        case let .fileUpdated(payload):
-            await self.processFileUpdate(payload)
-
-        case let .interruptDetected(sessionID):
-            await self.processInterrupt(sessionID: sessionID)
-
-        case let .clearDetected(sessionID):
-            await self.processClearDetected(sessionID: sessionID)
-
-        case let .sessionEnded(sessionID):
-            await self.processSessionEnd(sessionID: sessionID)
-
-        case let .loadHistory(sessionID, cwd):
-            await self.loadHistoryFromFile(sessionID: sessionID, cwd: cwd)
-
-        case let .historyLoaded(payload):
-            await self.processHistoryLoaded(payload)
-
-        case let .toolCompleted(sessionID, toolUseID, result):
-            await self.processToolCompleted(sessionID: sessionID, toolUseID: toolUseID, result: result)
-
-        // MARK: - Subagent Events
-
-        case let .subagentStarted(sessionID, taskToolID):
-            handleSubagentStarted(sessionID: sessionID, taskToolID: taskToolID)
-
-        case let .subagentToolExecuted(sessionID, tool):
-            handleSubagentToolExecuted(sessionID: sessionID, tool: tool)
-
-        case let .subagentToolCompleted(sessionID, toolID, status):
-            handleSubagentToolCompleted(sessionID: sessionID, toolID: toolID, status: status)
-
-        case let .subagentStopped(sessionID, taskToolID):
-            handleSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
-
-        // MARK: - Launch Events
-
-        case let .sessionLaunching(payload):
-            self.processSessionLaunching(payload)
-
-        case let .launchProgressUpdated(sessionID, progress):
-            self.processLaunchProgressUpdated(sessionID: sessionID, progress: progress)
-
-        case let .launchCompleted(sessionID):
-            self.processLaunchCompleted(sessionID: sessionID)
-
-        case let .launchFailed(sessionID, error):
-            self.processLaunchFailed(sessionID: sessionID, error: error)
-        }
-
+        await self.dispatchCoreEvent(event)
         self.publishState()
     }
 
@@ -231,6 +166,10 @@ actor SessionStore {
         }
     }
 
+    func setOnSessionRemoved(_ callback: @escaping @Sendable (String) -> Void) {
+        self.onSessionRemoved = callback
+    }
+
     // MARK: Private
 
     /// An entry in the event audit trail
@@ -269,6 +208,60 @@ actor SessionStore {
             }
         }
         return input
+    }
+
+    // MARK: - Event Dispatch
+
+    private func dispatchCoreEvent(_ event: SessionEvent) async {
+        switch event {
+        case let .hookReceived(hookEvent):
+            await self.processHookEvent(hookEvent)
+        case let .permissionApproved(sessionID, toolUseID):
+            await self.processPermissionApproved(sessionID: sessionID, toolUseID: toolUseID)
+        case let .permissionDenied(sessionID, toolUseID, reason):
+            await self.processPermissionDenied(sessionID: sessionID, toolUseID: toolUseID, reason: reason)
+        case let .permissionSocketFailed(sessionID, toolUseID):
+            await self.processSocketFailure(sessionID: sessionID, toolUseID: toolUseID)
+        case let .fileUpdated(payload):
+            await self.processFileUpdate(payload)
+        case let .interruptDetected(sessionID):
+            await self.processInterrupt(sessionID: sessionID)
+        case let .clearDetected(sessionID):
+            await self.processClearDetected(sessionID: sessionID)
+        case let .sessionEnded(sessionID):
+            await self.processSessionEnd(sessionID: sessionID)
+        case let .loadHistory(sessionID, cwd):
+            await self.loadHistoryFromFile(sessionID: sessionID, cwd: cwd)
+        case let .historyLoaded(payload):
+            await self.processHistoryLoaded(payload)
+        case let .toolCompleted(sessionID, toolUseID, result):
+            await self.processToolCompleted(sessionID: sessionID, toolUseID: toolUseID, result: result)
+        default:
+            await self.dispatchExtendedEvent(event)
+        }
+    }
+
+    private func dispatchExtendedEvent(_ event: SessionEvent) async {
+        switch event {
+        case let .subagentStarted(sessionID, taskToolID):
+            handleSubagentStarted(sessionID: sessionID, taskToolID: taskToolID)
+        case let .subagentToolExecuted(sessionID, tool):
+            handleSubagentToolExecuted(sessionID: sessionID, tool: tool)
+        case let .subagentToolCompleted(sessionID, toolID, status):
+            handleSubagentToolCompleted(sessionID: sessionID, toolID: toolID, status: status)
+        case let .subagentStopped(sessionID, taskToolID):
+            handleSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
+        case let .sessionLaunching(payload):
+            self.processSessionLaunching(payload)
+        case let .launchProgressUpdated(sessionID, progress):
+            self.processLaunchProgressUpdated(sessionID: sessionID, progress: progress)
+        case let .launchCompleted(sessionID):
+            self.processLaunchCompleted(sessionID: sessionID)
+        case let .launchFailed(sessionID, error):
+            self.processLaunchFailed(sessionID: sessionID, error: error)
+        default:
+            break
+        }
     }
 
     /// Register a continuation and yield the current state.
@@ -937,10 +930,6 @@ actor SessionStore {
         self.sessions.removeValue(forKey: sessionID)
         self.cancelPendingSync(sessionID: sessionID)
         self.onSessionRemoved?(sessionID)
-    }
-
-    func setOnSessionRemoved(_ callback: @escaping @Sendable (String) -> Void) {
-        self.onSessionRemoved = callback
     }
 
     // MARK: - Launch Event Processing

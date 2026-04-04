@@ -10,11 +10,7 @@ import SwiftUI
 // MARK: - ShortcutsSettingsView
 
 struct ShortcutsSettingsView: View {
-    @State private var isExpanded = false
-    @State private var isHovered = false
-    @State private var globalCombo: KeyCombo? = AppSettings.globalShortcut
-
-    private var hotkeyManager = HotkeyManager.shared
+    // MARK: Internal
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +39,7 @@ struct ShortcutsSettingsView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -61,6 +57,14 @@ struct ShortcutsSettingsView: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var globalCombo: KeyCombo? = AppSettings.globalShortcut
+
+    private var hotkeyManager = HotkeyManager.shared
 
     // MARK: - Global Section
 
@@ -126,7 +130,7 @@ struct ShortcutsSettingsView: View {
                         SessionShortcutRow(
                             sessionID: sessionID,
                             combo: binding.combo,
-                            hotkeyManager: self.hotkeyManager
+                            hotkeyManager: self.hotkeyManager,
                         )
                     }
                 }
@@ -138,11 +142,11 @@ struct ShortcutsSettingsView: View {
 // MARK: - SessionShortcutRow
 
 private struct SessionShortcutRow: View {
+    // MARK: Internal
+
     let sessionID: String
     var combo: KeyCombo
     var hotkeyManager: HotkeyManager
-
-    @State private var currentCombo: KeyCombo?
 
     var body: some View {
         HStack {
@@ -165,4 +169,8 @@ private struct SessionShortcutRow: View {
             self.currentCombo = self.combo
         }
     }
+
+    // MARK: Private
+
+    @State private var currentCombo: KeyCombo?
 }

@@ -7,11 +7,10 @@
 
 import SwiftUI
 
-struct ProjectsSettingsView: View {
-    @State private var isExpanded = false
-    @State private var isHovered = false
+// MARK: - ProjectsSettingsView
 
-    private var projectStore = ProjectStore.shared
+struct ProjectsSettingsView: View {
+    // MARK: Internal
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +39,7 @@ struct ProjectsSettingsView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -59,6 +58,13 @@ struct ProjectsSettingsView: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+
+    private var projectStore = ProjectStore.shared
 
     // MARK: - Pinned Section
 
@@ -82,7 +88,7 @@ struct ProjectsSettingsView: View {
                         isPinned: true,
                         onPin: nil,
                         onUnpin: { self.projectStore.unpin(id: project.id) },
-                        onRemove: { self.projectStore.remove(id: project.id) }
+                        onRemove: { self.projectStore.remove(id: project.id) },
                     )
                 }
             }
@@ -111,7 +117,7 @@ struct ProjectsSettingsView: View {
                         isPinned: false,
                         onPin: { self.projectStore.pin(id: project.id) },
                         onUnpin: nil,
-                        onRemove: { self.projectStore.remove(id: project.id) }
+                        onRemove: { self.projectStore.remove(id: project.id) }, // swiftlint:disable:this trailing_closure
                     )
                 }
             }
@@ -149,13 +155,13 @@ struct ProjectsSettingsView: View {
 // MARK: - ProjectRow
 
 private struct ProjectRow: View {
+    // MARK: Internal
+
     let project: ProjectEntry
     let isPinned: Bool
     let onPin: (() -> Void)?
     let onUnpin: (() -> Void)?
     let onRemove: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -209,8 +215,12 @@ private struct ProjectRow: View {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear)
+                .fill(self.isHovered ? Color.white.opacity(0.06) : Color.clear),
         )
         .onHover { self.isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }

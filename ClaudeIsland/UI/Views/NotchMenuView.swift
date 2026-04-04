@@ -852,11 +852,9 @@ struct TokenTrackingRow: View {
 // MARK: - PanelWidthRow
 
 struct PanelWidthRow: View {
-    var viewModel: NotchViewModel
+    // MARK: Internal
 
-    @State private var isExpanded = false
-    @State private var isHovered = false
-    @State private var widthFraction: Double = AppSettings.chatPanelWidthFraction
+    var viewModel: NotchViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -889,7 +887,7 @@ struct PanelWidthRow: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -921,14 +919,18 @@ struct PanelWidthRow: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var widthFraction: Double = AppSettings.chatPanelWidthFraction
 }
 
 // MARK: - ClaudeCommandRow
 
 struct ClaudeCommandRow: View {
-    @State private var isExpanded = false
-    @State private var isHovered = false
-    @State private var commandTemplate: String = AppSettings.claudeCommandTemplate
+    // MARK: Internal
 
     var body: some View {
         VStack(spacing: 0) {
@@ -957,7 +959,7 @@ struct ClaudeCommandRow: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear),
                 )
             }
             .buttonStyle(.plain)
@@ -983,4 +985,10 @@ struct ClaudeCommandRow: View {
             }
         }
     }
+
+    // MARK: Private
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var commandTemplate: String = AppSettings.claudeCommandTemplate
 }

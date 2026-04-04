@@ -17,7 +17,7 @@ final class SessionLauncherPanel: NSPanel {
             contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
-            defer: true
+            defer: true,
         )
 
         self.isFloatingPanel = true
@@ -43,7 +43,19 @@ final class SessionLauncherPanel: NSPanel {
 
     static let shared = SessionLauncherPanel()
 
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
+
     weak var viewModel: NotchViewModel?
+
+    override func cancelOperation(_: Any?) {
+        self.dismiss()
+    }
 
     func show() {
         guard !self.isVisible else { return }
@@ -66,32 +78,20 @@ final class SessionLauncherPanel: NSPanel {
     func dismiss() {
         self.removeMonitors()
 
-        NSAnimationContext.runAnimationGroup({ context in
+        NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.1
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             self.animator().alphaValue = 0
-        }, completionHandler: {
+        } completionHandler: {
             self.orderOut(nil)
-        })
-    }
-
-    override var canBecomeKey: Bool {
-        true
-    }
-
-    override var canBecomeMain: Bool {
-        false
-    }
-
-    override func cancelOperation(_: Any?) {
-        self.dismiss()
+        }
     }
 
     // MARK: Private
 
     nonisolated private static let logger = Logger(
         subsystem: "com.engels74.ClaudeIsland",
-        category: "SessionLauncherPanel"
+        category: "SessionLauncherPanel",
     )
 
     private var visualEffectView: NSVisualEffectView?
@@ -109,7 +109,7 @@ final class SessionLauncherPanel: NSPanel {
             },
             onDismiss: { [weak self] in
                 self?.dismiss()
-            }
+            },
         )
 
         let hostingView = NSHostingView(rootView: launcherView)
@@ -173,7 +173,7 @@ final class SessionLauncherPanel: NSPanel {
                     prompt: prompt,
                     sessionName: sessionName,
                     directory: directory,
-                    commandTemplate: AppSettings.claudeCommandTemplate
+                    commandTemplate: AppSettings.claudeCommandTemplate,
                 )
             } catch {
                 Self.logger.error("Launch failed: \(error.localizedDescription, privacy: .public)")

@@ -211,7 +211,7 @@ private struct BlockRenderer: View {
                         InlineRenderer(
                             children: Array(cell.inlineChildren),
                             baseColor: self.baseColor,
-                            fontSize: self.fontSize
+                            fontSize: self.fontSize,
                         )
                         .asText()
                         .bold()
@@ -228,12 +228,12 @@ private struct BlockRenderer: View {
                             InlineRenderer(
                                 children: Array(cell.inlineChildren),
                                 baseColor: self.baseColor,
-                                fontSize: self.fontSize
+                                fontSize: self.fontSize,
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(rowIndex % 2 == 0 ? Color.white.opacity(0.04) : Color.clear)
+                            .background(rowIndex.isMultiple(of: 2) ? Color.white.opacity(0.04) : Color.clear)
                         }
                     }
                 }
@@ -244,7 +244,7 @@ private struct BlockRenderer: View {
         .cornerRadius(6)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                .stroke(Color.white.opacity(0.15), lineWidth: 0.5),
         )
     }
 }
@@ -322,10 +322,10 @@ private struct InlineRenderer: View {
 // MARK: - CodeBlockView
 
 private struct CodeBlockView: View {
+    // MARK: Internal
+
     let code: String
     let language: String?
-
-    @State private var showCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -368,4 +368,8 @@ private struct CodeBlockView: View {
         .background(Color.white.opacity(0.08))
         .cornerRadius(6)
     }
+
+    // MARK: Private
+
+    @State private var showCopied = false
 }

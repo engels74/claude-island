@@ -12,6 +12,8 @@ import Foundation
 // MARK: - KeyCombo
 
 struct KeyCombo: Hashable, Codable, Sendable {
+    // MARK: Internal
+
     let keyCode: UInt16
     let modifiers: UInt
 
@@ -40,6 +42,8 @@ struct KeyCombo: Hashable, Codable, Sendable {
         return flags.contains(.command) || flags.contains(.control) || flags.contains(.option) || flags.contains(.shift)
     }
 
+    // MARK: Private
+
     private static func keyCodeToString(_ keyCode: UInt16) -> String? {
         let source = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
         guard let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
@@ -47,7 +51,7 @@ struct KeyCombo: Hashable, Codable, Sendable {
         return data.withUnsafeBytes { rawBuffer -> String? in
             guard let ptr = rawBuffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return nil }
             var deadKeyState: UInt32 = 0
-            var length: Int = 0
+            var length = 0
             var chars = [UniChar](repeating: 0, count: 4)
             let status = UCKeyTranslate(
                 ptr,
@@ -59,7 +63,7 @@ struct KeyCombo: Hashable, Codable, Sendable {
                 &deadKeyState,
                 4,
                 &length,
-                &chars
+                &chars,
             )
             guard status == noErr, length > 0 else { return nil }
             return String(utf16CodeUnits: chars, count: length).uppercased()

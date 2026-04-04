@@ -75,7 +75,7 @@ final class HotkeyManager {
 
     nonisolated private static let logger = Logger(
         subsystem: "com.engels74.ClaudeIsland",
-        category: "HotkeyManager"
+        category: "HotkeyManager",
     )
 
     private let hotkeyMap = Mutex<[KeyCombo: HotkeyAction]>([:])
@@ -123,8 +123,9 @@ final class HotkeyManager {
             options: .defaultTap,
             eventsOfInterest: mask,
             callback: callback,
-            userInfo: mutexRef
-        ) else {
+            userInfo: mutexRef,
+        )
+        else {
             Self.logger.warning("Failed to create CGEvent tap")
             return
         }

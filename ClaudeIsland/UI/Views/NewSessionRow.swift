@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct NewSessionRow: View {
-    let onTap: () -> Void
+    // MARK: Internal
 
-    @State private var isHovered = false
+    let onTap: () -> Void
 
     var body: some View {
         Button(action: self.onTap) {
@@ -32,15 +32,19 @@ struct NewSessionRow: View {
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(
                         Color.white.opacity(self.isHovered ? 0.4 : 0.2),
-                        style: StrokeStyle(lineWidth: 1, dash: [6, 4])
+                        style: StrokeStyle(lineWidth: 1, dash: [6, 4]),
                     )
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(self.isHovered ? Color.white.opacity(0.04) : Color.clear)
-                    )
+                            .fill(self.isHovered ? Color.white.opacity(0.04) : Color.clear),
+                    ),
             )
         }
         .buttonStyle(.plain)
         .onHover { self.isHovered = $0 }
     }
+
+    // MARK: Private
+
+    @State private var isHovered = false
 }

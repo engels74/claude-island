@@ -51,6 +51,14 @@ struct ClaudeInstancesView: View {
         }
     }
 
+    private var overflowActions: [SessionActionType] {
+        let allActions = AppSettings.sessionActionOrder
+        if allActions.count > 3 {
+            return Array(allActions.dropFirst(3))
+        }
+        return []
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
@@ -82,10 +90,9 @@ struct ClaudeInstancesView: View {
                             SessionActionOverflowMenu(
                                 session: session,
                                 actions: self.overflowActions,
-                                onDismiss: { self.showOverflowFor = nil }
-                            )
-                            .offset(y: 36)
-                            .zIndex(100)
+                            ) { self.showOverflowFor = nil }
+                                .offset(y: 36)
+                                .zIndex(100)
                         }
                     }
                 }
@@ -100,14 +107,6 @@ struct ClaudeInstancesView: View {
                 self.showOverflowFor = nil
             }
         }
-    }
-
-    private var overflowActions: [SessionActionType] {
-        let allActions = AppSettings.sessionActionOrder
-        if allActions.count > 3 {
-            return Array(allActions.dropFirst(3))
-        }
-        return []
     }
 
     /// Lower number = higher priority

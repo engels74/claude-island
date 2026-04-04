@@ -21,21 +21,9 @@ actor TmuxSessionCreator {
         prompt: String,
         sessionName: String,
         directory: String,
-        commandTemplate: String
+        commandTemplate: String,
     ) async throws(LaunchError) {
-        guard let tmuxPath = await TmuxPathFinder.shared.getTmuxPath() else {
-            throw .tmuxNotInstalled
-        }
-
-        let claudePath = await self.findClaudeBinary()
-        guard claudePath != nil else {
-            throw .claudeNotInstalled
-        }
-
-        guard FileManager.default.fileExists(atPath: directory) else {
-            throw .directoryNotFound(directory)
-        }
-
+        let tmuxPath = try await self.validatePreconditions(directory: directory)
         let resolvedName = await self.resolveSessionName(sessionName, tmuxPath: tmuxPath)
 
         let provisionalID = UUID().uuidString
@@ -44,88 +32,40 @@ actor TmuxSessionCreator {
             sessionName: resolvedName,
             cwd: directory,
             prompt: prompt,
-            commandTemplate: commandTemplate
+            commandTemplate: commandTemplate,
         )
         await SessionStore.shared.process(.sessionLaunching(payload))
 
-        await SessionStore.shared.process(.launchProgressUpdated(
-            sessionID: provisionalID,
-            progress: .creatingTmuxSession
-        ))
-
-        do {
-            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
-                "new-session", "-d", "-s", resolvedName, "-c", directory,
-            ])
-        } catch {
-            await SessionStore.shared.process(.launchFailed(
-                sessionID: provisionalID,
-                error: .tmuxSessionCreationFailed(error.localizedDescription)
-            ))
-            throw .tmuxSessionCreationFailed(error.localizedDescription)
-        }
-
-        await SessionStore.shared.process(.launchProgressUpdated(
-            sessionID: provisionalID,
-            progress: .startingClaude
-        ))
-
-        let resolvedCommand = self.resolveTemplate(
-            commandTemplate,
-            name: resolvedName,
-            directory: directory
+        try await self.createTmuxSession(
+            tmuxPath: tmuxPath,
+            sessionName: resolvedName,
+            directory: directory,
+            provisionalID: provisionalID,
         )
 
-        do {
-            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
-                "send-keys", "-t", resolvedName, "-l", resolvedCommand,
-            ])
-            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
-                "send-keys", "-t", resolvedName, "Enter",
-            ])
-        } catch {
-            await SessionStore.shared.process(.launchFailed(
-                sessionID: provisionalID,
-                error: .promptSendFailed(error.localizedDescription)
-            ))
-            throw .promptSendFailed(error.localizedDescription)
-        }
-
-        await SessionStore.shared.process(.launchProgressUpdated(
-            sessionID: provisionalID,
-            progress: .waitingForHook
-        ))
+        try await self.sendClaudeCommand(
+            tmuxPath: tmuxPath,
+            sessionName: resolvedName,
+            directory: directory,
+            commandTemplate: commandTemplate,
+            provisionalID: provisionalID,
+        )
 
         let hookReceived = await self.waitForHookMerge(provisionalID: provisionalID, timeout: 15.0)
-
         guard hookReceived else {
             await SessionStore.shared.process(.launchFailed(
                 sessionID: provisionalID,
-                error: .claudeStartTimeout
+                error: .claudeStartTimeout,
             ))
             throw .claudeStartTimeout
         }
 
         await SessionStore.shared.process(.launchProgressUpdated(
             sessionID: provisionalID,
-            progress: .sendingPrompt
+            progress: .sendingPrompt,
         ))
 
-        try? await Task.sleep(for: .milliseconds(200))
-
-        if !prompt.isEmpty {
-            do {
-                _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
-                    "send-keys", "-t", resolvedName, "-l", prompt,
-                ])
-                _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
-                    "send-keys", "-t", resolvedName, "Enter",
-                ])
-            } catch {
-                Self.logger.warning("Failed to send prompt: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
+        await self.sendPromptIfNeeded(prompt: prompt, tmuxPath: tmuxPath, sessionName: resolvedName)
         AppSettings.lastUsedDirectory = directory
     }
 
@@ -140,8 +80,92 @@ actor TmuxSessionCreator {
 
     nonisolated private static let logger = Logger(
         subsystem: "com.engels74.ClaudeIsland",
-        category: "TmuxSessionCreator"
+        category: "TmuxSessionCreator",
     )
+
+    private func validatePreconditions(directory: String) async throws(LaunchError) -> String {
+        guard let tmuxPath = await TmuxPathFinder.shared.getTmuxPath() else {
+            throw .tmuxNotInstalled
+        }
+        let claudePath = await self.findClaudeBinary()
+        guard claudePath != nil else {
+            throw .claudeNotInstalled
+        }
+        guard FileManager.default.fileExists(atPath: directory) else {
+            throw .directoryNotFound(directory)
+        }
+        return tmuxPath
+    }
+
+    private func createTmuxSession(
+        tmuxPath: String,
+        sessionName: String,
+        directory: String,
+        provisionalID: String,
+    ) async throws(LaunchError) {
+        await SessionStore.shared.process(.launchProgressUpdated(
+            sessionID: provisionalID,
+            progress: .creatingTmuxSession,
+        ))
+        do {
+            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
+                "new-session", "-d", "-s", sessionName, "-c", directory,
+            ])
+        } catch {
+            await SessionStore.shared.process(.launchFailed(
+                sessionID: provisionalID,
+                error: .tmuxSessionCreationFailed(error.localizedDescription),
+            ))
+            throw .tmuxSessionCreationFailed(error.localizedDescription)
+        }
+    }
+
+    private func sendClaudeCommand(
+        tmuxPath: String,
+        sessionName: String,
+        directory: String,
+        commandTemplate: String,
+        provisionalID: String,
+    ) async throws(LaunchError) {
+        await SessionStore.shared.process(.launchProgressUpdated(
+            sessionID: provisionalID,
+            progress: .startingClaude,
+        ))
+        let resolvedCommand = self.resolveTemplate(commandTemplate, name: sessionName, directory: directory)
+        do {
+            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
+                "send-keys", "-t", sessionName, "-l", resolvedCommand,
+            ])
+            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
+                "send-keys", "-t", sessionName, "Enter",
+            ])
+            await SessionStore.shared.process(.launchProgressUpdated(
+                sessionID: provisionalID,
+                progress: .waitingForHook,
+            ))
+        } catch {
+            await SessionStore.shared.process(.launchFailed(
+                sessionID: provisionalID,
+                error: .promptSendFailed(error.localizedDescription),
+            ))
+            throw .promptSendFailed(error.localizedDescription)
+        }
+    }
+
+    private func sendPromptIfNeeded(prompt: String, tmuxPath: String, sessionName: String) async {
+        guard !prompt.isEmpty else { return }
+        try? await Task.sleep(for: .milliseconds(200))
+        do {
+            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
+                "send-keys", "-t", sessionName, "-l", prompt,
+            ])
+            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
+                "send-keys", "-t", sessionName, "Enter",
+            ])
+        } catch {
+            Self.logger.warning("Failed to send prompt: \(error.localizedDescription, privacy: .public)")
+        }
+    }
 
     private func findClaudeBinary() async -> String? {
         let claudeBinPath = FileManager.default.homeDirectoryForCurrentUser
