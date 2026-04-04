@@ -138,6 +138,8 @@ struct NotchMenuView: View {
 
                         ProjectsSettingsView()
 
+                        ShortcutsSettingsView()
+
                         AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
                         MenuToggleRow(
