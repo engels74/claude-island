@@ -15,40 +15,60 @@ Adds system-wide keyboard shortcut support for opening the launcher and jumping 
 
 ### How It Works
 
-Uses `CGEvent` tap for system-wide key interception. This lets us consume the event so it doesn't trigger anything else. Requires accessibility permissions (`AXIsProcessTrusted`), which the app already requests.
+Uses `CGEvent` tap (`CGEvent.tapCreate()`) for system-wide key interception. This lets us consume the event so it doesn't trigger anything else. Requires accessibility permissions (`AXIsProcessTrusted`), which the app already requests via `AccessibilityPermissionManager`.
+
+Note: The existing codebase uses `CGEvent` for **posting** mouse events (in `NotchWindow.swift` and `NotchViewModel.swift`) but has never installed a `CGEvent` **tap** (listener). A keyboard-only tap filtered to `.keyDown`/`.keyUp` will not conflict with the existing mouse-event posting.
 
 ### HotkeyManager
 
-`@MainActor @Observable` class. Manages all registered shortcuts and dispatches actions.
+`@Observable final class` with `static let shared` and `private init()`. Follows the same pattern as other observables in the codebase (no `@MainActor` annotation).
 
 #### Internals
 
-- Creates a `CGEvent` tap on init (mach port + `CFRunLoopSource`)
+- Creates a `CGEvent` tap on init (mach port + `CFRunLoopSource` attached to **main run loop** -- this ensures the callback runs on MainActor-compatible thread)
 - Maintains a dictionary: `[KeyCombo: HotkeyAction]`
 - On each key event: checks for match, consumes and fires action if found, passes through if not
+
+#### Deferred Start
+
+Follow the `EventMonitors.shared.startMonitorsIfPermitted()` pattern (EventMonitors.swift line 62): only install the `CGEvent` tap when `AXIsProcessTrusted()` returns true. `AccessibilityPermissionManager` already calls `EventMonitors.shared.startMonitorsIfPermitted()` when permission is granted -- add a similar call to `HotkeyManager.shared.startIfPermitted()`.
+
+#### Tap Health Check
+
+`CGEvent.tapCreate()` can return `nil` even with accessibility granted, and taps can become disabled silently. Add a periodic check (similar to the accessibility polling in `AccessibilityPermissionManager`):
+- On each shortcut settings view appear, verify `CGEvent.tapIsEnabled(tap:)` -- if disabled, re-enable with `CGEvent.tapEnable(tap:enable:)`
+- If tap creation initially fails, retry on next accessibility permission grant
 
 #### Lifecycle
 
 - Created by `AppDelegate` on launch
 - Loads saved shortcuts from `AppSettings`
-- Installs `CGEvent` tap
+- Installs `CGEvent` tap (deferred until accessibility granted)
 - Tears down tap on app termination
 
 #### Accessibility Check
 
 - `AXIsProcessTrusted()` returns false if permission not granted
-- `CGEvent` tap silently fails without it
-- Show warning in Shortcuts settings if accessibility isn't granted, link to System Settings
+- `CGEvent` tap creation silently fails or returns nil
+- Show warning in Shortcuts settings if accessibility isn't granted, using the existing `AccessibilityPermissionManager.isAccessibilityGranted` flag
 
 ### KeyCombo Model
 
 ```swift
-struct KeyCombo: Hashable, Codable, Sendable {
+struct KeyCombo: Hashable, Sendable {
     let keyCode: UInt16
-    let modifiers: NSEvent.ModifierFlags  // .command, .shift, .option, .control
-    var displayString: String             // "Cmd+Shift+2"
+    let modifiers: UInt            // NSEvent.ModifierFlags.rawValue (UInt, not ModifierFlags directly)
+    var displayString: String      // "⌘⇧2" -- generated from keyCode + modifiers
+
+    var modifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: modifiers)
+    }
 }
 ```
+
+**Custom Codable conformance required**: `NSEvent.ModifierFlags` is NOT `Codable` out of the box (it's an `OptionSet` backed by `UInt`). Store `modifiers` as `UInt` (the raw value) which IS Codable. Provide a computed `modifierFlags` property for convenience.
+
+**Display string generation**: `keyCode` is keyboard-layout-dependent. Use `Carbon.UCKeyTranslate` with `TISCopyCurrentKeyboardInputSource()` to convert keyCode to a layout-independent character. Modifier symbols use standard macOS glyphs: ⌘ (Command), ⌃ (Control), ⌥ (Option), ⇧ (Shift).
 
 ### HotkeyAction Enum
 
@@ -66,17 +86,19 @@ Reusable SwiftUI view for capturing key combinations.
 ### Appearance
 
 - Rounded rect field, ~120px wide
-- Idle: shows current combo (e.g., "Cmd+Shift+N") or "Record..." in gray placeholder
+- Idle: shows current combo (e.g., "⌘⇧N") or "Record..." in gray placeholder
 - Recording: pulsing blue border, text shows "Press keys..."
-- Modifier symbols: standard macOS glyphs (Command, Control, Option, Shift)
+- Modifier symbols: standard macOS glyphs
 
 ### Interaction
 
 - Click field to start recording
+- Uses `NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged])` while recording (same pattern as `ChatView.swift` line ~556 for Cmd+V interception)
 - Press any key combo (must include at least one modifier)
 - Combo captured and displayed immediately
-- Escape cancels recording
+- Escape cancels recording (return event from monitor to not consume it)
 - Small X button clears current shortcut
+- Remove monitor when recording ends (on capture, cancel, or view disappear)
 
 ### Validation
 
@@ -89,13 +111,6 @@ Reusable SwiftUI view for capturing key combinations.
 - Cannot conflict with another registered HotkeyAction -- shows "Already used for [action]" with reassign option
 - On conflict reassign: clears old binding, assigns to new one
 
-### Implementation
-
-- `NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged])` while recording
-- Captures `keyCode` and `modifierFlags`
-- Converts to `KeyCombo` and validates
-- Calls back with result
-
 ### Where It Appears
 
 - Shortcuts settings: inline in each shortcut row
@@ -103,7 +118,11 @@ Reusable SwiftUI view for capturing key combinations.
 
 ## Per-Session Shortcuts
 
-### Binding Model
+### Binding Model & Ephemerality
+
+Per-session shortcuts are **conversation-scoped**, not tmux-session-scoped. The `sessionID` comes from Claude Code and changes every time Claude restarts, even in the same tmux session. This is intentional for the initial implementation -- shortcuts are meant for active, long-running sessions.
+
+Future enhancement: store a `tmuxSessionName` on `SessionState` (populated during `TmuxTargetFinder` lookup) to enable tmux-session-scoped shortcuts that survive Claude restarts. This is out of scope for Chunk 3.
 
 - Stored in `AppSettings` as `[String: KeyCombo]` (sessionID to key combo)
 - `HotkeyManager` registers as `.focusSession(sessionID:)` actions
@@ -112,21 +131,33 @@ Reusable SwiftUI view for capturing key combinations.
 ### What Happens When Fired
 
 1. `HotkeyManager` dispatches `.focusSession(sessionID:)`
-2. Session exists: `NotchViewModel.status = .opened`, `contentType = .chat(session)`, input field focused via `@FocusState`
-3. Session no longer exists: shortcut silently unregistered from `HotkeyManager` AND removed from `AppSettings.sessionShortcuts`, key combo does nothing
+2. `HotkeyManager` looks up the session via `ClaudeSessionMonitor.shared.instances.first(where: { $0.sessionID == sessionID })` -- this is synchronous since `ClaudeSessionMonitor` is `@Observable` on MainActor and `instances` is a plain array property
+3. If session found: call `NotchViewModel.showChat(for: session)` (existing method, line ~205) + set `NotchViewModel.status = .opened` via `notchOpen(reason:)` + set a `focusInputOnAppear` flag on `NotchViewModel` (see below)
+4. If session not found: silently unregister the shortcut
+
+**Input focus mechanism**: `@FocusState` is per-view and cannot be set from `NotchViewModel` directly. Instead:
+- Add a `var focusInputOnAppear = false` property on `NotchViewModel`
+- `ChatView` observes this property via `.onChange(of: viewModel.focusInputOnAppear)` and sets its local `@FocusState` binding when it becomes true
+- `ChatView` resets the flag to false after applying focus
+- This is the standard ViewModel-to-View focus coordination pattern
 
 ### Cleanup of Orphaned Bindings
 
-- On app launch: `HotkeyManager` loads saved shortcuts from `AppSettings`, cross-references with `SessionStore.sessions`. Any binding whose `sessionID` has no matching session is removed immediately.
-- On `SessionEvent.sessionEnded`: `SessionStore` notifies `HotkeyManager.removeShortcut(forSession:)` which unregisters the combo and removes from `AppSettings`
-- On session delete (from overflow menu): same cleanup path via `sessionEnded` event
+**On app launch**: `HotkeyManager` loads saved shortcuts, cross-references with `ClaudeSessionMonitor.shared.instances`. Any binding whose `sessionID` has no matching session is removed.
+
+**On session end**: Two code paths exist for session endings, and BOTH must trigger cleanup:
+
+1. **Via `.sessionEnded` event** (from archive action, periodic PID check): `SessionStore.processSessionEnd()` fires. Add a cleanup side-effect here.
+2. **Via hook `status == "ended"`** (from `SessionEnd` hook): `processHookEvent` directly removes the session at line ~323. **Currently does NOT emit `.sessionEnded`.** Must either: emit `.sessionEnded` from this path too, or add a separate notification.
+
+**Recommended approach**: After `sessions.removeValue(forKey: sessionID)` in both paths, call a cleanup closure/callback. Add a `var onSessionRemoved: ((String) -> Void)?` property on `SessionStore` that `AppDelegate` wires to `HotkeyManager.shared.removeShortcut(forSession:)`. This is the simplest approach without introducing a full observer pattern. Alternatively, `ClaudeSessionMonitor`'s session stream subscription can diff the previous and current session lists to detect removals.
 
 ### Assignment Flow
 
 1. Click `...` on session row -> "Assign Shortcut"
 2. Popover appears anchored to row
 3. Key recorder + "Save" + "Cancel"
-4. Save: `HotkeyManager.register(combo, action: .focusSession(session.sessionID))`
+4. Save: `HotkeyManager.shared.register(combo, action: .focusSession(session.sessionID))`
 5. Popover dismisses
 
 ### Reassignment
@@ -139,39 +170,78 @@ Reusable SwiftUI view for capturing key combinations.
 
 ### The `...` Button
 
-- 4th button in row, rightmost position
-- Renders as horizontal ellipsis icon matching existing button style
-- Click opens dropdown anchored below-left of button
+- 4th button in the InstanceRow action area (defined inside `ClaudeInstancesView.swift`, NOT a separate file)
+- Renders as horizontal ellipsis icon (`IconButton` with `"ellipsis"`) matching existing button style (24x24px)
+- Click opens dropdown within the notch panel
+
+### Overflow Dropdown Implementation
+
+No popovers or dropdowns exist anywhere in the current codebase. Two approaches:
+
+1. **SwiftUI overlay within notch** (recommended): Use a `ZStack` overlay with absolute positioning. The dropdown renders above other session rows within the notch's `ScrollView`. If the row is near the bottom of the visible area, anchor the dropdown above the button instead of below.
+2. **Separate NSPanel**: Like the launcher panel, but adds unnecessary complexity for a small menu.
+
+The overlay approach uses a `@State var showOverflowFor: String?` (sessionID) on `ClaudeInstancesView`. When set, an overlay view renders the dropdown positioned relative to the triggering row. Tapping outside or selecting an action dismisses it.
+
+### Interaction with Approval Buttons
+
+InstanceRow currently has THREE rendering modes (lines 316-342 of `ClaudeInstancesView.swift`):
+
+1. **Interactive tool approval**: Chat + Terminal (2 buttons)
+2. **Non-interactive tool approval**: Chat + Deny + Allow (`InlineApprovalButtons`, 3 buttons with text labels)
+3. **Normal state**: Chat + Terminal (conditional on PID) + Archive (conditional on idle/waitingForInput)
+
+**Approval buttons take absolute precedence.** When `session.phase.isWaitingForApproval`:
+- The customizable action slots are NOT shown
+- The `...` overflow button is NOT shown
+- Approval-specific buttons render as they do today (no change)
+
+When NOT in approval state:
+- The configurable visible buttons + `...` overflow render
+
+This means the customizable system only applies to normal (non-approval) state.
+
+### Conditional Action Visibility
+
+Some actions have preconditions:
+- **Focus**: requires `session.pid != nil` (no PID = can't find terminal)
+- **Archive**: requires `.idle` or `.waitingForInput` phase
+- **Copy Attach**: requires `session.isInTmux` (non-tmux sessions have nothing to attach to)
+- **Delete**: requires `session.isInTmux`
+- **Pin Project**: always available (cwd always exists)
+- **Assign Shortcut**: always available
+
+When a visible-slot action's condition is NOT met, the button is hidden and the remaining buttons shift left. The `...` button is always rightmost. This means the visible button count can vary from 1 to 3 plus `...`. This matches the current behavior where Terminal and Archive conditionally appear.
 
 ### Full Action Set
 
-| Action | Icon | Description | Default Visible |
-|---|---|---|---|
-| Chat | speech bubble | Open chat view | Yes (slot 1) |
-| Focus | terminal arrow | Switch to tmux pane | Yes (slot 2) |
-| Archive | box/tray | End session in Claude Island | Yes (slot 3) |
-| Copy Attach | clipboard | Copy `tmux attach -t <name>` to clipboard | No (overflow) |
-| Delete | trash | Kill tmux session + remove from list | No (overflow) |
-| Pin Project | star | Add session cwd to pinned projects | No (overflow) |
-| Assign Shortcut | keyboard | Open key recorder | No (overflow) |
-
-### Overflow Dropdown Rendering
-
-- Dark background matching notch aesthetic, rounded corners
-- Each row: icon + label
-- Divider before destructive actions
-- Delete in red text
-- Delete triggers inline confirmation: "Are you sure?" with "Delete" (red) + "Cancel"
+| Action | Icon | Description | Default Visible | Condition |
+|---|---|---|---|---|
+| Chat | bubble.left | Open chat view | Yes (slot 1) | Always |
+| Focus | terminal | Switch to tmux pane | Yes (slot 2) | `pid != nil` |
+| Archive | archivebox | End session in Claude Island | Yes (slot 3) | `.idle` or `.waitingForInput` |
+| Copy Attach | doc.on.clipboard | Copy `tmux attach -t <name>` to clipboard | No (overflow) | `isInTmux` |
+| Delete | trash | Kill tmux session + remove from list | No (overflow) | `isInTmux` |
+| Pin Project | star | Add session cwd to pinned projects | No (overflow) | Always |
+| Assign Shortcut | keyboard | Open key recorder | No (overflow) | Always |
 
 ### Copy Attach Behavior
 
+- Requires tmux session name -- look up via `TmuxTargetFinder.findTarget(forClaudePID: session.pid)` to get `TmuxTarget.session`
 - Copies: `tmux attach-session -t <session-name>`
-- Brief "Copied!" toast on row (fades after 1.5s)
-- Uses `NSPasteboard` directly
+- Brief "Copied!" toast on row (fades after 1.5s, using existing `.spring(response: 0.25, dampingFraction: 0.8)` animation pattern)
+- Uses `NSPasteboard.general.clearContents()` + `.setString(_:forType: .string)` (existing `NSPasteboard` import in `ChatView.swift`)
+
+### Delete Behavior
+
+- Requires tmux session name -- same `TmuxTargetFinder` lookup as Copy Attach
+- Inline confirmation within dropdown: "Are you sure?" with "Delete" (red) + "Cancel" (swaps dropdown content via `@State`)
+- On confirm: `TmuxController.shared.killSession(sessionName:)` (new method, uses `ProcessExecutor.run(tmuxPath, ["kill-session", "-t", name])`) then `SessionStore.shared.process(.sessionEnded(sessionID:))`
+- If tmux target lookup fails (PID nil, session already dead): just fire `.sessionEnded` to clean up Claude Island state
 
 ### Delete vs Archive
 
-- Archive: mark session as ended in Claude Island (existing, doesn't touch tmux)
+- Archive: mark session as ended in Claude Island (existing behavior, doesn't touch tmux)
 - Delete: kill tmux session AND remove from Claude Island. Confirmation required.
 
 ## Customizable Visible Actions
@@ -181,20 +251,26 @@ Reusable SwiftUI view for capturing key combinations.
 - New row in `NotchMenuView`: "Session Actions" with chevron
 - Expands to reorderable list of all 7 actions
 - Top 3 are visible quick buttons, rest go to overflow
-- Drag handles for reordering
+- Reorder using `.draggable` + `.dropDestination` pattern from `ModuleLayoutSettingsView` (lines 54-213) -- NOT `List` + `.onMove` (incompatible with notch's dark `ScrollView` + `VStack` styling)
 - `...` overflow button always present, can't be removed/reordered
 - Changes apply immediately
+- Pass the action order as a parameter from `ClaudeInstancesView` to `InstanceRow` to avoid per-row `UserDefaults` reads in `LazyVStack`
 
 ### Storage
 
-- Ordered action list in `AppSettings` as `[SessionActionType]` enum array
+- Ordered action list in `AppSettings` as JSON-encoded `[SessionActionType]` via `JSONEncoder`/`JSONDecoder` (same pattern as `moduleLayoutConfig`)
+- `SessionActionType` is a `String`-backed `RawRepresentable` enum for clean encoding
 - Default: `[.chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut]`
 
 ## Shortcuts Settings Menu
 
 ### Location
 
-New row in `NotchMenuView`: keyboard icon + "Shortcuts" label + chevron. After "Projects".
+New row in `NotchMenuView`: keyboard icon + "Shortcuts" label + chevron. Positioned after "Projects" row (Chunk 2) or after "Hooks" row if Chunk 2 is not yet implemented.
+
+### Menu Height
+
+Adding Shortcuts and Session Actions expandable sections to `NotchMenuView` increases content. The menu is inside a `ScrollView` (line 40) which handles overflow. However, the `openedSize` base height of 500px (NotchViewModel line ~125) may need increasing by ~80px (two new collapsed row headers at ~40px each). When expanded, content scrolls naturally within the ScrollView.
 
 ### Expanded View
 
@@ -207,30 +283,32 @@ New row in `NotchMenuView`: keyboard icon + "Shortcuts" label + chevron. After "
 #### Sessions Section
 
 - Header: "Sessions" in small gray label
-- One row per active binding: session name + key recorder
+- One row per active binding: session display title + key recorder
 - Only active bindings listed (sessions without shortcuts not shown)
 - Re-record or clear with X
-- Session ends -> row disappears
+- Session ends -> row disappears (via `HotkeyManager` cleanup)
 - Empty state: "No session shortcuts assigned" + help text about overflow menu
-
-## New Files
-
-- `HotkeyManager.swift` -- CGEvent tap + dispatch
-- `KeyCombo.swift` -- Model
-- `KeyRecorderView.swift` -- Reusable recorder component
-- `ShortcutsSettingsView.swift` -- Settings section
-- `SessionActionOverflowMenu.swift` -- Dropdown menu
-- `SessionActionsSettingsView.swift` -- Customizable actions settings
 
 ## Panel Layering
 
-The launcher panel (`SessionLauncherPanel`) and overflow menu can never appear simultaneously -- the launcher is a modal-like floating panel that dismisses on outside click, and the overflow menu is anchored to a session row inside the notch. If the notch is visible and user clicks `...`, the overflow appears within the notch. If the launcher is open, the notch is behind it and not interactive.
+The launcher panel (`SessionLauncherPanel`) and overflow menu can never appear simultaneously -- the launcher is a modal-like floating panel that dismisses on outside click, and the overflow menu is an overlay within the notch. If the notch is visible and user clicks `...`, the overlay appears within the notch. If the launcher is open, the notch is behind it and not interactive.
+
+## New Files
+
+- `HotkeyManager.swift` -- `@Observable final class`, CGEvent tap + dispatch, deferred start, health check
+- `KeyCombo.swift` -- Model with custom Codable (stores modifiers as UInt), keyCode-to-display via UCKeyTranslate
+- `KeyRecorderView.swift` -- Reusable SwiftUI recorder with local event monitor
+- `ShortcutsSettingsView.swift` -- Expandable settings section
+- `SessionActionOverflowMenu.swift` -- Overlay dropdown view
+- `SessionActionsSettingsView.swift` -- Reorderable action list (following ModuleLayoutSettingsView pattern)
 
 ## Modified Files
 
-- `InstanceRow.swift` -- Add 4th `...` overflow button, add `onCopyAttach`, `onDelete`, `onPinProject`, `onAssignShortcut` callbacks, conditional rendering based on `AppSettings.sessionActionOrder` for which 3 are visible
-- `ClaudeInstancesView.swift` -- Pass all action handlers to InstanceRow including new overflow actions
-- `NotchMenuView.swift` -- Add Shortcuts and Session Actions settings sections (expandable rows)
-- `NotchViewModel.swift` -- Add `focusSession(sessionID:)` method that sets `.opened` + `.chat(session)` + triggers input focus
-- `AppDelegate.swift` -- Initialize `HotkeyManager`, wire to `NotchViewModel` and `SessionLauncherPanel`
-- `AppSettings.swift` -- New keys following existing pattern (private `Keys` enum + computed properties): `globalShortcut` (Data?, encoded KeyCombo), `sessionShortcuts` (Data?, encoded [String: KeyCombo]), `sessionActionOrder` ([String], encoded [SessionActionType])
+- `ClaudeInstancesView.swift` -- Add `@State showOverflowFor` for dropdown overlay, add `...` button to `InstanceRow`, add `onCopyAttach`/`onDelete`/`onPinProject`/`onAssignShortcut` callbacks, skip customizable buttons during approval states, pass action order as parameter from parent, handle conditional action visibility
+- `NotchMenuView.swift` -- Add Shortcuts and Session Actions expandable settings sections
+- `NotchViewModel.swift` -- Add `focusInputOnAppear` flag for per-session shortcut focus coordination. Note: `focusSession` logic lives in `HotkeyManager` which calls `viewModel.showChat(for:)` (existing method) + `viewModel.notchOpen(reason:)` directly. Increase `openedSize` base height for `.menu` by ~80px.
+- `ChatView.swift` -- Observe `viewModel.focusInputOnAppear` via `.onChange`, set local `@FocusState` when true, reset flag after applying
+- `SessionStore.swift` -- Add `var onSessionRemoved: ((String) -> Void)?` callback, call it from both `processSessionEnd()` and the `status == "ended"` path in `processHookEvent`
+- `TmuxController.swift` -- Add `killSession(sessionName: String) async -> Bool` method using `ProcessExecutor`
+- `AppDelegate.swift` -- Initialize `HotkeyManager`, wire `SessionStore.onSessionRemoved` to `HotkeyManager.removeShortcut(forSession:)`, add `HotkeyManager.startIfPermitted()` to accessibility grant callback
+- `Settings.swift` -- New keys: `globalShortcut` (Data?, encoded KeyCombo via JSONEncoder), `sessionShortcuts` (Data?, encoded [String: KeyCombo]), `sessionActionOrder` (Data?, encoded [SessionActionType])
