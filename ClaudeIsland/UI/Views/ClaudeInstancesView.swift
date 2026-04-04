@@ -53,13 +53,10 @@ struct ClaudeInstancesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 8) {
-            Text("No sessions")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
-
-            Text("Run claude in terminal")
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.25))
+            Spacer()
+            NewSessionRow { self.showLauncher() }
+                .padding(.horizontal, 8)
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -78,6 +75,8 @@ struct ClaudeInstancesView: View {
                     )
                     .id(session.stableID)
                 }
+
+                NewSessionRow { self.showLauncher() }
             }
             .padding(.vertical, 4)
         }
@@ -123,6 +122,10 @@ struct ClaudeInstancesView: View {
     private func archiveSession(_ session: SessionState) {
         self.sessionMonitor.archiveSession(sessionID: session.sessionID)
     }
+
+    private func showLauncher() {
+        SessionLauncherPanel.shared.show()
+    }
 }
 
 // MARK: - InstanceRow
@@ -136,6 +139,9 @@ struct InstanceRow: View {
     let onArchive: () -> Void
     let onApprove: () -> Void
     let onReject: () -> Void
+    var onCancel: (() -> Void)?
+    var onRetry: (() -> Void)?
+    var onDismiss: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -199,7 +205,14 @@ struct InstanceRow: View {
         case .compacting: "Compacting..."
         case .waitingForInput: "Ready"
         case .waitingForApproval: "Waiting for approval"
-        case .launching: "Launching..."
+        case let .launching(progress):
+            switch progress {
+            case .creatingTmuxSession: "Creating session..."
+            case .startingClaude: "Starting Claude..."
+            case .waitingForHook: "Connecting..."
+            case .sendingPrompt: "Sending prompt..."
+            case let .failed(error): "Failed: \(error.localizedDescription)"
+            }
         case .idle: "Idle"
         case .ended: "Ended"
         }
@@ -330,6 +343,45 @@ struct InstanceRow: View {
                         onReject: self.onReject,
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                } else if case let .launching(progress) = self.session.phase {
+                    if case .failed = progress {
+                        HStack(spacing: 8) {
+                            Button {
+                                self.onRetry?()
+                            } label: {
+                                Text("Retry")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.white.opacity(0.1))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                self.onDismiss?()
+                            } label: {
+                                Text("Dismiss")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    } else {
+                        Button {
+                            self.onCancel?()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
                 } else {
                     HStack(spacing: 8) {
                         IconButton(icon: "bubble.left") { self.onChat() }
