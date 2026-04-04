@@ -22,7 +22,7 @@ private final class DocumentCache: Sendable {
             if let cached = cache[text] {
                 return cached
             }
-            let doc = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks, .parseTable])
+            let doc = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
             if cache.count >= self.maxSize {
                 cache.removeAll()
             }
@@ -107,7 +107,7 @@ private struct BlockRenderer: View {
             self.unorderedListView(list)
         } else if let list = markup as? OrderedList {
             self.orderedListView(list)
-        } else if let table = markup as? Table {
+        } else if let table = markup as? Markdown.Table {
             self.tableView(table)
         } else if self.markup is ThematicBreak {
             Divider()
@@ -200,7 +200,7 @@ private struct BlockRenderer: View {
         }
     }
 
-    private func tableView(_ table: Table) -> some View {
+    private func tableView(_ table: Markdown.Table) -> some View {
         let head = table.head
         let body = table.body
 

@@ -133,7 +133,7 @@ struct SessionLauncherView: View {
     // MARK: - Directory Picker
 
     private var directoryPicker: some View {
-        DirectoryPickerView(selectedPath: self.$selectedDirectory) { self.submit() }
+        DirectoryPickerView(selectedPath: self.$selectedDirectory, onSubmit: { self.submit() })
     }
 
     // MARK: - Bottom Bar

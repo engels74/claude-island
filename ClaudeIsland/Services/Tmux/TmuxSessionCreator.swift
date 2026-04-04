@@ -66,7 +66,7 @@ actor TmuxSessionCreator {
         ))
 
         await self.sendPromptIfNeeded(prompt: prompt, tmuxPath: tmuxPath, sessionName: resolvedName)
-        AppSettings.lastUsedDirectory = directory
+        await MainActor.run { AppSettings.lastUsedDirectory = directory }
     }
 
     func cancelLaunch(sessionName: String) async {

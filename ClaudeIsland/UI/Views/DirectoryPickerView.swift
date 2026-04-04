@@ -20,6 +20,13 @@ private struct DirectoryItem: Identifiable {
 // MARK: - DirectoryPickerView
 
 struct DirectoryPickerView: View {
+    // MARK: Lifecycle
+
+    init(selectedPath: Binding<String>, onSubmit: @escaping () -> Void) {
+        self._selectedPath = selectedPath
+        self.onSubmit = onSubmit
+    }
+
     // MARK: Internal
 
     @Binding var selectedPath: String
