@@ -19,6 +19,8 @@ enum SessionPhaseHelpers {
             TerminalColors.cyan
         case .compacting:
             TerminalColors.magenta
+        case .launching:
+            TerminalColors.cyan
         case .idle,
              .ended:
             TerminalColors.dim
@@ -36,6 +38,8 @@ enum SessionPhaseHelpers {
             "Processing..."
         case .compacting:
             "Compacting context..."
+        case .launching:
+            "Launching..."
         case .idle:
             "Idle"
         case .ended:

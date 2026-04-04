@@ -127,6 +127,20 @@ actor SessionStore {
 
         case let .subagentStopped(sessionID, taskToolID):
             handleSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
+
+        // MARK: - Launch Events (placeholder for Task 2+)
+
+        case let .sessionLaunching(payload):
+            Self.logger.info("Session launching: \(payload.sessionName, privacy: .public)")
+
+        case let .launchProgressUpdated(sessionID, progress):
+            Self.logger.info("Launch progress: \(sessionID.prefix(8), privacy: .public) -> \(String(describing: progress), privacy: .public)")
+
+        case let .launchCompleted(sessionID):
+            Self.logger.info("Launch completed: \(sessionID.prefix(8), privacy: .public)")
+
+        case let .launchFailed(sessionID, error):
+            Self.logger.info("Launch failed: \(sessionID.prefix(8), privacy: .public) -> \(String(describing: error), privacy: .public)")
         }
 
         self.publishState()

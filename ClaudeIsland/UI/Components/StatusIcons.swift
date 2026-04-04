@@ -262,6 +262,8 @@ struct StatusIcon: View {
         case .processing,
              .compacting:
             RunningIcon(size: self.size)
+        case .launching:
+            RunningIcon(size: self.size)
         case .idle,
              .ended:
             IdleIcon(size: self.size)

@@ -92,8 +92,9 @@ struct ClaudeInstancesView: View {
              .processing,
              .compacting: 0
         case .waitingForInput: 1
+        case .launching: 2
         case .idle,
-             .ended: 2
+             .ended: 3
         }
     }
 
@@ -198,6 +199,7 @@ struct InstanceRow: View {
         case .compacting: "Compacting..."
         case .waitingForInput: "Ready"
         case .waitingForApproval: "Waiting for approval"
+        case .launching: "Launching..."
         case .idle: "Idle"
         case .ended: "Ended"
         }
@@ -372,6 +374,10 @@ struct InstanceRow: View {
         case .waitingForInput:
             Circle()
                 .fill(TerminalColors.green)
+                .frame(width: 6, height: 6)
+        case .launching:
+            Circle()
+                .fill(TerminalColors.cyan)
                 .frame(width: 6, height: 6)
         case .idle,
              .ended:
