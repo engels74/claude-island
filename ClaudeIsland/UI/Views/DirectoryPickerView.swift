@@ -84,23 +84,29 @@ struct DirectoryPickerView: View {
             .cornerRadius(6)
         }
         .onKeyPress(.upArrow) {
-            var newIndex = self.highlightedIndex - 1
             let items = self.allItems
-            while newIndex >= 0, items[newIndex].isHeader {
-                newIndex -= 1
+            let count = items.count
+            var newIndex = (self.highlightedIndex - 1 + count) % count
+            var safety = 0
+            while items[newIndex].isHeader, safety < count {
+                newIndex = (newIndex - 1 + count) % count
+                safety += 1
             }
-            if newIndex >= 0 {
+            if !items[newIndex].isHeader {
                 self.highlightedIndex = newIndex
             }
             return .handled
         }
         .onKeyPress(.downArrow) {
-            var newIndex = self.highlightedIndex + 1
             let items = self.allItems
-            while newIndex < items.count, items[newIndex].isHeader {
-                newIndex += 1
+            let count = items.count
+            var newIndex = (self.highlightedIndex + 1) % count
+            var safety = 0
+            while items[newIndex].isHeader, safety < count {
+                newIndex = (newIndex + 1) % count
+                safety += 1
             }
-            if newIndex < items.count {
+            if !items[newIndex].isHeader {
                 self.highlightedIndex = newIndex
             }
             return .handled

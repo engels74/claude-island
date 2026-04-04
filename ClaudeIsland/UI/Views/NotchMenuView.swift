@@ -895,7 +895,7 @@ struct PanelWidthRow: View {
 
             if self.isExpanded {
                 VStack(alignment: .leading, spacing: 4) {
-                    Slider(value: self.$widthFraction, in: 0.5 ... 0.8, step: 0.05)
+                    Slider(value: self.$widthFraction, in: 0.5 ... 0.8)
                         .tint(.white.opacity(0.5))
                         .onChange(of: self.widthFraction) { _, newValue in
                             self.viewModel.chatPanelWidthFraction = newValue

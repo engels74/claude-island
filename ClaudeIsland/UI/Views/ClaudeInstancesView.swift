@@ -76,43 +76,64 @@ struct ClaudeInstancesView: View {
     }
 
     private var instancesList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 2) {
-                ForEach(self.sortedInstances) { session in
-                    InstanceRow(
-                        session: session,
-                        onFocus: { self.focusSession(session) },
-                        onChat: { self.openChat(session) },
-                        onArchive: { self.archiveSession(session) },
-                        onApprove: { self.approveSession(session) },
-                        onReject: { self.rejectSession(session) },
-                        onOverflow: { self.showOverflowFor = session.sessionID },
-                        onCancel: { self.cancelLaunch(session) },
-                        onRetry: { self.retryLaunch(session) },
-                        onDismiss: { self.dismissLaunch(session) },
-                        visibleActions: self.visibleActions,
-                    )
-                    .id(session.stableID)
-                    .overlay(alignment: .topTrailing) {
-                        if self.showOverflowFor == session.sessionID {
-                            SessionActionOverflowMenu(
-                                session: session,
-                                actions: self.overflowActions,
-                            ) { self.showOverflowFor = nil }
-                                .offset(y: 36)
-                                .zIndex(100)
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button {
+                    self.showLauncher()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                        .frame(width: 20, height: 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.08))
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 8)
+                .padding(.top, 4)
+            }
+
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 2) {
+                    ForEach(self.sortedInstances) { session in
+                        InstanceRow(
+                            session: session,
+                            onFocus: { self.focusSession(session) },
+                            onChat: { self.openChat(session) },
+                            onArchive: { self.archiveSession(session) },
+                            onApprove: { self.approveSession(session) },
+                            onReject: { self.rejectSession(session) },
+                            onOverflow: { self.showOverflowFor = session.sessionID },
+                            onCancel: { self.cancelLaunch(session) },
+                            onRetry: { self.retryLaunch(session) },
+                            onDismiss: { self.dismissLaunch(session) },
+                            visibleActions: self.visibleActions,
+                        )
+                        .id(session.stableID)
+                        .overlay(alignment: .topTrailing) {
+                            if self.showOverflowFor == session.sessionID {
+                                SessionActionOverflowMenu(
+                                    session: session,
+                                    actions: self.overflowActions,
+                                ) { self.showOverflowFor = nil }
+                                    .offset(y: 36)
+                                    .zIndex(100)
+                            }
                         }
                     }
-                }
 
-                NewSessionRow { self.showLauncher() }
+                    NewSessionRow { self.showLauncher() }
+                }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .onTapGesture {
-            if self.showOverflowFor != nil {
-                self.showOverflowFor = nil
+            .scrollBounceBehavior(.basedOnSize)
+            .onTapGesture {
+                if self.showOverflowFor != nil {
+                    self.showOverflowFor = nil
+                }
             }
         }
     }

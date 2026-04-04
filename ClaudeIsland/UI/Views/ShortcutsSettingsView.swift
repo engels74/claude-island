@@ -163,7 +163,7 @@ private struct SessionShortcutRow: View {
 
     var body: some View {
         HStack {
-            Text(self.sessionID.prefix(8) + "...")
+            Text(self.displayTitle)
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.7))
                 .lineLimit(1)
@@ -186,4 +186,9 @@ private struct SessionShortcutRow: View {
     // MARK: Private
 
     @State private var currentCombo: KeyCombo?
+
+    private var displayTitle: String {
+        SessionMetadataManager.shared.name(for: self.sessionID)
+            ?? String(self.sessionID.prefix(8)) + "..."
+    }
 }
