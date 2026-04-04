@@ -72,6 +72,8 @@ struct NotchMenuView: View {
                             self.showLayoutSettings = true
                         }
 
+                        PanelWidthRow(viewModel: self.viewModel)
+
                         Divider()
                             .background(Color.white.opacity(0.08))
                             .padding(.vertical, 4)
@@ -836,6 +838,80 @@ struct TokenTrackingRow: View {
                         .foregroundColor(TerminalColors.green)
                         .padding(.leading, 20)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - PanelWidthRow
+
+struct PanelWidthRow: View {
+    var viewModel: NotchViewModel
+
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var widthFraction: Double = AppSettings.chatPanelWidthFraction
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    self.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.left.and.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(self.isHovered || self.isExpanded ? 1.0 : 0.7))
+                        .frame(width: 16)
+
+                    Text("Panel Width")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(self.isHovered || self.isExpanded ? 1.0 : 0.7))
+
+                    Spacer()
+
+                    Text("\(Int(self.widthFraction * 100))%")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+
+                    Image(systemName: self.isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { self.isHovered = $0 }
+
+            if self.isExpanded {
+                VStack(alignment: .leading, spacing: 4) {
+                    Slider(value: self.$widthFraction, in: 0.5 ... 0.8, step: 0.05)
+                        .tint(.white.opacity(0.5))
+                        .onChange(of: self.widthFraction) { _, newValue in
+                            self.viewModel.chatPanelWidthFraction = newValue
+                            AppSettings.chatPanelWidthFraction = newValue
+                        }
+
+                    HStack {
+                        Text("50%")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.3))
+                        Spacer()
+                        Text("80%")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.3))
+                    }
+                }
+                .padding(.leading, 28)
+                .padding(.trailing, 28)
+                .padding(.vertical, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
