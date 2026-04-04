@@ -244,6 +244,30 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.verboseMode) }
     }
 
+    // MARK: - Claude Command Template
+
+    static var claudeCommandTemplate: String {
+        get { defaults.string(forKey: Keys.claudeCommandTemplate) ?? "claude" }
+        set { defaults.set(newValue, forKey: Keys.claudeCommandTemplate) }
+    }
+
+    // MARK: - Last Used Directory
+
+    static var lastUsedDirectory: String? {
+        get { defaults.string(forKey: Keys.lastUsedDirectory) }
+        set { defaults.set(newValue, forKey: Keys.lastUsedDirectory) }
+    }
+
+    // MARK: - Chat Panel Width
+
+    static var chatPanelWidthFraction: Double {
+        get {
+            let value = defaults.double(forKey: Keys.chatPanelWidthFraction)
+            return value > 0 ? value : 0.5
+        }
+        set { defaults.set(newValue, forKey: Keys.chatPanelWidthFraction) }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -261,6 +285,9 @@ enum AppSettings {
         static let tokenShowResetTime = "tokenShowResetTime"
         static let moduleLayoutConfig = "moduleLayoutConfig"
         static let verboseMode = "verboseMode"
+        static let claudeCommandTemplate = "claudeCommandTemplate"
+        static let lastUsedDirectory = "lastUsedDirectory"
+        static let chatPanelWidthFraction = "chatPanelWidthFraction"
     }
 
     private static let defaults = UserDefaults.standard
