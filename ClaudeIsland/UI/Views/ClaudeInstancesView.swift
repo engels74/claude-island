@@ -83,6 +83,9 @@ struct ClaudeInstancesView: View {
                         onApprove: { self.approveSession(session) },
                         onReject: { self.rejectSession(session) },
                         onOverflow: { self.showOverflowFor = session.sessionID },
+                        onCancel: { self.cancelLaunch(session) },
+                        onRetry: { self.retryLaunch(session) },
+                        onDismiss: { self.dismissLaunch(session) },
                     )
                     .id(session.stableID)
                     .overlay(alignment: .topTrailing) {
@@ -147,6 +150,30 @@ struct ClaudeInstancesView: View {
 
     private func archiveSession(_ session: SessionState) {
         self.sessionMonitor.archiveSession(sessionID: session.sessionID)
+    }
+
+    private func cancelLaunch(_ session: SessionState) {
+        guard let tmuxName = session.tmuxSessionName else { return }
+        Task(name: "cancel-launch") {
+            await TmuxSessionCreator.shared.cancelLaunch(sessionName: tmuxName)
+            await SessionStore.shared.process(.sessionEnded(sessionID: session.sessionID))
+        }
+    }
+
+    private func retryLaunch(_ session: SessionState) {
+        Task(name: "retry-launch") {
+            if let tmuxName = session.tmuxSessionName {
+                await TmuxSessionCreator.shared.cancelLaunch(sessionName: tmuxName)
+            }
+            await SessionStore.shared.process(.sessionEnded(sessionID: session.sessionID))
+            SessionLauncherPanel.shared.show()
+        }
+    }
+
+    private func dismissLaunch(_ session: SessionState) {
+        Task(name: "dismiss-launch") {
+            await SessionStore.shared.process(.sessionEnded(sessionID: session.sessionID))
+        }
     }
 
     private func showLauncher() {

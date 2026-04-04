@@ -164,7 +164,7 @@ final class SessionLauncherPanel: NSPanel {
     private func handleSubmit(prompt: String, sessionName: String, directory: String) {
         self.dismiss()
 
-        self.viewModel?.notchOpen(reason: .notification)
+        self.viewModel?.notchOpen(reason: .sessionCreated)
         self.viewModel?.contentType = .instances
 
         Task(name: "launch-session") {

@@ -1001,6 +1001,8 @@ actor SessionStore {
             realSession.isInTmux = true
             self.sessions[hookEvent.sessionID] = realSession
         }
+
+        Self.logger.info("Launch merge completed for session \(hookEvent.sessionID.prefix(8), privacy: .public)")
     }
 
     // MARK: - History Loading
