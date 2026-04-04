@@ -60,8 +60,18 @@ struct SessionLauncherView: View {
     }
 
     private var resolvedCommand: String {
-        AppSettings.claudeCommandTemplate
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = formatter.string(from: Date())
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH-mm"
+        let timeStr = timeFormatter.string(from: Date())
+
+        return AppSettings.claudeCommandTemplate
             .replacingOccurrences(of: "{{name}}", with: self.resolvedSessionName)
+            .replacingOccurrences(of: "{{date}}", with: dateStr)
+            .replacingOccurrences(of: "{{time}}", with: timeStr)
             .replacingOccurrences(of: "{{dir}}", with: self.selectedDirectory)
     }
 

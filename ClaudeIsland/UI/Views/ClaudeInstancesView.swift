@@ -125,7 +125,7 @@ struct ClaudeInstancesView: View {
              .processing,
              .compacting: 0
         case .waitingForInput: 1
-        case .launching: 2
+        case .launching: 0
         case .idle,
              .ended: 3
         }
@@ -242,6 +242,7 @@ struct InstanceRow: View {
     @State private var isHovered = false
     @State private var isEditing = false
     @State private var editingName = ""
+    @State private var launchPulse = false
     @FocusState private var isTitleFocused: Bool
 
     private let metadataManager = SessionMetadataManager.shared
@@ -488,8 +489,11 @@ struct InstanceRow: View {
                 .frame(width: 6, height: 6)
         case .launching:
             Circle()
-                .fill(TerminalColors.cyan)
-                .frame(width: 6, height: 6)
+                .stroke(Color(red: 0.04, green: 0.52, blue: 1.0), lineWidth: 1.5)
+                .frame(width: 8, height: 8)
+                .opacity(self.launchPulse ? 1.0 : 0.4)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: self.launchPulse)
+                .onAppear { self.launchPulse = true }
         case .idle,
              .ended:
             Circle()

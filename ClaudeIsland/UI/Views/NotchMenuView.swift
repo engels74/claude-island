@@ -971,8 +971,16 @@ struct ClaudeCommandRow: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12, design: .monospaced))
                         .onChange(of: self.commandTemplate) { _, newValue in
-                            AppSettings.claudeCommandTemplate = newValue
+                            if newValue.isEmpty || newValue.hasPrefix("claude") {
+                                AppSettings.claudeCommandTemplate = newValue.isEmpty ? "claude" : newValue
+                            }
                         }
+
+                    if !self.commandTemplate.isEmpty, !self.commandTemplate.hasPrefix("claude") {
+                        Text("Command must start with \"claude\"")
+                            .font(.system(size: 10))
+                            .foregroundColor(.red.opacity(0.7))
+                    }
 
                     Text("Variables: {{name}}, {{date}}, {{time}}, {{dir}}")
                         .font(.system(size: 10))
