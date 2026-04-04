@@ -29,6 +29,10 @@ Replaces the current empty state ("No sessions / Run claude in terminal"). The d
 
 Click opens the launcher panel. No other buttons on this row.
 
+### Header `+` Button
+
+Additionally, add a small `+` button in the top-right area of `ClaudeInstancesView` (near the existing header content) as a discoverable entry point. The dashed row at the bottom requires scrolling in a long session list — the header button is always visible. Both trigger `SessionLauncherPanel.show()`.
+
 ### Implementation
 
 - New `NewSessionRow` view added after the `ForEach` in `ClaudeInstancesView.instancesList` (inside the existing `LazyVStack`)
@@ -108,9 +112,10 @@ Following the existing pattern in `NotchViewController.swift`:
 
 - Shows: last used directory (from `AppSettings.lastUsedDirectory`), home directory, "Browse..."
 - Arrow keys move highlight, Enter selects
-- "Browse..." opens `NSOpenPanel`, result fills selection
+- "Browse..." opens `NSOpenPanel` (requires z-order workaround: temporarily order out the launcher panel before showing NSOpenPanel, re-show on completion — the launcher is at `.mainMenu + 4` which is above NSOpenPanel's default level)
 - Default selection: last used directory if set, otherwise home
 - Chunk 2 replaces this with the full pinned/recent system
+- Consider extracting a shared `showDirectoryPicker(orderingOut:completion:)` utility since Chunk 2 also needs NSOpenPanel in two more places
 
 #### 4. Bottom Bar
 
@@ -269,6 +274,8 @@ struct SessionLaunchPayload: Sendable {
 
 When `SessionStart` hook fires, we need to match it to a pending launch. **The `HookEvent` does NOT contain a tmux session name** -- it only has `sessionID`, `cwd`, `pid`, and `tty`. Matching requires an async lookup.
 
+**New field on SessionState**: Add `var tmuxSessionName: String?` to `SessionState`. Populate it during the merge (the tmux session name is already known from `pendingLaunches`). This eliminates expensive async `TmuxTargetFinder` lookups in Chunk 3 actions (Copy Attach, Delete, Kill). Also populate opportunistically during `processHookEvent` when `isInTmux` is determined via periodic checks.
+
 **Merge mechanism:**
 - `SessionStore` maintains a `pendingLaunches: [String: String]` dictionary mapping tmux session name to provisional session ID
 - When a `SessionStart` hook arrives AND `pendingLaunches` is non-empty:
@@ -279,6 +286,8 @@ When `SessionStart` hook fires, we need to match it to a pending launch. **The `
 - When `pendingLaunches` is empty, skip the `TmuxTargetFinder` lookup entirely (no performance impact on normal hook processing)
 - The real session starts in `.idle` phase (from the hook), then immediately receives the prompt (step 6) transitioning to `.processing`
 - If no match within 15 seconds: `launchFailed(.claudeStartTimeout)` is emitted and the provisional session transitions to `.launching(.failed)`
+
+**Actor reentrancy guard**: The async `TmuxTargetFinder` lookup in `processHookEvent` introduces a suspension point. A concurrent `status == "ended"` event could remove the session being merged while the lookup is in flight. After the `await`, verify the provisional session still exists in `pendingLaunches` before proceeding with the merge. If it was removed (user cancelled, timeout), discard the lookup result.
 
 **SwiftUI identity during merge:**
 - The provisional session has a UUID-based `stableID` and the real session will have a different `stableID` (based on the hook's session ID)
@@ -369,7 +378,8 @@ When `SessionStart` hook fires, we need to match it to a pending launch. **The `
 - `SessionEvent.swift` -- Add 4 launch event cases + `SessionLaunchPayload`, update `sessionID` computed property and `description`
 - `SessionStore.swift` -- Handle 4 new event cases in `process(_:)`, add `pendingLaunches` dictionary, add async `TmuxTargetFinder` lookup in `processHookEvent` when pending launches exist, merge provisional sessions
 - `ClaudeInstancesView.swift` -- Add `NewSessionRow` after `ForEach`, replace `emptyState`, add `.launching` case to `phasePriority`, update `InstanceRow` with `.launching` rendering (pulsing ring, progress text, cancel/retry/dismiss), add optional `onCancel`/`onRetry`/`onDismiss` callbacks to `InstanceRow`
-- `NotchMenuView.swift` -- Add Claude Command expandable settings section (following `TokenTrackingRow` pattern)
+- `NotchMenuView.swift` -- Add Claude Command expandable settings section (following `TokenTrackingRow` pattern). Insert after "Hooks" toggle (line ~133) in the system settings group, before Accessibility row.
+- `SessionState.swift` -- Add `var tmuxSessionName: String?` field
 - `NotchViewModel.swift` -- Add `showLauncher()` method (calls `SessionLauncherPanel.shared.show()`), update `openedSize` for `.menu` to include Claude Command section height, add `.sessionCreated` to `NotchOpenReason`
 - `WindowManager.swift` (or `AppDelegate.swift`) -- Create `SessionLauncherPanel` after `NotchWindowController` setup, pass `NotchViewModel` reference for post-creation auto-expand
 - `Settings.swift` -- Add `claudeCommandTemplate` (String, default "claude") and `lastUsedDirectory` (String?, default nil) to private `Keys` enum + static computed properties with UserDefaults getter/setter

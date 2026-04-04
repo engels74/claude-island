@@ -25,9 +25,10 @@ Note: The existing codebase uses `CGEvent` for **posting** mouse events (in `Not
 
 #### Internals
 
-- Creates a `CGEvent` tap on init (mach port + `CFRunLoopSource` attached to **main run loop** -- this ensures the callback runs on MainActor-compatible thread)
-- Maintains a dictionary: `[KeyCombo: HotkeyAction]`
-- On each key event: checks for match, consumes and fires action if found, passes through if not
+- Creates a `CGEvent` tap on init (mach port + `CFRunLoopSource` attached to **main run loop**)
+- The hotkey dictionary must be protected with `Mutex<[KeyCombo: HotkeyAction]>` (from `Synchronization` framework, which the codebase already uses). Reason: the CGEvent tap callback is a C function pointer (`@convention(c)`) that receives `self` via `UnsafeMutableRawPointer` — it cannot participate in Swift observation or actor isolation. The Mutex ensures thread-safe reads from the callback.
+- On each key event in the C callback: read the dictionary from the Mutex, check for match, consume and fire action if found, pass through if not
+- Action dispatch: `DispatchQueue.main.async { ... }` from the C callback to ensure MainActor context for UI updates (CGEvent tap callbacks on main run loop are not guaranteed MainActor in Swift 6.2)
 
 #### Deferred Start
 
@@ -55,7 +56,7 @@ Follow the `EventMonitors.shared.startMonitorsIfPermitted()` pattern (EventMonit
 ### KeyCombo Model
 
 ```swift
-struct KeyCombo: Hashable, Sendable {
+struct KeyCombo: Hashable, Codable, Sendable {
     let keyCode: UInt16
     let modifiers: UInt            // NSEvent.ModifierFlags.rawValue (UInt, not ModifierFlags directly)
     var displayString: String      // "⌘⇧2" -- generated from keyCode + modifiers
@@ -150,7 +151,7 @@ Future enhancement: store a `tmuxSessionName` on `SessionState` (populated durin
 1. **Via `.sessionEnded` event** (from archive action, periodic PID check): `SessionStore.processSessionEnd()` fires. Add a cleanup side-effect here.
 2. **Via hook `status == "ended"`** (from `SessionEnd` hook): `processHookEvent` directly removes the session at line ~323. **Currently does NOT emit `.sessionEnded`.** Must either: emit `.sessionEnded` from this path too, or add a separate notification.
 
-**Recommended approach**: After `sessions.removeValue(forKey: sessionID)` in both paths, call a cleanup closure/callback. Add a `var onSessionRemoved: ((String) -> Void)?` property on `SessionStore` that `AppDelegate` wires to `HotkeyManager.shared.removeShortcut(forSession:)`. This is the simplest approach without introducing a full observer pattern. Alternatively, `ClaudeSessionMonitor`'s session stream subscription can diff the previous and current session lists to detect removals.
+**Recommended approach**: Unify all session removal paths through `processSessionEnd()` (currently, the `status == "ended"` hook path bypasses it and directly removes). Then add a `var onSessionRemoved: (@Sendable (String) -> Void)?` property on `SessionStore` (must be `@Sendable` since the closure crosses actor boundary) that `AppDelegate` wires to `HotkeyManager.shared.removeShortcut(forSession:)`. This is the simplest approach without introducing a full observer pattern. Alternatively, `ClaudeSessionMonitor`'s session stream subscription can diff the previous and current session lists to detect removals.
 
 ### Assignment Flow
 
@@ -191,12 +192,17 @@ InstanceRow currently has THREE rendering modes (lines 316-342 of `ClaudeInstanc
 2. **Non-interactive tool approval**: Chat + Deny + Allow (`InlineApprovalButtons`, 3 buttons with text labels)
 3. **Normal state**: Chat + Terminal (conditional on PID) + Archive (conditional on idle/waitingForInput)
 
-**Approval buttons take absolute precedence.** When `session.phase.isWaitingForApproval`:
+**Approval and launching states take absolute precedence.** When `session.phase.isWaitingForApproval`:
 - The customizable action slots are NOT shown
 - The `...` overflow button is NOT shown
 - Approval-specific buttons render as they do today (no change)
 
-When NOT in approval state:
+When `session.phase` is `.launching` (from Chunk 1):
+- The customizable action slots are NOT shown
+- The `...` overflow button is NOT shown
+- Cancel/Retry/Dismiss buttons render per Chunk 1's spec
+
+When NOT in approval or launching state:
 - The configurable visible buttons + `...` overflow render
 
 This means the customizable system only applies to normal (non-approval) state.
@@ -227,14 +233,14 @@ When a visible-slot action's condition is NOT met, the button is hidden and the 
 
 ### Copy Attach Behavior
 
-- Requires tmux session name -- look up via `TmuxTargetFinder.findTarget(forClaudePID: session.pid)` to get `TmuxTarget.session`
+- Uses `session.tmuxSessionName` (added to `SessionState` by Chunk 1) — no async lookup needed
 - Copies: `tmux attach-session -t <session-name>`
 - Brief "Copied!" toast on row (fades after 1.5s, using existing `.spring(response: 0.25, dampingFraction: 0.8)` animation pattern)
 - Uses `NSPasteboard.general.clearContents()` + `.setString(_:forType: .string)` (existing `NSPasteboard` import in `ChatView.swift`)
 
 ### Delete Behavior
 
-- Requires tmux session name -- same `TmuxTargetFinder` lookup as Copy Attach
+- Uses `session.tmuxSessionName` (added to `SessionState` by Chunk 1) — no async lookup needed
 - Inline confirmation within dropdown: "Are you sure?" with "Delete" (red) + "Cancel" (swaps dropdown content via `@State`)
 - On confirm: `TmuxController.shared.killSession(sessionName:)` (new method, uses `ProcessExecutor.run(tmuxPath, ["kill-session", "-t", name])`) then `SessionStore.shared.process(.sessionEnded(sessionID:))`
 - If tmux target lookup fails (PID nil, session already dead): just fire `.sessionEnded` to clean up Claude Island state
@@ -308,7 +314,7 @@ The launcher panel (`SessionLauncherPanel`) and overflow menu can never appear s
 - `NotchMenuView.swift` -- Add Shortcuts and Session Actions expandable settings sections
 - `NotchViewModel.swift` -- Add `focusInputOnAppear` flag for per-session shortcut focus coordination. Note: `focusSession` logic lives in `HotkeyManager` which calls `viewModel.showChat(for:)` (existing method) + `viewModel.notchOpen(reason:)` directly. Increase `openedSize` base height for `.menu` by ~80px.
 - `ChatView.swift` -- Observe `viewModel.focusInputOnAppear` via `.onChange`, set local `@FocusState` when true, reset flag after applying
-- `SessionStore.swift` -- Add `var onSessionRemoved: ((String) -> Void)?` callback, call it from both `processSessionEnd()` and the `status == "ended"` path in `processHookEvent`
+- `SessionStore.swift` -- Unify all session removal through `processSessionEnd()` (route hook `status == "ended"` through it instead of direct removal). Add `var onSessionRemoved: (@Sendable (String) -> Void)?` callback, called from `processSessionEnd()`. Also clean up `pendingLaunches` (from Chunk 1) in the same method.
 - `TmuxController.swift` -- Add `killSession(sessionName: String) async -> Bool` method using `ProcessExecutor`
 - `AppDelegate.swift` -- Initialize `HotkeyManager`, wire `SessionStore.onSessionRemoved` to `HotkeyManager.removeShortcut(forSession:)`, add `HotkeyManager.startIfPermitted()` to accessibility grant callback
 - `Settings.swift` -- New keys: `globalShortcut` (Data?, encoded KeyCombo via JSONEncoder), `sessionShortcuts` (Data?, encoded [String: KeyCombo]), `sessionActionOrder` (Data?, encoded [SessionActionType])
