@@ -258,6 +258,20 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.lastUsedDirectory) }
     }
 
+    // MARK: - Projects
+
+    static var projects: [ProjectEntry] {
+        get {
+            guard let data = defaults.data(forKey: Keys.projects) else { return [] }
+            return (try? JSONDecoder().decode([ProjectEntry].self, from: data)) ?? []
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.projects)
+            }
+        }
+    }
+
     // MARK: - Chat Panel Width
 
     static var chatPanelWidthFraction: Double {
@@ -288,6 +302,7 @@ enum AppSettings {
         static let claudeCommandTemplate = "claudeCommandTemplate"
         static let lastUsedDirectory = "lastUsedDirectory"
         static let chatPanelWidthFraction = "chatPanelWidthFraction"
+        static let projects = "projects"
     }
 
     private static let defaults = UserDefaults.standard

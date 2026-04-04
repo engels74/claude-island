@@ -150,6 +150,10 @@ final class ClaudeSessionMonitor {
         }
         self.trackTask(task)
 
+        if event.event == "SessionStart" {
+            ProjectStore.shared.recordUsage(path: event.cwd)
+        }
+
         // Start/stop interrupt watcher (already on MainActor - no Task needed)
         if event.sessionPhase == .processing {
             InterruptWatcherManager.shared.startWatching(
