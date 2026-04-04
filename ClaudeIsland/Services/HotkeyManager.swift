@@ -84,12 +84,10 @@ final class HotkeyManager {
 
     private func installEventTap() {
         let mask: CGEventMask = 1 << CGEventType.keyDown.rawValue
-        let hotkeyMapRef = self.hotkeyMap
 
         let callback: CGEventTapCallBack = { _, _, event, refcon -> Unmanaged<CGEvent>? in
             guard let refcon else { return Unmanaged.passRetained(event) }
-            let mapPointer = Unmanaged<AnyObject>.fromOpaque(refcon).takeUnretainedValue()
-            guard let mutex = mapPointer as? Mutex<[KeyCombo: HotkeyAction]> else { return Unmanaged.passRetained(event) }
+            let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
 
             let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
             let flags = event.flags
@@ -101,13 +99,13 @@ final class HotkeyManager {
 
             let combo = KeyCombo(keyCode: keyCode, modifiers: UInt(modifiers))
 
-            let matchedAction: HotkeyAction? = mutex.withLock { map in
+            let matchedAction: HotkeyAction? = manager.hotkeyMap.withLock { map in
                 map[combo]
             }
 
             if let action = matchedAction {
-                Task { @MainActor in
-                    Self.shared.handleAction(action)
+                DispatchQueue.main.async {
+                    manager.handleAction(action)
                 }
                 return nil
             }
@@ -115,7 +113,7 @@ final class HotkeyManager {
             return Unmanaged.passRetained(event)
         }
 
-        let mutexRef = Unmanaged.passUnretained(hotkeyMapRef as AnyObject).toOpaque()
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -123,7 +121,7 @@ final class HotkeyManager {
             options: .defaultTap,
             eventsOfInterest: mask,
             callback: callback,
-            userInfo: mutexRef,
+            userInfo: selfPtr,
         )
         else {
             Self.logger.warning("Failed to create CGEvent tap")

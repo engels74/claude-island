@@ -51,6 +51,10 @@ struct ClaudeInstancesView: View {
         }
     }
 
+    private var visibleActions: [SessionActionType] {
+        Array(AppSettings.sessionActionOrder.prefix(3))
+    }
+
     private var overflowActions: [SessionActionType] {
         let allActions = AppSettings.sessionActionOrder
         if allActions.count > 3 {
@@ -86,6 +90,7 @@ struct ClaudeInstancesView: View {
                         onCancel: { self.cancelLaunch(session) },
                         onRetry: { self.retryLaunch(session) },
                         onDismiss: { self.dismissLaunch(session) },
+                        visibleActions: self.visibleActions,
                     )
                     .id(session.stableID)
                     .overlay(alignment: .topTrailing) {
@@ -196,6 +201,9 @@ struct InstanceRow: View {
     var onCancel: (() -> Void)?
     var onRetry: (() -> Void)?
     var onDismiss: (() -> Void)?
+    var onDelete: (() -> Void)?
+    var onAssignShortcut: (() -> Void)?
+    var visibleActions: [SessionActionType] = [.chat, .focus, .archive]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -438,12 +446,8 @@ struct InstanceRow: View {
                     }
                 } else {
                     HStack(spacing: 8) {
-                        IconButton(icon: "bubble.left") { self.onChat() }
-                        if self.session.pid != nil {
-                            IconButton(icon: "terminal") { self.onFocus() }
-                        }
-                        if self.session.phase == .idle || self.session.phase == .waitingForInput {
-                            IconButton(icon: "archivebox") { self.onArchive() }
+                        ForEach(self.visibleActions, id: \.self) { action in
+                            self.visibleActionButton(action)
                         }
                         IconButton(icon: "ellipsis") { self.onOverflow?() }
                     }
@@ -491,6 +495,39 @@ struct InstanceRow: View {
             Circle()
                 .fill(Color.white.opacity(0.2))
                 .frame(width: 6, height: 6)
+        }
+    }
+
+    @ViewBuilder
+    private func visibleActionButton(_ action: SessionActionType) -> some View {
+        switch action {
+        case .chat:
+            IconButton(icon: "bubble.left") { self.onChat() }
+        case .focus:
+            if self.session.pid != nil {
+                IconButton(icon: "terminal") { self.onFocus() }
+            }
+        case .archive:
+            if self.session.phase == .idle || self.session.phase == .waitingForInput {
+                IconButton(icon: "archivebox") { self.onArchive() }
+            }
+        case .copyAttach:
+            if self.session.isInTmux, let tmuxName = self.session.tmuxSessionName {
+                IconButton(icon: "doc.on.clipboard") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("tmux attach-session -t \(tmuxName)", forType: .string)
+                }
+            }
+        case .delete:
+            if self.session.isInTmux {
+                IconButton(icon: "trash") { self.onDelete?() }
+            }
+        case .pinProject:
+            IconButton(icon: "star") {
+                ProjectStore.shared.addPinned(path: self.session.cwd)
+            }
+        case .assignShortcut:
+            IconButton(icon: "keyboard") { self.onAssignShortcut?() }
         }
     }
 
