@@ -106,6 +106,18 @@ enum NotificationSound: String, CaseIterable {
     }
 }
 
+// MARK: - SessionActionType
+
+enum SessionActionType: String, Codable, CaseIterable, Sendable {
+    case chat
+    case focus
+    case archive
+    case copyAttach
+    case delete
+    case pinProject
+    case assignShortcut
+}
+
 // MARK: - AppSettings
 
 enum AppSettings {
@@ -282,6 +294,54 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.chatPanelWidthFraction) }
     }
 
+    // MARK: - Global Shortcut
+
+    static var globalShortcut: KeyCombo? {
+        get {
+            guard let data = defaults.data(forKey: Keys.globalShortcut) else { return nil }
+            return try? JSONDecoder().decode(KeyCombo.self, from: data)
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.globalShortcut)
+            } else {
+                defaults.removeObject(forKey: Keys.globalShortcut)
+            }
+        }
+    }
+
+    // MARK: - Session Shortcuts
+
+    static var sessionShortcuts: [String: KeyCombo] {
+        get {
+            guard let data = defaults.data(forKey: Keys.sessionShortcuts) else { return [:] }
+            return (try? JSONDecoder().decode([String: KeyCombo].self, from: data)) ?? [:]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionShortcuts)
+            }
+        }
+    }
+
+    // MARK: - Session Action Order
+
+    static var sessionActionOrder: [SessionActionType] {
+        get {
+            guard let data = defaults.data(forKey: Keys.sessionActionOrder) else {
+                return [.chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut]
+            }
+            return (try? JSONDecoder().decode([SessionActionType].self, from: data)) ?? [
+                .chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut,
+            ]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionActionOrder)
+            }
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -303,6 +363,9 @@ enum AppSettings {
         static let lastUsedDirectory = "lastUsedDirectory"
         static let chatPanelWidthFraction = "chatPanelWidthFraction"
         static let projects = "projects"
+        static let globalShortcut = "globalShortcut"
+        static let sessionShortcuts = "sessionShortcuts"
+        static let sessionActionOrder = "sessionActionOrder"
     }
 
     private static let defaults = UserDefaults.standard

@@ -73,6 +73,7 @@ final class NotchViewModel {
     var openReason: NotchOpenReason = .unknown
     var contentType: NotchContentType = .instances
     var isHovering = false
+    var focusInputOnAppear = false
     var chatPanelWidthFraction: Double = AppSettings.chatPanelWidthFraction
 
     // MARK: - Geometry
