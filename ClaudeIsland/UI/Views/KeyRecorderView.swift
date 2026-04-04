@@ -18,54 +18,62 @@ struct KeyRecorderView: View {
     var onChanged: ((KeyCombo?) -> Void)?
 
     var body: some View {
-        HStack(spacing: 4) {
-            Button {
-                self.isRecording.toggle()
-            } label: {
-                HStack(spacing: 4) {
-                    if self.isRecording {
-                        Text("Press keys...")
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.6))
-                    } else if let combo {
-                        Text(combo.displayString)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                    } else {
-                        Text("Record...")
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.3))
-                    }
-                }
-                .frame(minWidth: 80)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(
-                                    self.isRecording
-                                        ? Color.blue.opacity(0.6)
-                                        : (self.showReserved ? Color.red.opacity(0.6) : Color.clear),
-                                    lineWidth: 1.5,
-                                ),
-                        ),
-                )
-            }
-            .buttonStyle(.plain)
-
-            if self.combo != nil {
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(spacing: 4) {
                 Button {
-                    self.combo = nil
-                    self.onChanged?(nil)
+                    self.isRecording.toggle()
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
+                    HStack(spacing: 4) {
+                        if self.isRecording {
+                            Text("Press keys...")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.6))
+                        } else if let combo {
+                            Text(combo.displayString)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        } else {
+                            Text("Record...")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.3))
+                        }
+                    }
+                    .frame(minWidth: 80)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(
+                                        self.isRecording
+                                            ? Color.blue.opacity(0.6)
+                                            : (self.showReserved ? Color.red.opacity(0.6) : Color.clear),
+                                        lineWidth: 1.5,
+                                    ),
+                            ),
+                    )
                 }
                 .buttonStyle(.plain)
+
+                if self.combo != nil {
+                    Button {
+                        self.combo = nil
+                        self.onChanged?(nil)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let conflictMessage {
+                Text(conflictMessage)
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange.opacity(0.8))
             }
         }
         .onChange(of: self.isRecording) { _, newValue in
@@ -105,11 +113,14 @@ struct KeyRecorderView: View {
             KeyCombo(keyCode: 125, modifiers: ctrl),
             KeyCombo(keyCode: 123, modifiers: ctrl),
             KeyCombo(keyCode: 124, modifiers: ctrl),
+            KeyCombo(keyCode: 48, modifiers: cmd),   // Cmd+Tab
+            KeyCombo(keyCode: 50, modifiers: cmd),   // Cmd+`
         ]
     }()
 
     @State private var isRecording = false
     @State private var showReserved = false
+    @State private var conflictMessage: String?
     @State private var monitor: Any?
 
     // MARK: - Event Monitor
@@ -156,6 +167,16 @@ struct KeyRecorderView: View {
             Task(name: "reserved-feedback") {
                 try? await Task.sleep(for: .seconds(1.0))
                 self.showReserved = false
+            }
+            return
+        }
+
+        let isConflict = HotkeyManager.shared.allBindings().contains { $0.combo == newCombo }
+        if isConflict {
+            self.conflictMessage = "Already in use"
+            Task(name: "conflict-feedback") {
+                try? await Task.sleep(for: .seconds(2.0))
+                self.conflictMessage = nil
             }
             return
         }

@@ -58,6 +58,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ = HotkeyManager.shared
         HotkeyManager.shared.startIfPermitted()
 
+        Task(name: "cleanup-orphaned-bindings") {
+            await HotkeyManager.shared.cleanupOrphanedBindings()
+        }
+
         // Wire session removal to hotkey cleanup
         Task(name: "wire-session-removed") {
             await SessionStore.shared.setOnSessionRemoved { sessionID in

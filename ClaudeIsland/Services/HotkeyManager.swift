@@ -71,6 +71,35 @@ final class HotkeyManager {
         }
     }
 
+    func verifyTapHealth() {
+        guard let tap = self.eventTap else {
+            self.startIfPermitted()
+            return
+        }
+        if !CGEvent.tapIsEnabled(tap: tap) {
+            CGEvent.tapEnable(tap: tap, enable: true)
+            Self.logger.info("Re-enabled CGEvent tap")
+        }
+    }
+
+    func cleanupOrphanedBindings() async {
+        let sessions = await SessionStore.shared.allSessions()
+        let activeIDs = Set(sessions.map(\.sessionID))
+
+        self.hotkeyMap.withLock { map in
+            let orphanedCombos = map.compactMap { combo, action -> KeyCombo? in
+                if case let .focusSession(sessionID) = action, !activeIDs.contains(sessionID) {
+                    return combo
+                }
+                return nil
+            }
+            for combo in orphanedCombos {
+                map.removeValue(forKey: combo)
+            }
+        }
+        self.saveShortcuts()
+    }
+
     // MARK: Private
 
     nonisolated private static let logger = Logger(

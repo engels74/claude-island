@@ -47,6 +47,18 @@ struct ShortcutsSettingsView: View {
 
             if self.isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
+                    if AccessibilityPermissionManager.shared.shouldShowPermissionWarning {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 10))
+                                .foregroundColor(TerminalColors.amber)
+                            Text("Accessibility permission required for shortcuts")
+                                .font(.system(size: 11))
+                                .foregroundColor(TerminalColors.amber.opacity(0.8))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                    }
                     self.globalSection
                     self.sessionsSection
                 }
@@ -54,6 +66,7 @@ struct ShortcutsSettingsView: View {
                 .padding(.trailing, 12)
                 .padding(.vertical, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
+                .onAppear { HotkeyManager.shared.verifyTapHealth() }
             }
         }
     }
