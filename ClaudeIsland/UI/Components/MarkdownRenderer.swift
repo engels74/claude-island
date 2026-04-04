@@ -22,7 +22,7 @@ private final class DocumentCache: Sendable {
             if let cached = cache[text] {
                 return cached
             }
-            let doc = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
+            let doc = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks, .parseTable])
             if cache.count >= self.maxSize {
                 cache.removeAll()
             }
@@ -64,7 +64,7 @@ struct MarkdownText: View {
                 .foregroundColor(self.baseColor)
                 .font(.system(size: self.fontSize))
         } else {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                     BlockRenderer(markup: child, baseColor: self.baseColor, fontSize: self.fontSize)
                 }
@@ -95,18 +95,20 @@ private struct BlockRenderer: View {
     @ViewBuilder private var content: some View {
         if let paragraph = markup as? Paragraph {
             InlineRenderer(children: Array(paragraph.inlineChildren), baseColor: self.baseColor, fontSize: self.fontSize)
-                .lineSpacing(4)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         } else if let heading = markup as? Heading {
             self.headingView(heading)
         } else if let codeBlock = markup as? CodeBlock {
-            CodeBlockView(code: codeBlock.code)
+            CodeBlockView(code: codeBlock.code, language: codeBlock.language)
         } else if let blockQuote = markup as? BlockQuote {
             self.blockQuoteView(blockQuote)
         } else if let list = markup as? UnorderedList {
             self.unorderedListView(list)
         } else if let list = markup as? OrderedList {
             self.orderedListView(list)
+        } else if let table = markup as? Table {
+            self.tableView(table)
         } else if self.markup is ThematicBreak {
             Divider()
                 .background(self.baseColor.opacity(0.3))
@@ -149,10 +151,17 @@ private struct BlockRenderer: View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(list.listItems.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 6) {
-                    SwiftUI.Text("•")
-                        .font(.system(size: self.fontSize))
-                        .foregroundColor(self.baseColor.opacity(0.6))
-                        .frame(width: 12, alignment: .center)
+                    if let checkbox = item.checkbox {
+                        Image(systemName: checkbox == .checked ? "checkmark.square.fill" : "square")
+                            .font(.system(size: self.fontSize - 1))
+                            .foregroundColor(checkbox == .checked ? Color.green.opacity(0.8) : self.baseColor.opacity(0.5))
+                            .frame(width: 12, alignment: .center)
+                    } else {
+                        SwiftUI.Text("\u{2022}")
+                            .font(.system(size: self.fontSize))
+                            .foregroundColor(self.baseColor.opacity(0.6))
+                            .frame(width: 12, alignment: .center)
+                    }
 
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
@@ -189,6 +198,54 @@ private struct BlockRenderer: View {
                 }
             }
         }
+    }
+
+    private func tableView(_ table: Table) -> some View {
+        let head = table.head
+        let body = table.body
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    ForEach(Array(head.cells.enumerated()), id: \.offset) { _, cell in
+                        InlineRenderer(
+                            children: Array(cell.inlineChildren),
+                            baseColor: self.baseColor,
+                            fontSize: self.fontSize
+                        )
+                        .asText()
+                        .bold()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.12))
+                    }
+                }
+
+                ForEach(Array(body.rows.enumerated()), id: \.offset) { rowIndex, row in
+                    GridRow {
+                        ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
+                            InlineRenderer(
+                                children: Array(cell.inlineChildren),
+                                baseColor: self.baseColor,
+                                fontSize: self.fontSize
+                            )
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(rowIndex % 2 == 0 ? Color.white.opacity(0.04) : Color.clear)
+                        }
+                    }
+                }
+            }
+            .fixedSize()
+        }
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+        )
     }
 }
 
@@ -266,15 +323,48 @@ private struct InlineRenderer: View {
 
 private struct CodeBlockView: View {
     let code: String
+    let language: String?
+
+    @State private var showCopied = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            SwiftUI.Text(self.code)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.85))
-                .padding(10)
+        VStack(spacing: 0) {
+            if let language, !language.isEmpty {
+                HStack {
+                    SwiftUI.Text(language)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+
+                    Spacer()
+
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(self.code, forType: .string)
+                        self.showCopied = true
+                        Task(name: "copy-feedback") {
+                            try? await Task.sleep(for: .seconds(1.5))
+                            self.showCopied = false
+                        }
+                    } label: {
+                        Image(systemName: self.showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.12))
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                SwiftUI.Text(self.code)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(10)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.08))
         .cornerRadius(6)
     }

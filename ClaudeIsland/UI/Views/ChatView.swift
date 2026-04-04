@@ -334,7 +334,7 @@ struct ChatView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: 12) {
                     // Invisible anchor at bottom (first due to flip)
                     Color.clear
                         .frame(height: 1)
@@ -772,6 +772,7 @@ struct UserMessageView: View {
             Spacer(minLength: 60)
 
             MarkdownText(self.text, color: .white, fontSize: 13)
+                .frame(maxWidth: 700, alignment: .trailing)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
@@ -789,13 +790,13 @@ struct AssistantMessageView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
-            // White dot indicator
             Circle()
                 .fill(Color.white.opacity(0.6))
                 .frame(width: 6, height: 6)
                 .padding(.top, 5)
 
             MarkdownText(self.text, color: .white.opacity(0.9), fontSize: 13)
+                .frame(maxWidth: 700, alignment: .leading)
 
             Spacer(minLength: 60)
         }
