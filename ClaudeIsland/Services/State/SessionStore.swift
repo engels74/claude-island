@@ -43,6 +43,9 @@ actor SessionStore {
     /// Maps tmux session name to provisional session ID for launch merge
     var pendingLaunches: [String: String] = [:]
 
+    /// Callback fired when a session is removed, for external cleanup (e.g., hotkey removal)
+    var onSessionRemoved: (@Sendable (String) -> Void)?
+
     // MARK: - Periodic Status Check (see SessionStore+PeriodicCheck.swift)
 
     var statusCheckTask: Task<Void, Never>?
@@ -338,8 +341,7 @@ actor SessionStore {
         session.lastActivity = Date()
 
         if event.status == "ended" {
-            self.sessions.removeValue(forKey: sessionID)
-            self.cancelPendingSync(sessionID: sessionID)
+            await self.processSessionEnd(sessionID: sessionID)
             return
         }
 
@@ -934,6 +936,11 @@ actor SessionStore {
         }
         self.sessions.removeValue(forKey: sessionID)
         self.cancelPendingSync(sessionID: sessionID)
+        self.onSessionRemoved?(sessionID)
+    }
+
+    func setOnSessionRemoved(_ callback: @escaping @Sendable (String) -> Void) {
+        self.onSessionRemoved = callback
     }
 
     // MARK: - Launch Event Processing

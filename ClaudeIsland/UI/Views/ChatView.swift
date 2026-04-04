@@ -163,6 +163,12 @@ struct ChatView: View {
                 }
             }
         }
+        .onChange(of: self.viewModel.focusInputOnAppear) { _, newValue in
+            if newValue {
+                self.isInputFocused = true
+                self.viewModel.focusInputOnAppear = false
+            }
+        }
         .onAppear {
             // Auto-focus input when chat opens and tmux messaging is available
             self.focusInputTask?.cancel()
