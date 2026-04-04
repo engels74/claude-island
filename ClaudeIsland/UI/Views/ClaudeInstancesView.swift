@@ -29,6 +29,8 @@ struct ClaudeInstancesView: View {
 
     // MARK: Private
 
+    @State private var showOverflowFor: String?
+
     // MARK: - Instances List
 
     /// Priority: active (approval/processing/compacting) > waitingForInput > idle
@@ -72,8 +74,20 @@ struct ClaudeInstancesView: View {
                         onArchive: { self.archiveSession(session) },
                         onApprove: { self.approveSession(session) },
                         onReject: { self.rejectSession(session) },
+                        onOverflow: { self.showOverflowFor = session.sessionID },
                     )
                     .id(session.stableID)
+                    .overlay(alignment: .topTrailing) {
+                        if self.showOverflowFor == session.sessionID {
+                            SessionActionOverflowMenu(
+                                session: session,
+                                actions: self.overflowActions,
+                                onDismiss: { self.showOverflowFor = nil }
+                            )
+                            .offset(y: 36)
+                            .zIndex(100)
+                        }
+                    }
                 }
 
                 NewSessionRow { self.showLauncher() }
@@ -81,6 +95,19 @@ struct ClaudeInstancesView: View {
             .padding(.vertical, 4)
         }
         .scrollBounceBehavior(.basedOnSize)
+        .onTapGesture {
+            if self.showOverflowFor != nil {
+                self.showOverflowFor = nil
+            }
+        }
+    }
+
+    private var overflowActions: [SessionActionType] {
+        let allActions = AppSettings.sessionActionOrder
+        if allActions.count > 3 {
+            return Array(allActions.dropFirst(3))
+        }
+        return []
     }
 
     /// Lower number = higher priority
@@ -139,6 +166,7 @@ struct InstanceRow: View {
     let onArchive: () -> Void
     let onApprove: () -> Void
     let onReject: () -> Void
+    var onOverflow: (() -> Void)?
     var onCancel: (() -> Void)?
     var onRetry: (() -> Void)?
     var onDismiss: (() -> Void)?
@@ -391,6 +419,7 @@ struct InstanceRow: View {
                         if self.session.phase == .idle || self.session.phase == .waitingForInput {
                             IconButton(icon: "archivebox") { self.onArchive() }
                         }
+                        IconButton(icon: "ellipsis") { self.onOverflow?() }
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
