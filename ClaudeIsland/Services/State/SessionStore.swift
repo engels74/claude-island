@@ -40,6 +40,9 @@ actor SessionStore {
     /// Use `session(for:)` or `allSessions()` for read-only access.
     var sessions: [String: SessionState] = [:]
 
+    /// Maps tmux session name to provisional session ID for launch merge
+    var pendingLaunches: [String: String] = [:]
+
     // MARK: - Periodic Status Check (see SessionStore+PeriodicCheck.swift)
 
     var statusCheckTask: Task<Void, Never>?
@@ -128,19 +131,19 @@ actor SessionStore {
         case let .subagentStopped(sessionID, taskToolID):
             handleSubagentStopped(sessionID: sessionID, taskToolID: taskToolID)
 
-        // MARK: - Launch Events (placeholder for Task 2+)
+        // MARK: - Launch Events
 
         case let .sessionLaunching(payload):
-            Self.logger.info("Session launching: \(payload.sessionName, privacy: .public)")
+            self.processSessionLaunching(payload)
 
         case let .launchProgressUpdated(sessionID, progress):
-            Self.logger.info("Launch progress: \(sessionID.prefix(8), privacy: .public) -> \(String(describing: progress), privacy: .public)")
+            self.processLaunchProgressUpdated(sessionID: sessionID, progress: progress)
 
         case let .launchCompleted(sessionID):
-            Self.logger.info("Launch completed: \(sessionID.prefix(8), privacy: .public)")
+            self.processLaunchCompleted(sessionID: sessionID)
 
         case let .launchFailed(sessionID, error):
-            Self.logger.info("Launch failed: \(sessionID.prefix(8), privacy: .public) -> \(String(describing: error), privacy: .public)")
+            self.processLaunchFailed(sessionID: sessionID, error: error)
         }
 
         self.publishState()
@@ -321,6 +324,7 @@ actor SessionStore {
 
     private func processHookEvent(_ event: HookEvent) async {
         let sessionID = event.sessionID
+        let isNewSession = self.sessions[sessionID] == nil
         var session = self.sessions[sessionID] ?? self.createSession(from: event)
 
         session.pid = event.pid
@@ -366,6 +370,10 @@ actor SessionStore {
         }
 
         self.sessions[sessionID] = session
+
+        if isNewSession, !self.pendingLaunches.isEmpty {
+            await self.attemptLaunchMerge(hookEvent: event)
+        }
 
         if event.shouldSyncFile {
             self.scheduleFileSync(sessionID: sessionID, cwd: event.cwd)
@@ -921,8 +929,82 @@ actor SessionStore {
     // MARK: - Session End Processing
 
     private func processSessionEnd(sessionID: String) async {
+        if let session = sessions[sessionID], let tmuxName = session.tmuxSessionName {
+            self.pendingLaunches.removeValue(forKey: tmuxName)
+        }
         self.sessions.removeValue(forKey: sessionID)
         self.cancelPendingSync(sessionID: sessionID)
+    }
+
+    // MARK: - Launch Event Processing
+
+    private func processSessionLaunching(_ payload: SessionLaunchPayload) {
+        let session = SessionState(
+            sessionID: payload.sessionID,
+            cwd: payload.cwd,
+            projectName: URL(fileURLWithPath: payload.cwd).lastPathComponent,
+            tmuxSessionName: payload.sessionName,
+            phase: .launching(.creatingTmuxSession),
+        )
+        self.sessions[payload.sessionID] = session
+        self.pendingLaunches[payload.sessionName] = payload.sessionID
+    }
+
+    private func processLaunchProgressUpdated(sessionID: String, progress: LaunchProgress) {
+        guard var session = sessions[sessionID] else { return }
+        session.phase = .launching(progress)
+        session.lastActivity = Date()
+        self.sessions[sessionID] = session
+    }
+
+    private func processLaunchCompleted(sessionID: String) {
+        guard var session = sessions[sessionID] else { return }
+        if case .launching = session.phase {
+            session.phase = .idle
+            session.lastActivity = Date()
+            self.sessions[sessionID] = session
+        }
+    }
+
+    private func processLaunchFailed(sessionID: String, error: LaunchError) {
+        guard var session = sessions[sessionID] else { return }
+        session.phase = .launching(.failed(error))
+        session.lastActivity = Date()
+        self.sessions[sessionID] = session
+        if let tmuxName = session.tmuxSessionName {
+            self.pendingLaunches.removeValue(forKey: tmuxName)
+        }
+    }
+
+    // MARK: - Launch Merge
+
+    private func attemptLaunchMerge(hookEvent: HookEvent) async {
+        guard let pid = hookEvent.pid else { return }
+
+        let target = await TmuxTargetFinder.shared.findTarget(forClaudePID: pid)
+        guard let tmuxSessionName = target?.session else { return }
+
+        // Actor reentrancy guard: verify pending launch still exists after await
+        guard let provisionalID = pendingLaunches[tmuxSessionName] else { return }
+        guard let provisionalSession = sessions[provisionalID] else {
+            self.pendingLaunches.removeValue(forKey: tmuxSessionName)
+            return
+        }
+
+        // Verify cwd matches as corroborating signal
+        guard hookEvent.cwd == provisionalSession.cwd else { return }
+
+        // Remove provisional session
+        self.sessions.removeValue(forKey: provisionalID)
+        self.pendingLaunches.removeValue(forKey: tmuxSessionName)
+
+        // The real session was already created by processHookEvent's createSession
+        // Update it with tmux info from the provisional session
+        if var realSession = sessions[hookEvent.sessionID] {
+            realSession.tmuxSessionName = tmuxSessionName
+            realSession.isInTmux = true
+            self.sessions[hookEvent.sessionID] = realSession
+        }
     }
 
     // MARK: - History Loading
