@@ -60,6 +60,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.windowManager = WindowManager()
         _ = self.windowManager?.setupNotchWindow()
 
+        SessionLauncherPanel.shared.viewModel = self.windowManager?.windowController?.viewModel
+
         self.screenObserver = ScreenObserver { [weak self] in
             self?.handleScreenChange()
         }

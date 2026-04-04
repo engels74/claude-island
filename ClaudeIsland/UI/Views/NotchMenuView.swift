@@ -132,6 +132,8 @@ struct NotchMenuView: View {
                             }
                         }
 
+                        ClaudeCommandRow()
+
                         AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
                         MenuToggleRow(
@@ -834,6 +836,68 @@ struct TokenTrackingRow: View {
                         .foregroundColor(TerminalColors.green)
                         .padding(.leading, 20)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - ClaudeCommandRow
+
+struct ClaudeCommandRow: View {
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    @State private var commandTemplate: String = AppSettings.claudeCommandTemplate
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    self.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(self.isHovered || self.isExpanded ? 1.0 : 0.7))
+                        .frame(width: 16)
+
+                    Text("Claude Command")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(self.isHovered || self.isExpanded ? 1.0 : 0.7))
+
+                    Spacer()
+
+                    Image(systemName: self.isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(self.isHovered || self.isExpanded ? Color.white.opacity(0.08) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { self.isHovered = $0 }
+
+            if self.isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("claude", text: self.$commandTemplate)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12, design: .monospaced))
+                        .onChange(of: self.commandTemplate) { _, newValue in
+                            AppSettings.claudeCommandTemplate = newValue
+                        }
+
+                    Text("Variables: {{name}}, {{date}}, {{time}}, {{dir}}")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .padding(.leading, 28)
+                .padding(.trailing, 28)
+                .padding(.vertical, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

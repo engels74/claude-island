@@ -23,6 +23,7 @@ enum NotchOpenReason {
     case click
     case hover
     case notification
+    case sessionCreated
     case boot
     case unknown
 }
