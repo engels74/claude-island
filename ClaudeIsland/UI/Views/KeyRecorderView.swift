@@ -113,8 +113,8 @@ struct KeyRecorderView: View {
             KeyCombo(keyCode: 125, modifiers: ctrl),
             KeyCombo(keyCode: 123, modifiers: ctrl),
             KeyCombo(keyCode: 124, modifiers: ctrl),
-            KeyCombo(keyCode: 48, modifiers: cmd),   // Cmd+Tab
-            KeyCombo(keyCode: 50, modifiers: cmd),   // Cmd+`
+            KeyCombo(keyCode: 48, modifiers: cmd), // Cmd+Tab
+            KeyCombo(keyCode: 50, modifiers: cmd), // Cmd+`
         ]
     }()
 

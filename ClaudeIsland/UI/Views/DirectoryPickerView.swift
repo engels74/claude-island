@@ -7,6 +7,18 @@
 
 import SwiftUI
 
+// MARK: - DirectoryItem
+
+private struct DirectoryItem: Identifiable {
+    let id: String
+    let icon: String
+    let name: String
+    let path: String
+    let isHeader: Bool
+}
+
+// MARK: - DirectoryPickerView
+
 struct DirectoryPickerView: View {
     // MARK: Internal
 
@@ -138,29 +150,35 @@ struct DirectoryPickerView: View {
 
     private var projectStore = ProjectStore.shared
 
-    private var allItems: [(id: String, icon: String, name: String, path: String, isHeader: Bool)] {
-        var items: [(id: String, icon: String, name: String, path: String, isHeader: Bool)] = []
+    private var allItems: [DirectoryItem] {
+        var items: [DirectoryItem] = []
 
         if !self.projectStore.pinnedProjects.isEmpty {
-            items.append((id: "header-pinned", icon: "", name: "Pinned", path: "", isHeader: true))
+            items.append(DirectoryItem(id: "header-pinned", icon: "", name: "Pinned", path: "", isHeader: true))
             for project in self.projectStore.pinnedProjects {
-                items.append((id: project.id.uuidString, icon: "star.fill", name: project.displayName, path: project.path, isHeader: false))
+                items.append(DirectoryItem(
+                    id: project.id.uuidString,
+                    icon: "star.fill",
+                    name: project.displayName,
+                    path: project.path,
+                    isHeader: false,
+                ))
             }
         }
 
         if !self.projectStore.recentProjects.isEmpty {
-            items.append((id: "header-recent", icon: "", name: "Recent", path: "", isHeader: true))
+            items.append(DirectoryItem(id: "header-recent", icon: "", name: "Recent", path: "", isHeader: true))
             for project in self.projectStore.recentProjects {
-                items.append((id: project.id.uuidString, icon: "clock", name: project.displayName, path: project.path, isHeader: false))
+                items.append(DirectoryItem(id: project.id.uuidString, icon: "clock", name: project.displayName, path: project.path, isHeader: false))
             }
         }
 
         if items.isEmpty {
             let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-            items.append((id: "home", icon: "house", name: "Home", path: homePath, isHeader: false))
+            items.append(DirectoryItem(id: "home", icon: "house", name: "Home", path: homePath, isHeader: false))
         }
 
-        items.append((id: "browse", icon: "folder", name: "Browse...", path: "", isHeader: false))
+        items.append(DirectoryItem(id: "browse", icon: "folder", name: "Browse...", path: "", isHeader: false))
 
         return items
     }
