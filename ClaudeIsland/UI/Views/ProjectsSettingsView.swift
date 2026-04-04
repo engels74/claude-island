@@ -132,10 +132,15 @@ struct ProjectsSettingsView: View {
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
             panel.allowsMultipleSelection = false
+
+            let notchPanels = NSApp.windows.filter { $0 is NotchPanel }
+            notchPanels.forEach { $0.orderOut(nil) }
+
             panel.begin { response in
                 if response == .OK, let url = panel.url {
                     self.projectStore.addPinned(path: url.path)
                 }
+                notchPanels.forEach { $0.makeKeyAndOrderFront(nil) }
             }
         } label: {
             HStack(spacing: 6) {
@@ -174,6 +179,12 @@ private struct ProjectRow: View {
                 Text(self.project.displayName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(FileManager.default.fileExists(atPath: self.project.path) ? .white.opacity(0.8) : .white.opacity(0.3))
+
+                if self.isPinned, !FileManager.default.fileExists(atPath: self.project.path) {
+                    Text("Not found")
+                        .font(.system(size: 10))
+                        .foregroundColor(.red.opacity(0.5))
+                }
 
                 Text(self.project.path)
                     .font(.system(size: 10))

@@ -24,49 +24,58 @@ struct DirectoryPickerView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 1) {
                     ForEach(Array(self.allItems.enumerated()), id: \.element.id) { index, item in
-                        Button {
-                            if item.id == "browse" {
-                                self.openBrowser()
-                            } else {
-                                self.selectedPath = item.path
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: item.icon)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(item.id == "browse" ? .white
-                                        .opacity(0.5) : (item.icon == "star.fill" ? .yellow.opacity(0.7) : .white.opacity(0.4)))
-                                    .frame(width: 14)
-
-                                Text(item.name)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(item.id == "browse" ? 0.6 : 0.8))
-
-                                if item.id != "browse" {
-                                    Text(item.path)
+                        if item.isHeader {
+                            Text(item.name)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.white.opacity(0.3))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 3)
+                        } else {
+                            Button {
+                                if item.id == "browse" {
+                                    self.openBrowser()
+                                } else {
+                                    self.selectedPath = item.path
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: item.icon)
                                         .font(.system(size: 10))
-                                        .foregroundColor(.white.opacity(0.3))
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
+                                        .foregroundColor(item.id == "browse" ? .white
+                                            .opacity(0.5) : (item.icon == "star.fill" ? .yellow.opacity(0.7) : .white.opacity(0.4)))
+                                        .frame(width: 14)
 
-                                Spacer()
+                                    Text(item.name)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(item.id == "browse" ? 0.6 : 0.8))
 
-                                if self.selectedPath == item.path, item.id != "browse" {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.white.opacity(0.6))
+                                    if item.id != "browse" {
+                                        Text(item.path)
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.3))
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+
+                                    Spacer()
+
+                                    if self.selectedPath == item.path, item.id != "browse" {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white.opacity(0.6))
+                                    }
                                 }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    self.selectedPath == item.path && item.id != "browse"
+                                        ? Color(red: 0.04, green: 0.52, blue: 1.0).opacity(0.15)
+                                        : (index == self.highlightedIndex ? Color.white.opacity(0.06) : Color.clear),
+                                )
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                self.selectedPath == item.path && item.id != "browse"
-                                    ? Color(red: 0.04, green: 0.52, blue: 1.0).opacity(0.15)
-                                    : (index == self.highlightedIndex ? Color.white.opacity(0.06) : Color.clear),
-                            )
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -75,17 +84,32 @@ struct DirectoryPickerView: View {
             .cornerRadius(6)
         }
         .onKeyPress(.upArrow) {
-            self.highlightedIndex = max(0, self.highlightedIndex - 1)
+            var newIndex = self.highlightedIndex - 1
+            let items = self.allItems
+            while newIndex >= 0, items[newIndex].isHeader {
+                newIndex -= 1
+            }
+            if newIndex >= 0 {
+                self.highlightedIndex = newIndex
+            }
             return .handled
         }
         .onKeyPress(.downArrow) {
-            self.highlightedIndex = min(self.allItems.count - 1, self.highlightedIndex + 1)
+            var newIndex = self.highlightedIndex + 1
+            let items = self.allItems
+            while newIndex < items.count, items[newIndex].isHeader {
+                newIndex += 1
+            }
+            if newIndex < items.count {
+                self.highlightedIndex = newIndex
+            }
             return .handled
         }
         .onKeyPress(.return) {
             let items = self.allItems
             guard self.highlightedIndex < items.count else { return .ignored }
             let item = items[self.highlightedIndex]
+            guard !item.isHeader else { return .ignored }
             if item.id == "browse" {
                 self.openBrowser()
             } else {
@@ -93,6 +117,12 @@ struct DirectoryPickerView: View {
                 self.onSubmit()
             }
             return .handled
+        }
+        .onAppear {
+            let items = self.allItems
+            if let firstNonHeader = items.firstIndex(where: { !$0.isHeader }) {
+                self.highlightedIndex = firstNonHeader
+            }
         }
     }
 
@@ -102,23 +132,29 @@ struct DirectoryPickerView: View {
 
     private var projectStore = ProjectStore.shared
 
-    private var allItems: [(id: String, icon: String, name: String, path: String)] {
-        var items: [(id: String, icon: String, name: String, path: String)] = []
+    private var allItems: [(id: String, icon: String, name: String, path: String, isHeader: Bool)] {
+        var items: [(id: String, icon: String, name: String, path: String, isHeader: Bool)] = []
 
-        for project in self.projectStore.pinnedProjects {
-            items.append((id: project.id.uuidString, icon: "star.fill", name: project.displayName, path: project.path))
+        if !self.projectStore.pinnedProjects.isEmpty {
+            items.append((id: "header-pinned", icon: "", name: "Pinned", path: "", isHeader: true))
+            for project in self.projectStore.pinnedProjects {
+                items.append((id: project.id.uuidString, icon: "star.fill", name: project.displayName, path: project.path, isHeader: false))
+            }
         }
 
-        for project in self.projectStore.recentProjects {
-            items.append((id: project.id.uuidString, icon: "clock", name: project.displayName, path: project.path))
+        if !self.projectStore.recentProjects.isEmpty {
+            items.append((id: "header-recent", icon: "", name: "Recent", path: "", isHeader: true))
+            for project in self.projectStore.recentProjects {
+                items.append((id: project.id.uuidString, icon: "clock", name: project.displayName, path: project.path, isHeader: false))
+            }
         }
 
         if items.isEmpty {
             let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-            items.append((id: "home", icon: "house", name: "Home", path: homePath))
+            items.append((id: "home", icon: "house", name: "Home", path: homePath, isHeader: false))
         }
 
-        items.append((id: "browse", icon: "folder", name: "Browse...", path: ""))
+        items.append((id: "browse", icon: "folder", name: "Browse...", path: "", isHeader: false))
 
         return items
     }
