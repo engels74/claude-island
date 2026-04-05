@@ -96,13 +96,18 @@ actor TmuxSessionCreator {
 
     private func validatePreconditions(directory: String) async throws(LaunchError) -> String {
         guard let tmuxPath = await TmuxPathFinder.shared.getTmuxPath() else {
+            Self.logger.error("tmux binary not found")
             throw .tmuxNotInstalled
         }
+        Self.logger.info("Found tmux at \(tmuxPath, privacy: .public)")
         let claudePath = await self.findClaudeBinary()
-        guard claudePath != nil else {
+        guard let claudePath else {
+            Self.logger.error("claude binary not found")
             throw .claudeNotInstalled
         }
+        Self.logger.info("Found claude at \(claudePath, privacy: .public)")
         guard FileManager.default.fileExists(atPath: directory) else {
+            Self.logger.error("Directory not found: \(directory, privacy: .public)")
             throw .directoryNotFound(directory)
         }
         return tmuxPath

@@ -118,6 +118,13 @@ enum SessionActionType: String, Codable, CaseIterable, Sendable {
     case assignShortcut
 }
 
+// MARK: - ChatViewMode
+
+enum ChatViewMode: String, CaseIterable {
+    case terminal = "Terminal"
+    case chat = "Chat"
+}
+
 // MARK: - AppSettings
 
 enum AppSettings {
@@ -342,6 +349,22 @@ enum AppSettings {
         }
     }
 
+    // MARK: - Chat View Mode
+
+    static var chatViewMode: ChatViewMode {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.chatViewMode),
+                  let mode = ChatViewMode(rawValue: rawValue)
+            else {
+                return .terminal
+            }
+            return mode
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.chatViewMode)
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -366,6 +389,7 @@ enum AppSettings {
         static let globalShortcut = "globalShortcut"
         static let sessionShortcuts = "sessionShortcuts"
         static let sessionActionOrder = "sessionActionOrder"
+        static let chatViewMode = "chatViewMode"
     }
 
     private static let defaults = UserDefaults.standard

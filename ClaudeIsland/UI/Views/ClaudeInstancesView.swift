@@ -128,8 +128,7 @@ struct ClaudeInstancesView: View {
                 }
 
                 if let overflowSessionID = showOverflowFor,
-                   let session = sortedInstances.first(where: { $0.sessionID == overflowSessionID })
-                {
+                   let session = sortedInstances.first(where: { $0.sessionID == overflowSessionID }) {
                     SessionActionOverflowMenu(
                         session: session,
                         actions: self.overflowActions,

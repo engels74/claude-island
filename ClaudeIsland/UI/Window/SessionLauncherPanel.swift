@@ -9,6 +9,8 @@ import AppKit
 import os
 import SwiftUI
 
+// MARK: - SessionLauncherPanel
+
 final class SessionLauncherPanel: NSPanel {
     // MARK: Lifecycle
 

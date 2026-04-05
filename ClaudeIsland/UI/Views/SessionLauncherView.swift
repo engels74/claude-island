@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+// MARK: - SessionLauncherView
+
 struct SessionLauncherView: View {
     // MARK: Internal
 
@@ -322,6 +324,7 @@ struct SessionLauncherView: View {
 
 private struct SizePreferenceKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
+
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         value = nextValue()
     }

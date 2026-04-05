@@ -43,10 +43,11 @@ private final class DocumentCache: Sendable {
 struct MarkdownText: View {
     // MARK: Lifecycle
 
-    init(_ text: String, color: Color = .white.opacity(0.9), fontSize: CGFloat = 13) {
+    init(_ text: String, color: Color = .white.opacity(0.9), fontSize: CGFloat = 13, useSystemFont: Bool = false) {
         self.text = text
         self.baseColor = color
         self.fontSize = fontSize
+        self.useSystemFont = useSystemFont
         self.document = DocumentCache.shared.document(for: text)
     }
 
@@ -55,6 +56,7 @@ struct MarkdownText: View {
     let text: String
     let baseColor: Color
     let fontSize: CGFloat
+    let useSystemFont: Bool
 
     var body: some View {
         let children = Array(document.children)
@@ -62,11 +64,11 @@ struct MarkdownText: View {
             // Fallback for empty parse result
             SwiftUI.Text(self.text)
                 .foregroundColor(self.baseColor)
-                .font(.system(size: self.fontSize))
+                .font(self.useSystemFont ? .system(size: self.fontSize) : .system(size: self.fontSize, design: .monospaced))
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-                    BlockRenderer(markup: child, baseColor: self.baseColor, fontSize: self.fontSize)
+                    BlockRenderer(markup: child, baseColor: self.baseColor, fontSize: self.fontSize, useSystemFont: self.useSystemFont)
                 }
             }
         }
@@ -85,6 +87,7 @@ private struct BlockRenderer: View {
     let markup: Markup
     let baseColor: Color
     let fontSize: CGFloat
+    let useSystemFont: Bool
 
     var body: some View {
         self.content
@@ -94,9 +97,14 @@ private struct BlockRenderer: View {
 
     @ViewBuilder private var content: some View {
         if let paragraph = markup as? Paragraph {
-            InlineRenderer(children: Array(paragraph.inlineChildren), baseColor: self.baseColor, fontSize: self.fontSize)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
+            InlineRenderer(
+                children: Array(paragraph.inlineChildren),
+                baseColor: self.baseColor,
+                fontSize: self.fontSize,
+                useSystemFont: self.useSystemFont,
+            )
+            .lineSpacing(2)
+            .fixedSize(horizontal: false, vertical: true)
         } else if let heading = markup as? Heading {
             self.headingView(heading)
         } else if let codeBlock = markup as? CodeBlock {
@@ -120,7 +128,12 @@ private struct BlockRenderer: View {
 
     @ViewBuilder
     private func headingView(_ heading: Heading) -> some View {
-        let text = InlineRenderer(children: Array(heading.inlineChildren), baseColor: self.baseColor, fontSize: self.fontSize).asText()
+        let text = InlineRenderer(
+            children: Array(heading.inlineChildren),
+            baseColor: self.baseColor,
+            fontSize: self.fontSize,
+            useSystemFont: self.useSystemFont,
+        ).asText()
         switch heading.level {
         case 1: text.bold().italic().underline()
         case 2: text.bold()
@@ -137,9 +150,14 @@ private struct BlockRenderer: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(blockQuote.children.enumerated()), id: \.offset) { _, child in
                     if let para = child as? Paragraph {
-                        InlineRenderer(children: Array(para.inlineChildren), baseColor: self.baseColor.opacity(0.7), fontSize: self.fontSize)
-                            .asText()
-                            .italic()
+                        InlineRenderer(
+                            children: Array(para.inlineChildren),
+                            baseColor: self.baseColor.opacity(0.7),
+                            fontSize: self.fontSize,
+                            useSystemFont: self.useSystemFont,
+                        )
+                        .asText()
+                        .italic()
                     }
                 }
             }
@@ -166,9 +184,19 @@ private struct BlockRenderer: View {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
                             if let para = child as? Paragraph {
-                                InlineRenderer(children: Array(para.inlineChildren), baseColor: self.baseColor, fontSize: self.fontSize)
+                                InlineRenderer(
+                                    children: Array(para.inlineChildren),
+                                    baseColor: self.baseColor,
+                                    fontSize: self.fontSize,
+                                    useSystemFont: self.useSystemFont,
+                                )
                             } else {
-                                Self(markup: child, baseColor: self.baseColor, fontSize: self.fontSize)
+                                Self(
+                                    markup: child,
+                                    baseColor: self.baseColor,
+                                    fontSize: self.fontSize,
+                                    useSystemFont: self.useSystemFont,
+                                )
                             }
                         }
                     }
@@ -189,9 +217,19 @@ private struct BlockRenderer: View {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
                             if let para = child as? Paragraph {
-                                InlineRenderer(children: Array(para.inlineChildren), baseColor: self.baseColor, fontSize: self.fontSize)
+                                InlineRenderer(
+                                    children: Array(para.inlineChildren),
+                                    baseColor: self.baseColor,
+                                    fontSize: self.fontSize,
+                                    useSystemFont: self.useSystemFont,
+                                )
                             } else {
-                                Self(markup: child, baseColor: self.baseColor, fontSize: self.fontSize)
+                                Self(
+                                    markup: child,
+                                    baseColor: self.baseColor,
+                                    fontSize: self.fontSize,
+                                    useSystemFont: self.useSystemFont,
+                                )
                             }
                         }
                     }
@@ -212,6 +250,7 @@ private struct BlockRenderer: View {
                             children: Array(cell.inlineChildren),
                             baseColor: self.baseColor,
                             fontSize: self.fontSize,
+                            useSystemFont: self.useSystemFont,
                         )
                         .asText()
                         .bold()
@@ -229,6 +268,7 @@ private struct BlockRenderer: View {
                                 children: Array(cell.inlineChildren),
                                 baseColor: self.baseColor,
                                 fontSize: self.fontSize,
+                                useSystemFont: self.useSystemFont,
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -257,6 +297,7 @@ private struct InlineRenderer: View {
     let children: [InlineMarkup]
     let baseColor: Color
     let fontSize: CGFloat
+    let useSystemFont: Bool
 
     var body: some View {
         self.asText()
@@ -275,7 +316,8 @@ private struct InlineRenderer: View {
 
     private func renderInline(_ inline: InlineMarkup) -> SwiftUI.Text {
         if let text = inline as? Markdown.Text {
-            return SwiftUI.Text(text.string).foregroundColor(self.baseColor)
+            let base = SwiftUI.Text(text.string).foregroundColor(self.baseColor)
+            return self.useSystemFont ? base.font(.system(size: self.fontSize)) : base
         } else if let strong = inline as? Strong {
             let plainText = strong.plainText
             return SwiftUI.Text(plainText)

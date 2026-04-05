@@ -980,7 +980,7 @@ actor SessionStore {
         var matchedTmuxName: String?
         var matchedProvisionalID: String?
 
-        for (tmuxName, provisionalID) in pendingLaunches {
+        for (tmuxName, provisionalID) in self.pendingLaunches {
             guard let provisionalSession = sessions[provisionalID] else {
                 self.pendingLaunches.removeValue(forKey: tmuxName)
                 continue
