@@ -1,0 +1,71 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-05-chat-view-redesign.md",
+  "tasks": [
+    {
+      "id": 30,
+      "subject": "Task 1: Add ChatViewMode enum and AppSettings key",
+      "status": "pending",
+      "description": "**Goal:** Add ChatViewMode enum and settings key.\n\n**Files:**\n- Modify: ClaudeIsland/Core/Settings.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Core/Settings.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"ChatViewMode enum exists\", \"AppSettings.chatViewMode property works\", \"Default is .terminal\"]}\n```"
+    },
+    {
+      "id": 31,
+      "subject": "Task 2: Add useSystemFont to MarkdownRenderer",
+      "status": "pending",
+      "description": "**Goal:** Allow MarkdownText to render with system font for Chat mode.\n\n**Files:**\n- Modify: ClaudeIsland/UI/Components/MarkdownRenderer.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Components/MarkdownRenderer.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"useSystemFont parameter added\", \"Code blocks remain monospace\", \"Existing calls unaffected\"]}\n```"
+    },
+    {
+      "id": 32,
+      "subject": "Task 3: Create CollapsibleContentView component",
+      "status": "pending",
+      "description": "**Goal:** Build reusable height-capped content view with gradient fade.\n\n**Files:**\n- Create: ClaudeIsland/UI/Components/CollapsibleContentView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Components/CollapsibleContentView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"120px height cap\", \"Gradient fade\", \"Expand link\", \"Works in inverted scroll\"]}\n```"
+    },
+    {
+      "id": 33,
+      "subject": "Task 4: Create ThinkingBlockView component",
+      "status": "pending",
+      "description": "**Goal:** Build collapsed thinking block with expand toggle.\n\n**Files:**\n- Create: ClaudeIsland/UI/Components/ThinkingBlockView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Components/ThinkingBlockView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Collapsed Thinking label\", \"Chevron rotation\", \"Expand shows full text\", \"Dim italic style\"]}\n```"
+    },
+    {
+      "id": 34,
+      "subject": "Task 5: Create ToolCallInlineView for Terminal mode",
+      "status": "pending",
+      "blockedBy": [32],
+      "description": "**Goal:** Build minimal inline tool call component for Terminal mode.\n\n**Files:**\n- Create: ClaudeIsland/UI/Components/ToolCallInlineView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Components/ToolCallInlineView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Status dot colors\", \"Tool name + file path\", \"Inline content\", \"CollapsibleContentView for long content\", \"Orange approval\", \"Red errors\"]}\n```"
+    },
+    {
+      "id": 35,
+      "subject": "Task 6: Create ToolCallSummaryView for Chat mode",
+      "status": "pending",
+      "description": "**Goal:** Build compact one-line tool summary for Chat mode.\n\n**Files:**\n- Create: ClaudeIsland/UI/Components/ToolCallSummaryView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Components/ToolCallSummaryView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"5px status dot\", \"One-line summary\", \"No expand\"]}\n```"
+    },
+    {
+      "id": 36,
+      "subject": "Task 7: Create TerminalModeView",
+      "status": "pending",
+      "blockedBy": [33, 34],
+      "description": "**Goal:** Build Terminal mode message renderer.\n\n**Files:**\n- Create: ClaudeIsland/UI/Views/TerminalModeView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/TerminalModeView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"User messages with blue label\", \"Assistant with purple label\", \"ToolCallInlineView integration\", \"ThinkingBlockView integration\", \"Interrupted message\"]}\n```"
+    },
+    {
+      "id": 37,
+      "subject": "Task 8: Create ChatModeView",
+      "status": "pending",
+      "blockedBy": [31, 33, 35],
+      "description": "**Goal:** Build Chat mode with iMessage-style bubbles.\n\n**Files:**\n- Create: ClaudeIsland/UI/Views/ChatModeView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ChatModeView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Blue user bubbles\", \"Purple avatar assistant\", \"System font markdown\", \"ToolCallSummaryView integration\", \"BubbleShape\"]}\n```"
+    },
+    {
+      "id": 38,
+      "subject": "Task 9: Refactor ChatView with mode routing",
+      "status": "pending",
+      "blockedBy": [30, 36, 37],
+      "description": "**Goal:** Refactor ChatView to route to mode views, add segmented control.\n\n**Files:**\n- Modify: ClaudeIsland/UI/Views/ChatView.swift\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ChatView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Segmented control in header\", \"Mode routing works\", \"Old views removed\", \"Shared logic preserved\", \"Inline approval in Terminal mode\"]}\n```"
+    },
+    {
+      "id": 39,
+      "subject": "Task 10: Lint pass and final cleanup",
+      "status": "pending",
+      "blockedBy": [38],
+      "description": "**Goal:** Fix lint violations, verify build, clean up.\n\n**Files:**\n- Any files with lint violations\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ChatView.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/ 2>&1 | tail -3\", \"acceptanceCriteria\": [\"0 lint violations\", \"swiftformat clean\", \"Build succeeds\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-05T00:45:00Z"
+}
