@@ -53,10 +53,6 @@ final class SessionLauncherPanel: NSPanel {
 
     weak var viewModel: NotchViewModel?
 
-    override func cancelOperation(_: Any?) {
-        self.dismiss()
-    }
-
     func show() {
         guard !self.isVisible else { return }
 
@@ -96,7 +92,6 @@ final class SessionLauncherPanel: NSPanel {
     )
 
     private var visualEffectView: NSVisualEffectView?
-    private var localMonitor: Any?
     private var globalMonitor: Any?
 
     private func updateHostingView() {
@@ -135,14 +130,6 @@ final class SessionLauncherPanel: NSPanel {
     }
 
     private func installMonitors() {
-        self.localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.dismiss()
-                return nil
-            }
-            return event
-        }
-
         self.globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
             guard let self, self.isVisible else { return }
             if !self.frame.contains(NSEvent.mouseLocation) {
@@ -152,10 +139,6 @@ final class SessionLauncherPanel: NSPanel {
     }
 
     private func removeMonitors() {
-        if let localMonitor {
-            NSEvent.removeMonitor(localMonitor)
-            self.localMonitor = nil
-        }
         if let globalMonitor {
             NSEvent.removeMonitor(globalMonitor)
             self.globalMonitor = nil
