@@ -314,18 +314,23 @@ private struct InlineRenderer: View {
 
     // MARK: Private
 
+    private var bodyFont: Font {
+        self.useSystemFont ? .system(size: self.fontSize) : .system(size: self.fontSize, design: .monospaced)
+    }
+
     private func renderInline(_ inline: InlineMarkup) -> SwiftUI.Text {
         if let text = inline as? Markdown.Text {
-            let base = SwiftUI.Text(text.string).foregroundColor(self.baseColor)
-            return self.useSystemFont ? base.font(.system(size: self.fontSize)) : base
+            return SwiftUI.Text(text.string)
+                .font(self.bodyFont)
+                .foregroundColor(self.baseColor)
         } else if let strong = inline as? Strong {
-            let plainText = strong.plainText
-            return SwiftUI.Text(plainText)
+            return SwiftUI.Text(strong.plainText)
+                .font(self.bodyFont)
                 .fontWeight(.bold)
                 .foregroundColor(self.baseColor)
         } else if let emphasis = inline as? Emphasis {
-            let plainText = emphasis.plainText
-            return SwiftUI.Text(plainText)
+            return SwiftUI.Text(emphasis.plainText)
+                .font(self.bodyFont)
                 .italic()
                 .foregroundColor(self.baseColor)
         } else if let code = inline as? InlineCode {
@@ -333,13 +338,13 @@ private struct InlineRenderer: View {
                 .font(.system(size: self.fontSize, design: .monospaced))
                 .foregroundColor(self.baseColor)
         } else if let link = inline as? Markdown.Link {
-            let plainText = link.plainText
-            return SwiftUI.Text(plainText)
+            return SwiftUI.Text(link.plainText)
+                .font(self.bodyFont)
                 .foregroundColor(Color.blue)
                 .underline()
         } else if let strike = inline as? Strikethrough {
-            let plainText = strike.plainText
-            return SwiftUI.Text(plainText)
+            return SwiftUI.Text(strike.plainText)
+                .font(self.bodyFont)
                 .strikethrough()
                 .foregroundColor(self.baseColor)
         } else if inline is SoftBreak {
@@ -347,7 +352,9 @@ private struct InlineRenderer: View {
         } else if inline is LineBreak {
             return SwiftUI.Text("\n")
         } else {
-            return SwiftUI.Text(inline.plainText).foregroundColor(self.baseColor)
+            return SwiftUI.Text(inline.plainText)
+                .font(self.bodyFont)
+                .foregroundColor(self.baseColor)
         }
     }
 

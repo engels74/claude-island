@@ -57,20 +57,23 @@ struct ChatView: View {
                 }
 
                 // Approval bar, interactive prompt, or Input bar
+                // Terminal mode uses inline approval in ToolCallInlineView
                 if let tool = approvalTool {
                     if tool == "AskUserQuestion" {
-                        // Interactive tools - show prompt to answer in terminal
                         self.interactivePromptBar
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .move(edge: .bottom)),
                                 removal: .opacity,
                             ))
-                    } else {
+                    } else if self.currentMode == .chat {
                         self.approvalBar(tool: tool)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .move(edge: .bottom)),
                                 removal: .opacity,
                             ))
+                    } else {
+                        self.inputBar
+                            .transition(.opacity)
                     }
                 } else {
                     self.inputBar

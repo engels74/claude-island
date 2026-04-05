@@ -15,8 +15,16 @@ struct ToolCallSummaryView: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(self.statusColor.opacity(0.6))
+                .fill(self.statusColor.opacity(self.isAnimating ? self.pulseOpacity : 0.6))
                 .frame(width: 5, height: 5)
+                .id(self.tool.status)
+                .onAppear {
+                    if self.isAnimating {
+                        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                            self.pulseOpacity = 0.15
+                        }
+                    }
+                }
 
             Text(self.summaryText)
                 .font(.system(size: 11))
@@ -27,6 +35,12 @@ struct ToolCallSummaryView: View {
     }
 
     // MARK: Private
+
+    @State private var pulseOpacity = 0.6
+
+    private var isAnimating: Bool {
+        self.tool.status == .running || self.tool.status == .waitingForApproval
+    }
 
     private var statusColor: Color {
         switch self.tool.status {
@@ -44,6 +58,9 @@ struct ToolCallSummaryView: View {
         }
         if self.tool.status == .waitingForApproval {
             return "Waiting for approval"
+        }
+        if self.tool.status == .interrupted {
+            return "Interrupted"
         }
         return ToolStatusDisplay.completed(for: self.tool.name, result: self.tool.structuredResult).text
     }

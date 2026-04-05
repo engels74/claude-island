@@ -49,7 +49,7 @@ struct ChatModeView: View {
 
     // MARK: Private
 
-    private let bubbleBlue = Color(red: 0.145, green: 0.388, blue: 0.918)
+    private let bubbleBlue = Color(red: 0.145, green: 0.388, blue: 0.922)
     private let avatarPurple = Color(red: 0.486, green: 0.227, blue: 0.929)
 
     private func userBubble(_ text: String) -> some View {
