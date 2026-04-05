@@ -62,6 +62,11 @@ struct ToolCallSummaryView: View {
         if self.tool.status == .interrupted {
             return "Interrupted"
         }
-        return ToolStatusDisplay.completed(for: self.tool.name, result: self.tool.structuredResult).text
+        let completed = ToolStatusDisplay.completed(for: self.tool.name, result: self.tool.structuredResult).text
+        if completed == "Completed" && !self.tool.inputPreview.isEmpty {
+            let name = MCPToolFormatter.formatToolName(self.tool.name)
+            return "\(name): \(self.tool.inputPreview)"
+        }
+        return completed
     }
 }

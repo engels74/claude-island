@@ -27,7 +27,9 @@ struct TerminalModeView: View {
                 onDeny: self.onDeny,
             )
         case let .thinking(text):
-            ThinkingBlockView(text: text)
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ThinkingBlockView(text: text)
+            }
         case .interrupted:
             self.interruptedMessage
         }

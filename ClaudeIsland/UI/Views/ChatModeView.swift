@@ -35,8 +35,10 @@ struct ChatModeView: View {
                 }
             }
         case let .thinking(text):
-            self.assistantBubble {
-                ThinkingBlockView(text: text)
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                self.assistantBubble {
+                    ThinkingBlockView(text: text)
+                }
             }
         case .interrupted:
             self.assistantBubble {
