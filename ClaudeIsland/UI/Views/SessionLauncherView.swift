@@ -158,49 +158,37 @@ struct SessionLauncherView: View {
     // MARK: - Prompt Field
 
     private var promptField: some View {
-        ZStack(alignment: .topLeading) {
-            if self.prompt.isEmpty {
-                Text("What should Claude do?")
-                    .font(.system(size: 15))
-                    .foregroundColor(.white.opacity(0.25))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 10)
-                    .allowsHitTesting(false)
+        TextField("What should Claude do?", text: self.$prompt, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 15))
+            .foregroundColor(.white)
+            .focused(self.$focusedField, equals: .prompt)
+            .lineLimit(1 ... 5)
+            .onKeyPress(.return, phases: .down) { keyPress in
+                if keyPress.modifiers.contains(.shift) {
+                    return .ignored
+                }
+                self.submit()
+                return .handled
             }
-
-            TextEditor(text: self.$prompt)
-                .font(.system(size: 15))
-                .foregroundColor(.white)
-                .scrollContentBackground(.hidden)
-                .focused(self.$focusedField, equals: .prompt)
-                .frame(minHeight: 44, maxHeight: 120)
-                .fixedSize(horizontal: false, vertical: true)
-                .onKeyPress(.return, phases: .down) { keyPress in
-                    if keyPress.modifiers.contains(.shift) {
-                        return .ignored
-                    }
-                    self.submit()
-                    return .handled
+            .onKeyPress(.tab, phases: .down) { _ in
+                withAnimation {
+                    self.showNameField = true
                 }
-                .onKeyPress(.tab, phases: .down) { _ in
-                    withAnimation {
-                        self.showNameField = true
-                    }
-                    self.focusedField = .name
-                    return .handled
-                }
-        }
-        .padding(8)
-        .background(Color.white.opacity(0.06))
-        .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(
-                    self.accentBlue.opacity(self.focusedField == .prompt ? 0.4 : 0),
-                    lineWidth: 1.5,
-                ),
-        )
-        .animation(.easeInOut(duration: 0.15), value: self.focusedField)
+                self.focusedField = .name
+                return .handled
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        self.accentBlue.opacity(self.focusedField == .prompt ? 0.4 : 0),
+                        lineWidth: 1.5,
+                    ),
+            )
+            .animation(.easeInOut(duration: 0.15), value: self.focusedField)
     }
 
     // MARK: - Name Field
@@ -294,8 +282,6 @@ struct SessionLauncherView: View {
             .frame(maxWidth: .infinity)
         }
     }
-
-    // MARK: - Actions
 
     private func submit() {
         let trimmedPrompt = self.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
