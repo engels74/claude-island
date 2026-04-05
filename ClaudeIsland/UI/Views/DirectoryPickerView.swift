@@ -2,209 +2,188 @@
 //  DirectoryPickerView.swift
 //  ClaudeIsland
 //
-//  Directory picker for the session launcher
+//  Dropdown directory picker for the session launcher
 //
 
 import SwiftUI
-
-// MARK: - DirectoryItem
-
-private struct DirectoryItem: Identifiable {
-    let id: String
-    let icon: String
-    let name: String
-    let path: String
-    let isHeader: Bool
-}
 
 // MARK: - DirectoryPickerView
 
 struct DirectoryPickerView: View {
     // MARK: Lifecycle
 
-    init(selectedPath: Binding<String>, onSubmit: @escaping () -> Void) {
+    init(
+        selectedPath: Binding<String>,
+        onSelect: @escaping () -> Void,
+        onBrowse: @escaping () -> Void,
+    ) {
         self._selectedPath = selectedPath
-        self.onSubmit = onSubmit
+        self.onSelect = onSelect
+        self.onBrowse = onBrowse
     }
 
     // MARK: Internal
 
     @Binding var selectedPath: String
 
-    var onSubmit: () -> Void
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Directory")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
-                .padding(.leading, 4)
-
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 1) {
-                    ForEach(Array(self.allItems.enumerated()), id: \.element.id) { index, item in
-                        if item.isHeader {
-                            Text(item.name)
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.white.opacity(0.3))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 3)
-                        } else {
-                            Button {
-                                if item.id == "browse" {
-                                    self.openBrowser()
-                                } else {
-                                    self.selectedPath = item.path
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: item.icon)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(item.id == "browse" ? .white
-                                            .opacity(0.5) : (item.icon == "star.fill" ? .yellow.opacity(0.7) : .white.opacity(0.4)))
-                                        .frame(width: 14)
-
-                                    Text(item.name)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(item.id == "browse" ? 0.6 : 0.8))
-
-                                    if item.id != "browse" {
-                                        Text(item.path)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.3))
-                                            .lineLimit(1)
-                                            .truncationMode(.middle)
-                                    }
-
-                                    Spacer()
-
-                                    if self.selectedPath == item.path, item.id != "browse" {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundColor(.white.opacity(0.6))
-                                    }
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    self.selectedPath == item.path && item.id != "browse"
-                                        ? Color(red: 0.04, green: 0.52, blue: 1.0).opacity(0.15)
-                                        : (index == self.highlightedIndex ? Color.white.opacity(0.06) : Color.clear),
-                                )
-                            }
-                            .buttonStyle(.plain)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                // Pinned section
+                if !self.projectStore.pinnedProjects.isEmpty {
+                    self.sectionHeader("Pinned")
+                    ForEach(self.projectStore.pinnedProjects) { project in
+                        self.projectRow(
+                            icon: "star.fill",
+                            iconColor: .yellow.opacity(0.7),
+                            name: project.displayName,
+                            trailing: self.selectedPath == project.path
+                                ? AnyView(Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundColor(.white.opacity(0.5)))
+                                : nil,
+                            isHighlighted: self.highlightedPath == project.path,
+                            isSelected: self.selectedPath == project.path,
+                        ) {
+                            self.selectedPath = project.path
+                            self.onSelect()
                         }
                     }
                 }
+
+                // Recent section
+                if !self.projectStore.recentProjects.isEmpty {
+                    if !self.projectStore.pinnedProjects.isEmpty {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.06))
+                            .frame(height: 1)
+                            .padding(.horizontal, 4)
+                    }
+                    self.sectionHeader("Recent")
+                    ForEach(self.projectStore.recentProjects) { project in
+                        self.projectRow(
+                            icon: "clock",
+                            iconColor: .white.opacity(0.4),
+                            name: project.displayName,
+                            trailing: AnyView(
+                                Text(SessionPhaseHelpers.timeAgo(project.lastUsedAt, now: Date()))
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.3)),
+                            ),
+                            isHighlighted: self.highlightedPath == project.path,
+                            isSelected: self.selectedPath == project.path,
+                        ) {
+                            self.selectedPath = project.path
+                            self.onSelect()
+                        }
+                    }
+                }
+
+                // Empty state
+                if self.projectStore.pinnedProjects.isEmpty, self.projectStore.recentProjects.isEmpty {
+                    let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+                    self.projectRow(
+                        icon: "house",
+                        iconColor: .white.opacity(0.4),
+                        name: "Home",
+                        trailing: self.selectedPath == homePath
+                            ? AnyView(Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundColor(.white.opacity(0.5)))
+                            : nil,
+                        isHighlighted: false,
+                        isSelected: self.selectedPath == homePath,
+                    ) {
+                        self.selectedPath = homePath
+                        self.onSelect()
+                    }
+                }
+
+                // Browse
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: 1)
+                    .padding(.horizontal, 4)
+
+                Button {
+                    self.onBrowse()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.4))
+                            .frame(width: 14)
+                        Text("Browse...")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
             }
-            .frame(maxHeight: 200)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(6)
         }
-        .onKeyPress(.upArrow) {
-            let items = self.allItems
-            let count = items.count
-            var newIndex = (self.highlightedIndex - 1 + count) % count
-            var safety = 0
-            while items[newIndex].isHeader, safety < count {
-                newIndex = (newIndex - 1 + count) % count
-                safety += 1
-            }
-            if !items[newIndex].isHeader {
-                self.highlightedIndex = newIndex
-            }
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            let items = self.allItems
-            let count = items.count
-            var newIndex = (self.highlightedIndex + 1) % count
-            var safety = 0
-            while items[newIndex].isHeader, safety < count {
-                newIndex = (newIndex + 1) % count
-                safety += 1
-            }
-            if !items[newIndex].isHeader {
-                self.highlightedIndex = newIndex
-            }
-            return .handled
-        }
-        .onKeyPress(.return) {
-            let items = self.allItems
-            guard self.highlightedIndex < items.count else { return .ignored }
-            let item = items[self.highlightedIndex]
-            guard !item.isHeader else { return .ignored }
-            if item.id == "browse" {
-                self.openBrowser()
-            } else {
-                self.selectedPath = item.path
-                self.onSubmit()
-            }
-            return .handled
-        }
-        .onAppear {
-            let items = self.allItems
-            if let firstNonHeader = items.firstIndex(where: { !$0.isHeader }) {
-                self.highlightedIndex = firstNonHeader
-            }
-        }
+        .frame(maxHeight: 200)
+        .background(Color(red: 0.06, green: 0.06, blue: 0.12).opacity(0.98))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1),
+        )
+        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
     }
 
     // MARK: Private
 
-    @State private var highlightedIndex = 0
+    private let onSelect: () -> Void
+    private let onBrowse: () -> Void
 
+    @State private var highlightedPath: String?
     private var projectStore = ProjectStore.shared
 
-    private var allItems: [DirectoryItem] {
-        var items: [DirectoryItem] = []
-
-        if !self.projectStore.pinnedProjects.isEmpty {
-            items.append(DirectoryItem(id: "header-pinned", icon: "", name: "Pinned", path: "", isHeader: true))
-            for project in self.projectStore.pinnedProjects {
-                items.append(DirectoryItem(
-                    id: project.id.uuidString,
-                    icon: "star.fill",
-                    name: project.displayName,
-                    path: project.path,
-                    isHeader: false,
-                ))
-            }
-        }
-
-        if !self.projectStore.recentProjects.isEmpty {
-            items.append(DirectoryItem(id: "header-recent", icon: "", name: "Recent", path: "", isHeader: true))
-            for project in self.projectStore.recentProjects {
-                items.append(DirectoryItem(id: project.id.uuidString, icon: "clock", name: project.displayName, path: project.path, isHeader: false))
-            }
-        }
-
-        if items.isEmpty {
-            let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-            items.append(DirectoryItem(id: "home", icon: "house", name: "Home", path: homePath, isHeader: false))
-        }
-
-        items.append(DirectoryItem(id: "browse", icon: "folder", name: "Browse...", path: "", isHeader: false))
-
-        return items
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(.white.opacity(0.25))
+            .tracking(0.5)
+            .textCase(.uppercase)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
     }
 
-    private func openBrowser() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = URL(fileURLWithPath: self.selectedPath)
+    private func projectRow(
+        icon: String,
+        iconColor: Color,
+        name: String,
+        trailing: AnyView?,
+        isHighlighted: Bool,
+        isSelected: Bool,
+        action: @escaping () -> Void,
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(iconColor)
+                    .frame(width: 14)
 
-        SessionLauncherPanel.shared.orderOut(nil)
+                Text(name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(isSelected ? 0.95 : 0.7))
 
-        panel.begin { response in
-            if response == .OK, let url = panel.url {
-                self.selectedPath = url.path
-                ProjectStore.shared.recordUsage(path: url.path)
+                Spacer()
+
+                if let trailing {
+                    trailing
+                }
             }
-            SessionLauncherPanel.shared.makeKeyAndOrderFront(nil)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                isSelected
+                    ? Color(red: 0.04, green: 0.52, blue: 1.0).opacity(0.15)
+                    : (isHighlighted ? Color.white.opacity(0.06) : Color.clear),
+            )
         }
+        .buttonStyle(.plain)
     }
 }
