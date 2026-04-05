@@ -179,12 +179,14 @@ actor TmuxSessionCreator {
     }
 
     private func findClaudeBinary() async -> String? {
-        let claudeBinPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/bin/claude").path
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let claudeBinPath = home.appendingPathComponent(".claude/bin/claude").path
+        let localBinPath = home.appendingPathComponent(".local/bin/claude").path
 
         let knownPaths = [
-            "/usr/local/bin/claude",
+            localBinPath,
             claudeBinPath,
+            "/usr/local/bin/claude",
             "/opt/homebrew/bin/claude",
         ]
 
