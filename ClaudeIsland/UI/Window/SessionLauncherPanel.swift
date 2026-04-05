@@ -14,7 +14,7 @@ final class SessionLauncherPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 200),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: true,
@@ -27,16 +27,6 @@ final class SessionLauncherPanel: NSPanel {
         self.hasShadow = true
         self.hidesOnDeactivate = false
         self.isMovableByWindowBackground = false
-
-        let visualEffect = NSVisualEffectView()
-        visualEffect.material = .hudWindow
-        visualEffect.state = .active
-        visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = 16
-        visualEffect.layer?.masksToBounds = true
-
-        self.contentView = visualEffect
-        self.visualEffectView = visualEffect
     }
 
     // MARK: Internal
@@ -56,7 +46,7 @@ final class SessionLauncherPanel: NSPanel {
     func show() {
         guard !self.isVisible else { return }
 
-        self.updateHostingView()
+        self.setupContent()
         self.centerOnNotchScreen()
         self.alphaValue = 0
 
@@ -81,6 +71,7 @@ final class SessionLauncherPanel: NSPanel {
             self.animator().alphaValue = 0
         } completionHandler: {
             self.orderOut(nil)
+            self.hostingController = nil
         }
     }
 
@@ -91,16 +82,10 @@ final class SessionLauncherPanel: NSPanel {
         category: "SessionLauncherPanel",
     )
 
-    private var visualEffectView: NSVisualEffectView?
-    private var hostingView: NSView?
-    private var sizeObservation: NSKeyValueObservation?
+    private var hostingController: AnyObject?
     private var globalMonitor: Any?
 
-    private func updateHostingView() {
-        guard let visualEffectView else { return }
-
-        visualEffectView.subviews.forEach { $0.removeFromSuperview() }
-
+    private func setupContent() {
         let launcherView = SessionLauncherView(
             onSubmit: { [weak self] prompt, name, directory in
                 self?.handleSubmit(prompt: prompt, sessionName: name, directory: directory)
@@ -110,35 +95,27 @@ final class SessionLauncherPanel: NSPanel {
             },
         )
 
-        let hostingView = NSHostingView(rootView: launcherView)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        visualEffectView.addSubview(hostingView)
-
-        NSLayoutConstraint.activate([
-            hostingView.topAnchor.constraint(equalTo: visualEffectView.topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: visualEffectView.bottomAnchor),
-            hostingView.leadingAnchor.constraint(equalTo: visualEffectView.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: visualEffectView.trailingAnchor),
-        ])
-
-        self.hostingView = hostingView
-
-        // Observe hosting view size changes to resize the panel dynamically
-        self.sizeObservation = hostingView.observe(\.intrinsicContentSize) { [weak self] view, _ in
-            guard let self else { return }
-            let size = view.intrinsicContentSize
-            guard size.width > 0, size.height > 0 else { return }
-            let newFrame = NSRect(
-                x: self.frame.origin.x,
-                y: self.frame.origin.y + self.frame.height - size.height,
-                width: size.width,
-                height: size.height,
+        let wrappedView = launcherView
+            .background(
+                VisualEffectBackground(material: .hudWindow, cornerRadius: 16),
             )
-            self.setFrame(newFrame, display: true, animate: true)
-        }
+
+        let controller = NSHostingController(rootView: wrappedView)
+        controller.view.wantsLayer = true
+        controller.view.layer?.cornerRadius = 16
+        controller.view.layer?.masksToBounds = true
+
+        self.contentView = controller.view
+        self.hostingController = controller
     }
 
     private func centerOnNotchScreen() {
+        // Let the content determine the window size
+        if let contentView {
+            let fittingSize = contentView.fittingSize
+            self.setContentSize(NSSize(width: max(fittingSize.width, 500), height: fittingSize.height))
+        }
+
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
         let panelSize = self.frame.size
@@ -178,7 +155,6 @@ final class SessionLauncherPanel: NSPanel {
                     directory: directory,
                     commandTemplate: AppSettings.claudeCommandTemplate,
                 )
-                // After successful launch, open chat for the new session
                 let sessions = await SessionStore.shared.allSessions()
                 if let newSession = sessions.first(where: { $0.cwd == directory }) {
                     await MainActor.run {
@@ -189,5 +165,26 @@ final class SessionLauncherPanel: NSPanel {
                 Self.logger.error("Launch failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+}
+
+// MARK: - VisualEffectBackground
+
+private struct VisualEffectBackground: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let cornerRadius: CGFloat
+
+    func makeNSView(context _: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = self.material
+        view.state = .active
+        view.wantsLayer = true
+        view.layer?.cornerRadius = self.cornerRadius
+        view.layer?.masksToBounds = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context _: Context) {
+        nsView.material = self.material
     }
 }
