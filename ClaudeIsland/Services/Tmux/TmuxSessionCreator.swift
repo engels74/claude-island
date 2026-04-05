@@ -23,18 +23,29 @@ actor TmuxSessionCreator {
         directory: String,
         commandTemplate: String,
     ) async throws(LaunchError) {
-        let tmuxPath = try await self.validatePreconditions(directory: directory)
-        let resolvedName = await self.resolveSessionName(sessionName, tmuxPath: tmuxPath)
-
+        // Create provisional session FIRST so the UI shows progress immediately
         let provisionalID = UUID().uuidString
+        let sanitizedName = self.sanitizeName(sessionName.isEmpty ? prompt : sessionName)
         let payload = SessionLaunchPayload(
             sessionID: provisionalID,
-            sessionName: resolvedName,
+            sessionName: sanitizedName,
             cwd: directory,
             prompt: prompt,
             commandTemplate: commandTemplate,
         )
         await SessionStore.shared.process(.sessionLaunching(payload))
+
+        let tmuxPath: String
+        do {
+            tmuxPath = try await self.validatePreconditions(directory: directory)
+        } catch {
+            await SessionStore.shared.process(.launchFailed(
+                sessionID: provisionalID,
+                error: error,
+            ))
+            throw error
+        }
+        let resolvedName = await self.resolveSessionName(sanitizedName, tmuxPath: tmuxPath)
 
         try await self.createTmuxSession(
             tmuxPath: tmuxPath,
@@ -174,13 +185,15 @@ actor TmuxSessionCreator {
         let knownPaths = [
             "/usr/local/bin/claude",
             claudeBinPath,
+            "/opt/homebrew/bin/claude",
         ]
 
         for path in knownPaths where FileManager.default.isExecutableFile(atPath: path) {
             return path
         }
 
-        let result = await ProcessExecutor.shared.runWithResult("/usr/bin/which", arguments: ["claude"])
+        // GUI apps don't inherit shell PATH — use login shell to find claude
+        let result = await ProcessExecutor.shared.runWithResult("/bin/zsh", arguments: ["-l", "-c", "which claude"])
         if case let .success(processResult) = result, processResult.isSuccess {
             let path = processResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
             if !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
@@ -191,7 +204,7 @@ actor TmuxSessionCreator {
         return nil
     }
 
-    private func resolveSessionName(_ name: String, tmuxPath: String) async -> String {
+    private func sanitizeName(_ name: String) -> String {
         var sanitized = name.lowercased()
             .replacingOccurrences(of: " ", with: "-")
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
@@ -202,7 +215,11 @@ actor TmuxSessionCreator {
             sanitized = "claude-\(formatter.string(from: Date()))"
         }
 
-        sanitized = String(sanitized.prefix(50))
+        return String(sanitized.prefix(50))
+    }
+
+    private func resolveSessionName(_ name: String, tmuxPath: String) async -> String {
+        let sanitized = self.sanitizeName(name)
 
         var candidate = sanitized
         var counter = 2

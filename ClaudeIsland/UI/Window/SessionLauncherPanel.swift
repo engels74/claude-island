@@ -65,6 +65,7 @@ final class SessionLauncherPanel: NSPanel {
         self.alphaValue = 0
 
         self.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: false)
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15

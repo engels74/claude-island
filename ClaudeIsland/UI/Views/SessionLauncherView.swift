@@ -27,7 +27,11 @@ struct SessionLauncherView: View {
         .frame(width: 500)
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.showNameField)
         .onAppear {
-            self.focusedField = .prompt
+            Task(name: "focus-launcher-prompt") {
+                try? await Task.sleep(for: .seconds(0.15))
+                guard !Task.isCancelled else { return }
+                self.focusedField = .prompt
+            }
         }
     }
 
@@ -85,6 +89,7 @@ struct SessionLauncherView: View {
                     .foregroundColor(.white.opacity(0.3))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 10)
+                    .allowsHitTesting(false)
             }
 
             TextEditor(text: self.$prompt)
