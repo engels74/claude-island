@@ -975,20 +975,24 @@ actor SessionStore {
     // MARK: - Launch Merge
 
     private func attemptLaunchMerge(hookEvent: HookEvent) async {
-        guard let pid = hookEvent.pid else { return }
+        // Match by cwd: find a pending launch whose cwd matches the hook event's cwd
+        // This is simpler and more reliable than async TmuxTargetFinder PID lookup
+        var matchedTmuxName: String?
+        var matchedProvisionalID: String?
 
-        let target = await TmuxTargetFinder.shared.findTarget(forClaudePID: pid)
-        guard let tmuxSessionName = target?.session else { return }
-
-        // Actor reentrancy guard: verify pending launch still exists after await
-        guard let provisionalID = pendingLaunches[tmuxSessionName] else { return }
-        guard let provisionalSession = sessions[provisionalID] else {
-            self.pendingLaunches.removeValue(forKey: tmuxSessionName)
-            return
+        for (tmuxName, provisionalID) in pendingLaunches {
+            guard let provisionalSession = sessions[provisionalID] else {
+                self.pendingLaunches.removeValue(forKey: tmuxName)
+                continue
+            }
+            if hookEvent.cwd == provisionalSession.cwd {
+                matchedTmuxName = tmuxName
+                matchedProvisionalID = provisionalID
+                break
+            }
         }
 
-        // Verify cwd matches as corroborating signal
-        guard hookEvent.cwd == provisionalSession.cwd else { return }
+        guard let tmuxSessionName = matchedTmuxName, let provisionalID = matchedProvisionalID else { return }
 
         // Remove provisional session
         self.sessions.removeValue(forKey: provisionalID)
