@@ -92,6 +92,8 @@ final class SessionLauncherPanel: NSPanel {
     )
 
     private var visualEffectView: NSVisualEffectView?
+    private var hostingView: NSView?
+    private var sizeObservation: NSKeyValueObservation?
     private var globalMonitor: Any?
 
     private func updateHostingView() {
@@ -118,6 +120,22 @@ final class SessionLauncherPanel: NSPanel {
             hostingView.leadingAnchor.constraint(equalTo: visualEffectView.leadingAnchor),
             hostingView.trailingAnchor.constraint(equalTo: visualEffectView.trailingAnchor),
         ])
+
+        self.hostingView = hostingView
+
+        // Observe hosting view size changes to resize the panel dynamically
+        self.sizeObservation = hostingView.observe(\.intrinsicContentSize) { [weak self] view, _ in
+            guard let self else { return }
+            let size = view.intrinsicContentSize
+            guard size.width > 0, size.height > 0 else { return }
+            let newFrame = NSRect(
+                x: self.frame.origin.x,
+                y: self.frame.origin.y + self.frame.height - size.height,
+                width: size.width,
+                height: size.height,
+            )
+            self.setFrame(newFrame, display: true, animate: true)
+        }
     }
 
     private func centerOnNotchScreen() {
