@@ -33,14 +33,10 @@ struct DirectoryPickerView: View {
                 if !self.projectStore.pinnedProjects.isEmpty {
                     self.sectionHeader("Pinned")
                     ForEach(self.projectStore.pinnedProjects) { project in
-                        self.projectRow(
+                        PickerRow(
                             icon: "star.fill",
                             iconColor: .yellow.opacity(0.7),
                             name: project.displayName,
-                            trailing: self.selectedPath == project.path
-                                ? AnyView(Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundColor(.white.opacity(0.5)))
-                                : nil,
-                            isHighlighted: self.highlightedPath == project.path,
                             isSelected: self.selectedPath == project.path,
                         ) {
                             self.selectedPath = project.path
@@ -59,17 +55,12 @@ struct DirectoryPickerView: View {
                     }
                     self.sectionHeader("Recent")
                     ForEach(self.projectStore.recentProjects) { project in
-                        self.projectRow(
+                        PickerRow(
                             icon: "clock",
                             iconColor: .white.opacity(0.4),
                             name: project.displayName,
-                            trailing: AnyView(
-                                Text(SessionPhaseHelpers.timeAgo(project.lastUsedAt, now: Date()))
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.3)),
-                            ),
-                            isHighlighted: self.highlightedPath == project.path,
                             isSelected: self.selectedPath == project.path,
+                            trailingText: SessionPhaseHelpers.timeAgo(project.lastUsedAt, now: Date()),
                         ) {
                             self.selectedPath = project.path
                             self.onSelect()
@@ -80,14 +71,10 @@ struct DirectoryPickerView: View {
                 // Empty state
                 if self.projectStore.pinnedProjects.isEmpty, self.projectStore.recentProjects.isEmpty {
                     let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-                    self.projectRow(
+                    PickerRow(
                         icon: "house",
                         iconColor: .white.opacity(0.4),
                         name: "Home",
-                        trailing: self.selectedPath == homePath
-                            ? AnyView(Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundColor(.white.opacity(0.5)))
-                            : nil,
-                        isHighlighted: false,
                         isSelected: self.selectedPath == homePath,
                     ) {
                         self.selectedPath = homePath
@@ -135,7 +122,6 @@ struct DirectoryPickerView: View {
     private let onSelect: () -> Void
     private let onBrowse: () -> Void
 
-    @State private var highlightedPath: String?
     private var projectStore = ProjectStore.shared
 
     private func sectionHeader(_ title: String) -> some View {
@@ -149,39 +135,48 @@ struct DirectoryPickerView: View {
             .padding(.top, 6)
             .padding(.bottom, 2)
     }
+}
 
-    private func projectRow(
-        icon: String,
-        iconColor: Color,
-        name: String,
-        trailing: AnyView?,
-        isHighlighted: Bool,
-        isSelected: Bool,
-        action: @escaping () -> Void,
-    ) -> some View {
-        Button(action: action) {
+// MARK: - PickerRow
+
+private struct PickerRow: View {
+    let icon: String
+    let iconColor: Color
+    let name: String
+    let isSelected: Bool
+    var trailingText: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: self.action) {
             HStack(spacing: 6) {
-                Image(systemName: icon)
+                Image(systemName: self.icon)
                     .font(.system(size: 10))
-                    .foregroundColor(iconColor)
+                    .foregroundColor(self.iconColor)
                     .frame(width: 14)
 
-                Text(name)
+                Text(self.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(isSelected ? 0.95 : 0.7))
+                    .foregroundColor(.white.opacity(self.isSelected ? 0.95 : 0.7))
 
                 Spacer()
 
-                if let trailing {
-                    trailing
+                if self.isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white.opacity(0.5))
+                } else if let trailingText {
+                    Text(trailingText)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.3))
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
-                isSelected
+                self.isSelected
                     ? Color(red: 0.04, green: 0.52, blue: 1.0).opacity(0.15)
-                    : (isHighlighted ? Color.white.opacity(0.06) : Color.clear),
+                    : Color.clear,
             )
         }
         .buttonStyle(.plain)
