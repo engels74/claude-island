@@ -12,6 +12,7 @@ struct SessionLauncherView: View {
 
     let onSubmit: (String, String, String) -> Void
     let onDismiss: () -> Void
+    var onSizeChange: ((CGSize) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,6 +61,16 @@ struct SessionLauncherView: View {
             self.bottomBar
         }
         .frame(width: 500)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .preference(key: SizePreferenceKey.self, value: geometry.size)
+            },
+        )
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            self.onSizeChange?(size)
+        }
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.showNameField)
         .animation(.spring(response: 0.2, dampingFraction: 0.85), value: self.isDropdownOpen)
         .onAppear {
@@ -304,5 +315,14 @@ struct SessionLauncherView: View {
             }
             SessionLauncherPanel.shared.makeKeyAndOrderFront(nil)
         }
+    }
+}
+
+// MARK: - SizePreferenceKey
+
+private struct SizePreferenceKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }

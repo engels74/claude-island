@@ -93,6 +93,9 @@ final class SessionLauncherPanel: NSPanel {
             onDismiss: { [weak self] in
                 self?.dismiss()
             },
+            onSizeChange: { [weak self] size in
+                self?.resizeToFit(size)
+            },
         )
 
         let wrappedView = launcherView
@@ -107,6 +110,21 @@ final class SessionLauncherPanel: NSPanel {
 
         self.contentView = controller.view
         self.hostingController = controller
+    }
+
+    private func resizeToFit(_ size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        let newHeight = size.height
+        let currentFrame = self.frame
+        // Grow/shrink from top (keep top edge fixed, adjust origin.y)
+        let newOriginY = currentFrame.origin.y + currentFrame.height - newHeight
+        let newFrame = NSRect(
+            x: currentFrame.origin.x,
+            y: newOriginY,
+            width: currentFrame.width,
+            height: newHeight,
+        )
+        self.setFrame(newFrame, display: true, animate: false)
     }
 
     private func centerOnNotchScreen() {
