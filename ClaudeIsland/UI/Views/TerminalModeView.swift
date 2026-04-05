@@ -11,7 +11,6 @@ struct TerminalModeView: View {
     // MARK: Internal
 
     let item: ChatHistoryItem
-    let sessionID: String
     let onApprove: (() -> Void)?
     let onDeny: (() -> Void)?
 
@@ -24,7 +23,6 @@ struct TerminalModeView: View {
         case let .toolCall(tool):
             ToolCallInlineView(
                 tool: tool,
-                sessionID: self.sessionID,
                 onApprove: self.onApprove,
                 onDeny: self.onDeny,
             )

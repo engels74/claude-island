@@ -378,7 +378,6 @@ struct ChatView: View {
                             case .terminal:
                                 TerminalModeView(
                                     item: item,
-                                    sessionID: self.sessionID,
                                     onApprove: { self.approvePermission() },
                                     onDeny: { self.denyPermission() },
                                 )
@@ -890,11 +889,11 @@ struct SubagentToolRow: View {
 
     private var statusColor: Color {
         switch self.tool.status {
-        case .running,
-             .waitingForApproval: .orange
-        case .success: .green
+        case .running: .white
+        case .waitingForApproval: Color(red: 0.824, green: 0.6, blue: 0.133)
+        case .success: Color(red: 0.247, green: 0.725, blue: 0.314)
         case .error,
-             .interrupted: .red
+             .interrupted: Color(red: 0.973, green: 0.318, blue: 0.286)
         }
     }
 

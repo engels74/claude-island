@@ -13,7 +13,6 @@ struct ToolCallInlineView: View {
     // MARK: Internal
 
     let tool: ToolCallItem
-    let sessionID: String
     let onApprove: (() -> Void)?
     let onDeny: (() -> Void)?
 
