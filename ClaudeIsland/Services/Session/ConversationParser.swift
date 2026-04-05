@@ -507,7 +507,7 @@ actor ConversationParser {
             if type == "user" && !isMeta {
                 if let message = json["message"] as? [String: Any],
                    let msgContent = message["content"] as? String {
-                    if !msgContent.hasPrefix("<command-name>") && !msgContent.hasPrefix("<local-command") && !msgContent.hasPrefix("Caveat:") {
+                    if !msgContent.hasPrefix("<command-name>") && !msgContent.hasPrefix("<command-message>") && !msgContent.hasPrefix("<command-args>") && !msgContent.hasPrefix("<local-command") && !msgContent.hasPrefix("Caveat:") {
                         firstUserMessage = Self.truncateMessage(msgContent, maxLength: 50)
                         break
                     }
@@ -562,7 +562,7 @@ actor ConversationParser {
                 let isMeta = json["isMeta"] as? Bool ?? false
                 if !isMeta, let message = json["message"] as? [String: Any] {
                     if let msgContent = message["content"] as? String {
-                        if !msgContent.hasPrefix("<command-name>") && !msgContent.hasPrefix("<local-command") && !msgContent.hasPrefix("Caveat:") {
+                        if !msgContent.hasPrefix("<command-name>") && !msgContent.hasPrefix("<command-message>") && !msgContent.hasPrefix("<command-args>") && !msgContent.hasPrefix("<local-command") && !msgContent.hasPrefix("Caveat:") {
                             if let timestampStr = json["timestamp"] as? String {
                                 lastUserMessageDate = formatter.date(from: timestampStr)
                             }
@@ -719,7 +719,7 @@ actor ConversationParser {
         blocks.reserveCapacity(4) // Most messages have 2-4 blocks
 
         if let content = messageDict["content"] as? String {
-            if content.hasPrefix("<command-name>") || content.hasPrefix("<local-command") || content.hasPrefix("Caveat:") {
+            if content.hasPrefix("<command-name>") || content.hasPrefix("<command-message>") || content.hasPrefix("<command-args>") || content.hasPrefix("<local-command") || content.hasPrefix("Caveat:") {
                 return nil
             }
             if content.hasPrefix("[Request interrupted by user") {
