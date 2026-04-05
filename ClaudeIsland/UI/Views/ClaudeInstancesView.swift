@@ -96,43 +96,46 @@ struct ClaudeInstancesView: View {
                 .padding(.top, 4)
             }
 
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 2) {
-                    ForEach(self.sortedInstances) { session in
-                        InstanceRow(
-                            session: session,
-                            onFocus: { self.focusSession(session) },
-                            onChat: { self.openChat(session) },
-                            onArchive: { self.archiveSession(session) },
-                            onApprove: { self.approveSession(session) },
-                            onReject: { self.rejectSession(session) },
-                            onOverflow: { self.showOverflowFor = session.sessionID },
-                            onCancel: { self.cancelLaunch(session) },
-                            onRetry: { self.retryLaunch(session) },
-                            onDismiss: { self.dismissLaunch(session) },
-                            visibleActions: self.visibleActions,
-                        )
-                        .id(session.stableID)
-                        .overlay(alignment: .topTrailing) {
-                            if self.showOverflowFor == session.sessionID {
-                                SessionActionOverflowMenu(
-                                    session: session,
-                                    actions: self.overflowActions,
-                                ) { self.showOverflowFor = nil }
-                                    .offset(y: 36)
-                                    .zIndex(100)
-                            }
+            ZStack(alignment: .topTrailing) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 2) {
+                        ForEach(self.sortedInstances) { session in
+                            InstanceRow(
+                                session: session,
+                                onFocus: { self.focusSession(session) },
+                                onChat: { self.openChat(session) },
+                                onArchive: { self.archiveSession(session) },
+                                onApprove: { self.approveSession(session) },
+                                onReject: { self.rejectSession(session) },
+                                onOverflow: { self.showOverflowFor = session.sessionID },
+                                onCancel: { self.cancelLaunch(session) },
+                                onRetry: { self.retryLaunch(session) },
+                                onDismiss: { self.dismissLaunch(session) },
+                                visibleActions: self.visibleActions,
+                            )
+                            .id(session.stableID)
                         }
-                    }
 
-                    NewSessionRow { self.showLauncher() }
+                        NewSessionRow { self.showLauncher() }
+                    }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .onTapGesture {
-                if self.showOverflowFor != nil {
-                    self.showOverflowFor = nil
+                .scrollBounceBehavior(.basedOnSize)
+                .onTapGesture {
+                    if self.showOverflowFor != nil {
+                        self.showOverflowFor = nil
+                    }
+                }
+
+                if let overflowSessionID = showOverflowFor,
+                   let session = sortedInstances.first(where: { $0.sessionID == overflowSessionID })
+                {
+                    SessionActionOverflowMenu(
+                        session: session,
+                        actions: self.overflowActions,
+                    ) { self.showOverflowFor = nil }
+                        .padding(.top, 44)
+                        .padding(.trailing, 8)
                 }
             }
         }
