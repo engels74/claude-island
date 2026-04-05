@@ -168,6 +168,7 @@ final class SessionLauncherPanel: NSPanel {
         self.viewModel?.notchOpen(reason: .sessionCreated)
         self.viewModel?.contentType = .instances
 
+        let viewModel = self.viewModel
         Task(name: "launch-session") {
             do {
                 try await TmuxSessionCreator.shared.launch(
@@ -176,6 +177,13 @@ final class SessionLauncherPanel: NSPanel {
                     directory: directory,
                     commandTemplate: AppSettings.claudeCommandTemplate,
                 )
+                // After successful launch, open chat for the new session
+                let sessions = await SessionStore.shared.allSessions()
+                if let newSession = sessions.first(where: { $0.cwd == directory }) {
+                    await MainActor.run {
+                        viewModel?.showChat(for: newSession)
+                    }
+                }
             } catch {
                 Self.logger.error("Launch failed: \(error.localizedDescription, privacy: .public)")
             }
