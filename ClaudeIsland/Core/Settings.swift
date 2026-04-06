@@ -106,6 +106,18 @@ enum NotificationSound: String, CaseIterable {
     }
 }
 
+// MARK: - SessionActionType
+
+enum SessionActionType: String, Codable, CaseIterable, Sendable {
+    case chat
+    case focus
+    case archive
+    case copyAttach
+    case delete
+    case pinProject
+    case assignShortcut
+}
+
 // MARK: - AppSettings
 
 enum AppSettings {
@@ -244,6 +256,45 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.verboseMode) }
     }
 
+    // MARK: - Last Used Directory
+
+    static var lastUsedDirectory: String? {
+        get { defaults.string(forKey: Keys.lastUsedDirectory) }
+        set { defaults.set(newValue, forKey: Keys.lastUsedDirectory) }
+    }
+
+    // MARK: - Projects
+
+    static var projects: [ProjectEntry] {
+        get {
+            guard let data = defaults.data(forKey: Keys.projects) else { return [] }
+            return (try? JSONDecoder().decode([ProjectEntry].self, from: data)) ?? []
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.projects)
+            }
+        }
+    }
+
+    // MARK: - Session Action Order
+
+    static var sessionActionOrder: [SessionActionType] {
+        get {
+            guard let data = defaults.data(forKey: Keys.sessionActionOrder) else {
+                return [.chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut]
+            }
+            return (try? JSONDecoder().decode([SessionActionType].self, from: data)) ?? [
+                .chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut,
+            ]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionActionOrder)
+            }
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -261,6 +312,9 @@ enum AppSettings {
         static let tokenShowResetTime = "tokenShowResetTime"
         static let moduleLayoutConfig = "moduleLayoutConfig"
         static let verboseMode = "verboseMode"
+        static let lastUsedDirectory = "lastUsedDirectory"
+        static let projects = "projects"
+        static let sessionActionOrder = "sessionActionOrder"
     }
 
     private static let defaults = UserDefaults.standard
