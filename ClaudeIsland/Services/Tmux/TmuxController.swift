@@ -41,6 +41,18 @@ actor TmuxController {
         await ToolApprovalHandler.shared.reject(target: target, message: message)
     }
 
+    func killSession(sessionName: String) async -> Bool {
+        guard let tmuxPath = await TmuxPathFinder.shared.getTmuxPath() else { return false }
+        do {
+            _ = try await ProcessExecutor.shared.run(tmuxPath, arguments: [
+                "kill-session", "-t", sessionName,
+            ])
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func switchToPane(target: TmuxTarget) async -> Bool {
         guard let tmuxPath = await TmuxPathFinder.shared.getTmuxPath() else {
             return false

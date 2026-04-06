@@ -277,6 +277,16 @@ enum AppSettings {
         }
     }
 
+    // MARK: - Claude Command Template
+
+    static var claudeCommandTemplate: String {
+        get { defaults.string(forKey: Keys.claudeCommandTemplate) ?? "claude" }
+        set {
+            let validated = newValue.hasPrefix("claude") ? newValue : "claude"
+            defaults.set(validated, forKey: Keys.claudeCommandTemplate)
+        }
+    }
+
     // MARK: - Session Action Order
 
     static var sessionActionOrder: [SessionActionType] {
@@ -315,6 +325,7 @@ enum AppSettings {
         static let lastUsedDirectory = "lastUsedDirectory"
         static let projects = "projects"
         static let sessionActionOrder = "sessionActionOrder"
+        static let claudeCommandTemplate = "claudeCommandTemplate"
     }
 
     private static let defaults = UserDefaults.standard
