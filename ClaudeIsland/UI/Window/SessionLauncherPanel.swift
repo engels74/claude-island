@@ -169,14 +169,13 @@ final class SessionLauncherPanel: NSPanel {
         let viewModel = self.viewModel
         Task(name: "launch-session") {
             do {
-                try await TmuxSessionCreator.shared.launch(
+                let sessionID = try await TmuxSessionCreator.shared.launch(
                     prompt: prompt,
                     sessionName: sessionName,
                     directory: directory,
                     commandTemplate: AppSettings.claudeCommandTemplate,
                 )
-                let sessions = await SessionStore.shared.allSessions()
-                if let newSession = sessions.first(where: { $0.cwd == directory }) {
+                if let newSession = await SessionStore.shared.session(for: sessionID) {
                     await MainActor.run {
                         viewModel?.showChat(for: newSession)
                     }

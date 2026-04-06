@@ -111,6 +111,7 @@ struct ClaudeInstancesView: View {
                                 onCancel: { self.cancelLaunch(session) },
                                 onRetry: { self.retryLaunch(session) },
                                 onDismiss: { self.dismissLaunch(session) },
+                                onDelete: { self.deleteSession(session) },
                                 visibleActions: self.visibleActions,
                             )
                             .id(session.stableID)
@@ -132,7 +133,11 @@ struct ClaudeInstancesView: View {
                     SessionActionOverflowMenu(
                         session: session,
                         actions: self.overflowActions,
-                    ) { self.showOverflowFor = nil }
+                        onChat: { self.openChat(session) },
+                        onFocus: { self.focusSession(session) },
+                        onArchive: { self.archiveSession(session) },
+                        onDismiss: { self.showOverflowFor = nil }
+                    )
                         .padding(.top, 44)
                         .padding(.trailing, 8)
                 }
@@ -186,7 +191,9 @@ struct ClaudeInstancesView: View {
 
     private func cancelLaunch(_ session: SessionState) {
         Task(name: "cancel-launch") {
-            await TmuxSessionCreator.shared.cancelLaunch(sessionName: session.displayTitle)
+            if let tmuxName = session.tmuxSessionName {
+                await TmuxSessionCreator.shared.cancelLaunch(sessionName: tmuxName)
+            }
             self.sessionMonitor.archiveSession(sessionID: session.sessionID)
         }
     }
@@ -194,6 +201,12 @@ struct ClaudeInstancesView: View {
     private func retryLaunch(_ session: SessionState) {
         self.sessionMonitor.archiveSession(sessionID: session.sessionID)
         self.showLauncher()
+    }
+
+    private func deleteSession(_ session: SessionState) {
+        Task(name: "delete-session") {
+            await SessionStore.shared.process(.sessionEnded(sessionID: session.sessionID))
+        }
     }
 
     private func dismissLaunch(_ session: SessionState) {

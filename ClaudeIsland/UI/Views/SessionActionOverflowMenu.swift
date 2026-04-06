@@ -14,6 +14,10 @@ struct SessionActionOverflowMenu: View {
 
     let session: SessionState
     let actions: [SessionActionType]
+    var onChat: (() -> Void)?
+    var onFocus: (() -> Void)?
+    var onArchive: (() -> Void)?
+    var onAssignShortcut: (() -> Void)?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -99,11 +103,20 @@ struct SessionActionOverflowMenu: View {
     private func actionRow(_ action: SessionActionType) -> some View {
         switch action {
         case .chat:
-            self.menuButton(icon: "bubble.left", label: "Chat") { self.onDismiss() }
+            self.menuButton(icon: "bubble.left", label: "Chat") {
+                self.onChat?()
+                self.onDismiss()
+            }
         case .focus:
-            self.menuButton(icon: "terminal", label: "Focus Terminal") { self.onDismiss() }
+            self.menuButton(icon: "terminal", label: "Focus Terminal") {
+                self.onFocus?()
+                self.onDismiss()
+            }
         case .archive:
-            self.menuButton(icon: "archivebox", label: "Archive") { self.onDismiss() }
+            self.menuButton(icon: "archivebox", label: "Archive") {
+                self.onArchive?()
+                self.onDismiss()
+            }
         case .copyAttach:
             self.copyAttachRow
         case .delete:
@@ -114,7 +127,10 @@ struct SessionActionOverflowMenu: View {
                 self.onDismiss()
             }
         case .assignShortcut:
-            self.menuButton(icon: "keyboard", label: "Assign Shortcut") { self.onDismiss() }
+            self.menuButton(icon: "keyboard", label: "Assign Shortcut") {
+                self.onAssignShortcut?()
+                self.onDismiss()
+            }
         }
     }
 

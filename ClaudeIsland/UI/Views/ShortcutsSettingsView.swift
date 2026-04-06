@@ -96,10 +96,11 @@ struct ShortcutsSettingsView: View {
                 Spacer()
 
                 KeyRecorderView(combo: self.$globalCombo) { newCombo in
+                    if let existing = self.hotkeyManager.combo(for: .openLauncher) {
+                        self.hotkeyManager.unregister(combo: existing)
+                    }
                     if let newCombo {
                         self.hotkeyManager.register(combo: newCombo, action: .openLauncher)
-                    } else if let old = AppSettings.globalShortcut {
-                        self.hotkeyManager.unregister(combo: old)
                     }
                 }
             }
@@ -171,7 +172,9 @@ private struct SessionShortcutRow: View {
             Spacer()
 
             KeyRecorderView(combo: self.$currentCombo) { newCombo in
-                self.hotkeyManager.unregister(combo: self.combo)
+                if let existing = self.hotkeyManager.combo(for: .focusSession(sessionID: self.sessionID)) {
+                    self.hotkeyManager.unregister(combo: existing)
+                }
                 if let newCombo {
                     self.hotkeyManager.register(combo: newCombo, action: .focusSession(sessionID: self.sessionID))
                 }

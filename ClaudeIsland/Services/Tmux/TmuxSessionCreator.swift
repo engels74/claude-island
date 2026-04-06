@@ -17,12 +17,13 @@ actor TmuxSessionCreator {
 
     static let shared = TmuxSessionCreator()
 
+    @discardableResult
     func launch(
         prompt: String,
         sessionName: String,
         directory: String,
         commandTemplate: String,
-    ) async throws(LaunchError) {
+    ) async throws(LaunchError) -> String {
         // Create provisional session FIRST so the UI shows progress immediately
         let provisionalID = UUID().uuidString
         let sanitizedName = self.sanitizeName(sessionName.isEmpty ? prompt : sessionName)
@@ -78,6 +79,7 @@ actor TmuxSessionCreator {
 
         await self.sendPromptIfNeeded(prompt: prompt, tmuxPath: tmuxPath, sessionName: resolvedName)
         await MainActor.run { AppSettings.lastUsedDirectory = directory }
+        return provisionalID
     }
 
     func cancelLaunch(sessionName: String) async {
@@ -263,6 +265,4 @@ actor TmuxSessionCreator {
             .replacingOccurrences(of: "{{time}}", with: timeStr)
             .replacingOccurrences(of: "{{dir}}", with: directory)
     }
-
-
 }
