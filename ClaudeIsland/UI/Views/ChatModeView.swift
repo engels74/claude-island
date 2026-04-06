@@ -21,7 +21,12 @@ struct ChatModeView: View {
             self.userBubble(text)
         case let .assistant(text):
             self.assistantBubble {
-                MarkdownText(text, color: .white.opacity(0.9), fontSize: 13, useSystemFont: true)
+                MarkdownText(
+                    text,
+                    color: Self.isErrorMessage(text) ? self.errorRed.opacity(0.9) : .white.opacity(0.9),
+                    fontSize: 13,
+                    useSystemFont: true,
+                )
             }
         case let .toolCall(tool):
             self.assistantBubble {
@@ -53,6 +58,14 @@ struct ChatModeView: View {
 
     private let bubbleBlue = Color(red: 0.145, green: 0.388, blue: 0.922)
     private let avatarPurple = Color(red: 0.486, green: 0.227, blue: 0.929)
+    private let errorRed = Color(red: 0.973, green: 0.318, blue: 0.286)
+
+    private static func isErrorMessage(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("error:") || lowered.contains("api error")
+            || lowered.hasPrefix("error") || lowered.contains("failed:")
+            || lowered.contains("exception:") || lowered.contains("fatal:")
+    }
 
     private func userBubble(_ text: String) -> some View {
         HStack {

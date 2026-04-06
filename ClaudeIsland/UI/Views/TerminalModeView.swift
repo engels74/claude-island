@@ -39,11 +39,12 @@ struct TerminalModeView: View {
 
     private let labelBlue = Color(red: 0.345, green: 0.651, blue: 1.0)
     private let labelPurple = Color(red: 0.702, green: 0.557, blue: 0.941)
+    private let errorRed = Color(red: 0.973, green: 0.318, blue: 0.286)
 
     private var interruptedMessage: some View {
         Text("Interrupted")
             .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(Color(red: 0.973, green: 0.318, blue: 0.286))
+            .foregroundColor(self.errorRed)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -62,10 +63,21 @@ struct TerminalModeView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Claude")
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(self.labelPurple)
+                .foregroundColor(Self.isErrorMessage(text) ? self.errorRed : self.labelPurple)
 
-            MarkdownText(text, color: .white.opacity(0.9), fontSize: 11)
+            MarkdownText(
+                text,
+                color: Self.isErrorMessage(text) ? self.errorRed.opacity(0.9) : .white.opacity(0.9),
+                fontSize: 11,
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private static func isErrorMessage(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("error:") || lowered.contains("api error")
+            || lowered.hasPrefix("error") || lowered.contains("failed:")
+            || lowered.contains("exception:") || lowered.contains("fatal:")
     }
 }
