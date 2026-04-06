@@ -24,6 +24,7 @@ enum NotchOpenReason {
     case hover
     case notification
     case boot
+    case sessionCreated
     case unknown
 }
 
@@ -72,6 +73,7 @@ final class NotchViewModel {
     var openReason: NotchOpenReason = .unknown
     var contentType: NotchContentType = .instances
     var isHovering = false
+    var focusInputOnAppear = false
 
     // MARK: - Geometry
 

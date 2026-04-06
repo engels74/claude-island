@@ -108,6 +108,9 @@ struct ClaudeInstancesView: View {
                                 onApprove: { self.approveSession(session) },
                                 onReject: { self.rejectSession(session) },
                                 onOverflow: { self.showOverflowFor = session.sessionID },
+                                onCancel: { self.cancelLaunch(session) },
+                                onRetry: { self.retryLaunch(session) },
+                                onDismiss: { self.dismissLaunch(session) },
                                 visibleActions: self.visibleActions,
                             )
                             .id(session.stableID)
@@ -143,7 +146,8 @@ struct ClaudeInstancesView: View {
         switch phase {
         case .waitingForApproval,
              .processing,
-             .compacting: 0
+             .compacting,
+             .launching: 0
         case .waitingForInput: 1
         case .idle,
              .ended: 3
@@ -177,6 +181,23 @@ struct ClaudeInstancesView: View {
     }
 
     private func showLauncher() {
+        SessionLauncherPanel.shared.show()
+    }
+
+    private func cancelLaunch(_ session: SessionState) {
+        Task(name: "cancel-launch") {
+            await TmuxSessionCreator.shared.cancelLaunch(sessionName: session.displayTitle)
+            self.sessionMonitor.archiveSession(sessionID: session.sessionID)
+        }
+    }
+
+    private func retryLaunch(_ session: SessionState) {
+        self.sessionMonitor.archiveSession(sessionID: session.sessionID)
+        self.showLauncher()
+    }
+
+    private func dismissLaunch(_ session: SessionState) {
+        self.sessionMonitor.archiveSession(sessionID: session.sessionID)
     }
 }
 

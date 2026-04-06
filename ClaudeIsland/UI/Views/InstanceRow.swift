@@ -64,6 +64,7 @@ struct InstanceRow: View {
     @State private var isHovered = false
     @State private var isEditing = false
     @State private var editingName = ""
+    @State private var launchPulse = false
     @FocusState private var isTitleFocused: Bool
 
     private let metadataManager = SessionMetadataManager.shared
@@ -87,6 +88,14 @@ struct InstanceRow: View {
         switch self.session.phase {
         case .processing: "Processing..."
         case .compacting: "Compacting..."
+        case let .launching(progress):
+            switch progress {
+            case .creatingTmuxSession: "Creating session..."
+            case .startingClaude: "Starting Claude..."
+            case .waitingForHook: "Connecting..."
+            case .sendingPrompt: "Sending prompt..."
+            case let .failed(error): "Failed: \(error)"
+            }
         case .waitingForInput: "Ready"
         case .waitingForApproval: "Waiting for approval"
         case .idle: "Idle"
@@ -177,6 +186,9 @@ struct InstanceRow: View {
                 onReject: self.onReject,
             )
             .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        } else if case let .launching(progress) = self.session.phase {
+            self.launchingButtons(progress: progress)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
         } else {
             HStack(spacing: 8) {
                 ForEach(self.visibleActions, id: \.self) { action in
@@ -186,6 +198,52 @@ struct InstanceRow: View {
                     .accessibilityLabel("More actions")
             }
             .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        }
+    }
+
+    @ViewBuilder
+    private func launchingButtons(progress: LaunchProgress) -> some View {
+        HStack(spacing: 6) {
+            if case .failed = progress {
+                Button {
+                    self.onRetry?()
+                } label: {
+                    Text("Retry")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    self.onDismiss?()
+                } label: {
+                    Text("Dismiss")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    self.onCancel?()
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -199,6 +257,13 @@ struct InstanceRow: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(self.claudeOrange)
             }
+        case .launching:
+            Circle()
+                .stroke(Color(red: 0.04, green: 0.52, blue: 1.0), lineWidth: 1.5)
+                .frame(width: 8, height: 8)
+                .opacity(self.launchPulse ? 1.0 : 0.4)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: self.launchPulse)
+                .onAppear { self.launchPulse = true }
         case .waitingForApproval:
             TimelineView(.periodic(from: .now, by: 0.15)) { context in
                 let phase = Int(context.date.timeIntervalSinceReferenceDate / 0.15) % self.spinnerSymbols.count
