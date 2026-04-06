@@ -84,7 +84,7 @@ struct EditInputDiffView: View {
         if let path = input["file_path"] {
             return URL(fileURLWithPath: path).lastPathComponent
         }
-        return "file"
+        return String(localized: "file")
     }
 
     private var oldString: String {
@@ -130,7 +130,7 @@ struct EditResultContent: View {
             }
 
             if self.result.userModified {
-                Text("(User modified)")
+                Text(String(localized: "User modified"))
                     .font(.system(size: 10))
                     .foregroundColor(.orange.opacity(0.7))
             }
@@ -165,7 +165,7 @@ struct WriteResultContent: View {
         VStack(alignment: .leading, spacing: 6) {
             // Action and filename
             HStack(spacing: 4) {
-                Text(self.result.type == .create ? "Created" : "Wrote")
+                Text(self.result.type == .create ? String(localized: "Created") : String(localized: "Wrote"))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.5))
                 Text(self.result.filename)
@@ -195,7 +195,7 @@ struct BashResultContent: View {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 10))
-                    Text("Background task: \(bgID)")
+                    Text(String(localized: "Background task: \(bgID)"))
                         .font(.system(size: 10, design: .monospaced))
                 }
                 .foregroundColor(.blue.opacity(0.7))
@@ -216,7 +216,7 @@ struct BashResultContent: View {
             // Stderr (shown in red)
             if !self.result.stderr.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("stderr:")
+                    Text(String(localized: "stderr:"))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.red.opacity(0.7))
                     Text(self.result.stderr)
@@ -228,7 +228,7 @@ struct BashResultContent: View {
 
             // Empty state
             if !self.result.hasOutput && self.result.backgroundTaskID == nil && self.result.returnCodeInterpretation == nil {
-                Text("(No content)")
+                Text(String(localized: "No content"))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
             }
@@ -247,7 +247,7 @@ struct GrepResultContent: View {
             case .filesWithMatches:
                 // Show file list
                 if self.result.filenames.isEmpty {
-                    Text("No matches found")
+                    Text(String(localized: "No matches found"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.white.opacity(0.3))
                 } else {
@@ -259,13 +259,13 @@ struct GrepResultContent: View {
                 if let content = result.content, !content.isEmpty {
                     CodePreview(content: content, maxLines: 15)
                 } else {
-                    Text("No matches found")
+                    Text(String(localized: "No matches found"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.white.opacity(0.3))
                 }
 
             case .count:
-                Text("\(self.result.numFiles) files with matches")
+                Text(String(localized: "\(self.result.numFiles) files with matches"))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -281,14 +281,14 @@ struct GlobResultContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if self.result.filenames.isEmpty {
-                Text("No files found")
+                Text(String(localized: "No files found"))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
             } else {
                 FileListView(files: self.result.filenames, limit: 10)
 
                 if self.result.truncated {
-                    Text("... and more (truncated)")
+                    Text(String(localized: "… and more (truncated)"))
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.3))
                 }
@@ -354,7 +354,7 @@ struct TaskResultContent: View {
         VStack(alignment: .leading, spacing: 6) {
             // Status and stats
             HStack(spacing: 8) {
-                Text(self.result.status.capitalized)
+                Text(self.localizedStatus)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(self.statusColor)
 
@@ -365,7 +365,7 @@ struct TaskResultContent: View {
                 }
 
                 if let tools = result.totalToolUseCount {
-                    Text("\(tools) tools")
+                    Text(String(localized: "\(tools) tools"))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.4))
                 }
@@ -373,7 +373,7 @@ struct TaskResultContent: View {
 
             // Content summary
             if !self.result.content.isEmpty {
-                Text(self.result.content.prefix(200) + (self.result.content.count > 200 ? "..." : ""))
+                Text(self.result.content.count > 200 ? String(self.result.content.prefix(200)) + String(localized: "…") : self.result.content)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.6))
                     .lineLimit(5)
@@ -382,6 +382,21 @@ struct TaskResultContent: View {
     }
 
     // MARK: Private
+
+    private var localizedStatus: String {
+        switch self.result.status {
+        case "completed":
+            String(localized: "Completed")
+        case "in_progress":
+            String(localized: "In Progress")
+        case "failed":
+            String(localized: "Failed")
+        case "error":
+            String(localized: "Error")
+        default:
+            self.result.status.capitalized
+        }
+    }
 
     private var statusColor: Color {
         switch self.result.status {
@@ -452,7 +467,7 @@ struct WebSearchResultContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if self.result.results.isEmpty {
-                Text("No results found")
+                Text(String(localized: "No results found"))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
             } else {
@@ -473,7 +488,7 @@ struct WebSearchResultContent: View {
                 }
 
                 if self.result.results.count > 5 {
-                    Text("... and \(self.result.results.count - 5) more results")
+                    Text(String(localized: "… and \(self.result.results.count - 5) more results"))
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.3))
                 }
@@ -521,12 +536,12 @@ struct BashOutputResultContent: View {
         VStack(alignment: .leading, spacing: 4) {
             // Status
             HStack(spacing: 6) {
-                Text("Status: \(self.result.status)")
+                Text(String(localized: "Status: \(self.result.status)"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.5))
 
                 if let exitCode = result.exitCode {
-                    Text("Exit: \(exitCode)")
+                    Text(String(localized: "Exit: \(exitCode)"))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(exitCode == 0 ? .green.opacity(0.6) : .red.opacity(0.6))
                 }
@@ -558,7 +573,7 @@ struct KillShellResultContent: View {
                 .font(.system(size: 11))
                 .foregroundColor(.red.opacity(0.6))
 
-            Text(self.result.message.isEmpty ? "Shell \(self.result.shellID) terminated" : self.result.message)
+            Text(self.result.message.isEmpty ? String(localized: "Shell \(self.result.shellID) terminated") : self.result.message)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.white.opacity(0.5))
         }
@@ -633,7 +648,7 @@ struct GenericResultContent: View {
         if let content = result.rawContent, !content.isEmpty {
             GenericTextContent(text: content)
         } else {
-            Text("Completed")
+            Text(String(localized: "Completed"))
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.white.opacity(0.3))
         }
@@ -684,7 +699,7 @@ struct FileCodeView: View {
 
             // Top overflow indicator
             if self.hasLinesBefore {
-                Text("...")
+                Text(String(localized: "…"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -706,7 +721,7 @@ struct FileCodeView: View {
 
             // Bottom overflow indicator
             if self.hasMoreAfter {
-                Text("... (\(self.lines.count - self.maxLines) more lines)")
+                Text(String(localized: "… (\(self.lines.count - self.maxLines) more lines)"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -784,7 +799,7 @@ struct CodePreview: View {
             }
 
             if hasMore {
-                Text("... (\(lines.count - self.maxLines) more lines)")
+                Text(String(localized: "… (\(lines.count - self.maxLines) more lines)"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
                     .padding(.top, 2)
@@ -814,7 +829,7 @@ struct FileListView: View {
             }
 
             if self.files.count > self.limit {
-                Text("... and \(self.files.count - self.limit) more files")
+                Text(String(localized: "… and \(self.files.count - self.limit) more files"))
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.3))
             }
@@ -842,7 +857,7 @@ struct DiffView: View {
                     }
 
                     if patch.lines.count > 10 {
-                        Text("... (\(patch.lines.count - 10) more lines)")
+                        Text(String(localized: "… (\(patch.lines.count - 10) more lines)"))
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.white.opacity(0.3))
                     }
@@ -850,7 +865,7 @@ struct DiffView: View {
             }
 
             if self.patches.count > 3 {
-                Text("... and \(self.patches.count - 3) more hunks")
+                Text(String(localized: "… and \(self.patches.count - 3) more hunks"))
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.3))
             }
@@ -949,17 +964,14 @@ struct SimpleDiffView: View {
 
             // Top overflow indicator
             if hasLinesBefore {
-                Text("...")
+                Text(String(localized: "…"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 46)
                     .padding(.vertical, 3)
                     .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedCorner(
-                        radius: 6,
-                        corners: self.filename == nil ? [.topLeft, .topRight] as RoundedCorner.RectCorner : [] as RoundedCorner.RectCorner,
-                    ))
+                    .clipShape(RoundedCorner(radius: 6, corners: self.filename == nil ? [.topLeft, .topRight] as RoundedCorner.RectCorner : [] as RoundedCorner.RectCorner))
             }
 
             // Diff lines
@@ -977,7 +989,7 @@ struct SimpleDiffView: View {
 
             // Bottom overflow indicator
             if hasMoreChanges {
-                Text("...")
+                Text(String(localized: "…"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
                     .frame(maxWidth: .infinity, alignment: .leading)

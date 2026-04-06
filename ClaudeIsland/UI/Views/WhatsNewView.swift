@@ -29,7 +29,7 @@ struct WhatsNewView: View {
                                 .foregroundColor(.white.opacity(0.7))
                                 .frame(width: 16)
 
-                            Text("What's New")
+                            Text(String(localized: "What's New"))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white.opacity(0.7))
 
@@ -59,7 +59,7 @@ struct WhatsNewView: View {
                 if self.releaseService.releases.isEmpty, self.releaseService.isLoading {
                     VStack(spacing: 8) {
                         ProgressView()
-                        Text("Loading...")
+                        Text(String(localized: "Loading..."))
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.4))
                     }
@@ -75,7 +75,7 @@ struct WhatsNewView: View {
                         Button {
                             Task { await self.releaseService.fetchReleases() }
                         } label: {
-                            Text("Retry")
+                            Text(String(localized: "Retry"))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(TerminalColors.blue)
                         }
@@ -92,7 +92,7 @@ struct WhatsNewView: View {
                                     .foregroundColor(.white)
 
                                 if self.isInstalled(release) {
-                                    Text("Installed")
+                                    Text(String(localized: "Installed"))
                                         .font(.system(size: 10, weight: .medium))
                                         .foregroundColor(TerminalColors.green)
                                 }

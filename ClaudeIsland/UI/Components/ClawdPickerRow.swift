@@ -24,7 +24,7 @@ struct ClawdPickerRow: View {
                 HStack(spacing: 10) {
                     ClaudeCrabIcon(size: 12, color: self.selectedColor)
 
-                    Text("Clawd")
+                    Text(String(localized: "Clawd"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(self.textColor)
 
@@ -95,7 +95,7 @@ struct ClawdPickerRow: View {
                                 .foregroundColor(self.alwaysVisibleTextColor)
                                 .frame(width: 16)
 
-                            Text("Always Visible")
+                            Text(String(localized: "Always Visible"))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(self.alwaysVisibleTextColor)
 
@@ -105,7 +105,7 @@ struct ClawdPickerRow: View {
                                 .fill(self.alwaysVisible ? TerminalColors.green : Color.white.opacity(0.3))
                                 .frame(width: 6, height: 6)
 
-                            Text(self.alwaysVisible ? "On" : "Off")
+                            Text(self.alwaysVisible ? String(localized: "On") : String(localized: "Off"))
                                 .font(.system(size: 11))
                                 .foregroundColor(.white.opacity(0.4))
                         }
