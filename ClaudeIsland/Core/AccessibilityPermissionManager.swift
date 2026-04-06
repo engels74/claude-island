@@ -129,25 +129,25 @@ final class AccessibilityPermissionManager {
         notchWindow?.orderOut(nil)
 
         let alert = NSAlert()
-        alert.messageText = "Accessibility Permission Required"
-        alert.informativeText = """
+        alert.messageText = String(localized: "Accessibility Permission Required")
+        alert.informativeText = String(localized: """
         Claude Island needs Accessibility permission to:
 
         \u{2022} Monitor mouse position to show/hide the notch
         \u{2022} Pass clicks through to apps behind the notch
 
         To grant permission:
-        1. Click "Open Settings" below
-        2. Click the "+" button at the bottom of the list
+        1. Click \"Open Settings\" below
+        2. Click the \"+\" button at the bottom of the list
         3. Navigate to and select the Claude Island app bundle
         4. Enable the checkbox next to Claude Island
 
         Important: If Claude Island is already in the list but not working, \
-        remove it first using the "-" button, then add it again using "+".
-        """
+        remove it first using the \"-\" button, then add it again using \"+\".
+        """)
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Later")
+        alert.addButton(withTitle: String(localized: "Open Settings"))
+        alert.addButton(withTitle: String(localized: "Later"))
 
         let response = alert.runModal()
 
