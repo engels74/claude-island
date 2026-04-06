@@ -29,6 +29,8 @@ struct ClaudeInstancesView: View {
 
     // MARK: Private
 
+    @State private var showOverflowFor: String?
+
     // MARK: - Instances List
 
     /// Priority: active (approval/processing/compacting) > waitingForInput > idle
@@ -49,39 +51,90 @@ struct ClaudeInstancesView: View {
         }
     }
 
+    private var visibleActions: [SessionActionType] {
+        Array(AppSettings.sessionActionOrder.prefix(3))
+    }
+
+    private var overflowActions: [SessionActionType] {
+        let allActions = AppSettings.sessionActionOrder
+        if allActions.count > 3 {
+            return Array(allActions.dropFirst(3))
+        }
+        return []
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
         VStack(spacing: 8) {
-            Text("No sessions")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
-
-            Text("Run claude in terminal")
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.25))
+            Spacer()
+            NewSessionRow { self.showLauncher() }
+                .padding(.horizontal, 8)
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var instancesList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 2) {
-                ForEach(self.sortedInstances) { session in
-                    InstanceRow(
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button {
+                    self.showLauncher()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                        .frame(width: 20, height: 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.08)),
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 8)
+                .padding(.top, 4)
+            }
+
+            ZStack(alignment: .topTrailing) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 2) {
+                        ForEach(self.sortedInstances) { session in
+                            InstanceRow(
+                                session: session,
+                                onFocus: { self.focusSession(session) },
+                                onChat: { self.openChat(session) },
+                                onArchive: { self.archiveSession(session) },
+                                onApprove: { self.approveSession(session) },
+                                onReject: { self.rejectSession(session) },
+                                onOverflow: { self.showOverflowFor = session.sessionID },
+                                visibleActions: self.visibleActions,
+                            )
+                            .id(session.stableID)
+                        }
+
+                        NewSessionRow { self.showLauncher() }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .onTapGesture {
+                    if self.showOverflowFor != nil {
+                        self.showOverflowFor = nil
+                    }
+                }
+
+                if let overflowSessionID = showOverflowFor,
+                   let session = sortedInstances.first(where: { $0.sessionID == overflowSessionID }) {
+                    SessionActionOverflowMenu(
                         session: session,
-                        onFocus: { self.focusSession(session) },
-                        onChat: { self.openChat(session) },
-                        onArchive: { self.archiveSession(session) },
-                        onApprove: { self.approveSession(session) },
-                        onReject: { self.rejectSession(session) },
-                    )
-                    .id(session.stableID)
+                        actions: self.overflowActions,
+                    ) { self.showOverflowFor = nil }
+                        .padding(.top, 44)
+                        .padding(.trailing, 8)
                 }
             }
-            .padding(.vertical, 4)
         }
-        .scrollBounceBehavior(.basedOnSize)
     }
 
     /// Lower number = higher priority
@@ -93,7 +146,7 @@ struct ClaudeInstancesView: View {
              .compacting: 0
         case .waitingForInput: 1
         case .idle,
-             .ended: 2
+             .ended: 3
         }
     }
 
@@ -121,6 +174,9 @@ struct ClaudeInstancesView: View {
 
     private func archiveSession(_ session: SessionState) {
         self.sessionMonitor.archiveSession(sessionID: session.sessionID)
+    }
+
+    private func showLauncher() {
     }
 }
 
