@@ -305,6 +305,36 @@ enum AppSettings {
         }
     }
 
+    // MARK: - Global Shortcut
+
+    static var globalShortcut: KeyCombo? {
+        get {
+            guard let data = defaults.data(forKey: Keys.globalShortcut) else { return nil }
+            return try? JSONDecoder().decode(KeyCombo.self, from: data)
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.globalShortcut)
+            } else {
+                defaults.removeObject(forKey: Keys.globalShortcut)
+            }
+        }
+    }
+
+    // MARK: - Session Shortcuts
+
+    static var sessionShortcuts: [String: KeyCombo] {
+        get {
+            guard let data = defaults.data(forKey: Keys.sessionShortcuts) else { return [:] }
+            return (try? JSONDecoder().decode([String: KeyCombo].self, from: data)) ?? [:]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionShortcuts)
+            }
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -326,6 +356,8 @@ enum AppSettings {
         static let projects = "projects"
         static let sessionActionOrder = "sessionActionOrder"
         static let claudeCommandTemplate = "claudeCommandTemplate"
+        static let globalShortcut = "globalShortcut"
+        static let sessionShortcuts = "sessionShortcuts"
     }
 
     private static let defaults = UserDefaults.standard
