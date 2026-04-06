@@ -14,6 +14,7 @@ struct SessionActionOverflowMenu: View {
 
     let session: SessionState
     let actions: [SessionActionType]
+    let onAction: (SessionActionType) -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -47,6 +48,10 @@ struct SessionActionOverflowMenu: View {
             icon: self.showCopied ? "checkmark" : "doc.on.clipboard",
             label: self.showCopied ? "Copied!" : "Copy Attach",
         ) {
+            if let name = self.session.tmuxSessionName {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("tmux attach -t \(name)", forType: .string)
+            }
             self.showCopied = true
             Task(name: "copy-feedback") {
                 try? await Task.sleep(for: .seconds(1.5))
@@ -67,9 +72,7 @@ struct SessionActionOverflowMenu: View {
                     Spacer()
 
                     Button("Delete") {
-                        Task(name: "delete-session") {
-                            await SessionStore.shared.process(.sessionEnded(sessionID: self.session.sessionID))
-                        }
+                        self.onAction(.delete)
                         self.onDismiss()
                     }
                     .font(.system(size: 11, weight: .medium))
@@ -99,22 +102,34 @@ struct SessionActionOverflowMenu: View {
     private func actionRow(_ action: SessionActionType) -> some View {
         switch action {
         case .chat:
-            self.menuButton(icon: "bubble.left", label: "Chat") { self.onDismiss() }
+            self.menuButton(icon: "bubble.left", label: "Chat") {
+                self.onAction(.chat)
+                self.onDismiss()
+            }
         case .focus:
-            self.menuButton(icon: "terminal", label: "Focus Terminal") { self.onDismiss() }
+            self.menuButton(icon: "terminal", label: "Focus Terminal") {
+                self.onAction(.focus)
+                self.onDismiss()
+            }
         case .archive:
-            self.menuButton(icon: "archivebox", label: "Archive") { self.onDismiss() }
+            self.menuButton(icon: "archivebox", label: "Archive") {
+                self.onAction(.archive)
+                self.onDismiss()
+            }
         case .copyAttach:
             self.copyAttachRow
         case .delete:
             self.deleteRow
         case .pinProject:
             self.menuButton(icon: "star", label: "Pin Project") {
-                ProjectStore.shared.addPinned(path: self.session.cwd)
+                self.onAction(.pinProject)
                 self.onDismiss()
             }
         case .assignShortcut:
-            self.menuButton(icon: "keyboard", label: "Assign Shortcut") { self.onDismiss() }
+            self.menuButton(icon: "keyboard", label: "Assign Shortcut") {
+                self.onAction(.assignShortcut)
+                self.onDismiss()
+            }
         }
     }
 

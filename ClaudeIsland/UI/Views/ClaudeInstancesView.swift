@@ -111,6 +111,7 @@ struct ClaudeInstancesView: View {
                                 onCancel: { self.cancelLaunch(session) },
                                 onRetry: { self.retryLaunch(session) },
                                 onDismiss: { self.dismissLaunch(session) },
+                                onAction: { self.performAction($0, for: session) },
                                 visibleActions: self.visibleActions,
                             )
                             .id(session.stableID)
@@ -132,7 +133,9 @@ struct ClaudeInstancesView: View {
                     SessionActionOverflowMenu(
                         session: session,
                         actions: self.overflowActions,
-                    ) { self.showOverflowFor = nil }
+                        onAction: { self.performAction($0, for: session) },
+                        onDismiss: { self.showOverflowFor = nil },
+                    )
                         .padding(.top, 44)
                         .padding(.trailing, 8)
                 }
@@ -186,7 +189,7 @@ struct ClaudeInstancesView: View {
 
     private func cancelLaunch(_ session: SessionState) {
         Task(name: "cancel-launch") {
-            await TmuxSessionCreator.shared.cancelLaunch(sessionName: session.displayTitle)
+            await TmuxSessionCreator.shared.cancelLaunch(sessionName: session.tmuxSessionName ?? session.displayTitle)
             self.sessionMonitor.archiveSession(sessionID: session.sessionID)
         }
     }
@@ -198,6 +201,30 @@ struct ClaudeInstancesView: View {
 
     private func dismissLaunch(_ session: SessionState) {
         self.sessionMonitor.archiveSession(sessionID: session.sessionID)
+    }
+
+    private func performAction(_ action: SessionActionType, for session: SessionState) {
+        switch action {
+        case .chat:
+            self.openChat(session)
+        case .focus:
+            self.focusSession(session)
+        case .archive:
+            self.archiveSession(session)
+        case .copyAttach:
+            if let name = session.tmuxSessionName {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("tmux attach -t \(name)", forType: .string)
+            }
+        case .delete:
+            Task(name: "delete-session") {
+                await SessionStore.shared.process(.sessionEnded(sessionID: session.sessionID))
+            }
+        case .pinProject:
+            ProjectStore.shared.addPinned(path: session.cwd)
+        case .assignShortcut:
+            break
+        }
     }
 }
 

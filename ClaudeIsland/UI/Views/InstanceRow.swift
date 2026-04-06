@@ -23,8 +23,7 @@ struct InstanceRow: View {
     var onCancel: (() -> Void)?
     var onRetry: (() -> Void)?
     var onDismiss: (() -> Void)?
-    var onDelete: (() -> Void)?
-    var onAssignShortcut: (() -> Void)?
+    var onAction: ((SessionActionType) -> Void)?
     var visibleActions: [SessionActionType] = [.chat, .focus, .archive]
 
     var body: some View {
@@ -300,19 +299,23 @@ struct InstanceRow: View {
                     .accessibilityLabel("Archive session")
             }
         case .copyAttach:
-            EmptyView()
+            if self.session.isInTmux, let name = self.session.tmuxSessionName {
+                IconButton(icon: "doc.on.clipboard") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("tmux attach -t \(name)", forType: .string)
+                }
+                .accessibilityLabel("Copy attach command")
+            }
         case .delete:
             if self.session.isInTmux {
-                IconButton(icon: "trash") { self.onDelete?() }
+                IconButton(icon: "trash") { self.onAction?(.delete) }
                     .accessibilityLabel("Delete session")
             }
         case .pinProject:
-            IconButton(icon: "star") {
-                ProjectStore.shared.addPinned(path: self.session.cwd)
-            }
-            .accessibilityLabel("Pin project")
+            IconButton(icon: "star") { self.onAction?(.pinProject) }
+                .accessibilityLabel("Pin project")
         case .assignShortcut:
-            IconButton(icon: "keyboard") { self.onAssignShortcut?() }
+            IconButton(icon: "keyboard") { self.onAction?(.assignShortcut) }
                 .accessibilityLabel("Assign shortcut")
         }
     }
