@@ -38,7 +38,7 @@ struct NotchGeometry: Sendable {
     }
 
     /// Check if a point is in the notch area (with padding for easier interaction)
-    @inline(always)
+    @inline(__always)
     func isPointInNotch(_ point: CGPoint) -> Bool {
         self.notchScreenRect.insetBy(dx: -10, dy: -5).contains(point)
     }
@@ -49,7 +49,7 @@ struct NotchGeometry: Sendable {
     }
 
     /// Check if a point is outside the opened panel (for closing)
-    @inline(always)
+    @inline(__always)
     func isPointOutsidePanel(_ point: CGPoint, size: CGSize) -> Bool {
         !self.openedScreenRect(for: size).contains(point)
     }
