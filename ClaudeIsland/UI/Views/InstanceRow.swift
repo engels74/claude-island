@@ -235,7 +235,14 @@ struct InstanceRow: View {
                     .accessibilityLabel("Archive session")
             }
         case .copyAttach:
-            EmptyView()
+            if self.session.isInTmux {
+                IconButton(icon: "doc.on.clipboard") {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(self.session.sessionID, forType: .string)
+                }
+                .accessibilityLabel("Copy session ID")
+            }
         case .delete:
             if self.session.isInTmux {
                 IconButton(icon: "trash") { self.onDelete?() }

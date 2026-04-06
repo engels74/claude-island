@@ -68,8 +68,10 @@ struct ClaudeInstancesView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Spacer()
-            NewSessionRow { self.showLauncher() }
+            NewSessionRow { }
                 .padding(.horizontal, 8)
+                .disabled(true)
+                .opacity(0.5)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -80,18 +82,18 @@ struct ClaudeInstancesView: View {
             HStack {
                 Spacer()
                 Button {
-                    self.showLauncher()
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(.white.opacity(0.3))
                         .frame(width: 20, height: 20)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.08)),
+                                .fill(Color.white.opacity(0.05)),
                         )
                 }
                 .buttonStyle(.plain)
+                .disabled(true)
                 .padding(.trailing, 8)
                 .padding(.top, 4)
             }
@@ -113,7 +115,9 @@ struct ClaudeInstancesView: View {
                             .id(session.stableID)
                         }
 
-                        NewSessionRow { self.showLauncher() }
+                        NewSessionRow { }
+                            .disabled(true)
+                            .opacity(0.5)
                     }
                     .padding(.vertical, 4)
                 }
@@ -129,7 +133,11 @@ struct ClaudeInstancesView: View {
                     SessionActionOverflowMenu(
                         session: session,
                         actions: self.overflowActions,
-                    ) { self.showOverflowFor = nil }
+                        onChat: { self.openChat(session) },
+                        onFocus: { self.focusSession(session) },
+                        onArchive: { self.archiveSession(session) },
+                        onDismiss: { self.showOverflowFor = nil },
+                    )
                         .padding(.top, 44)
                         .padding(.trailing, 8)
                 }

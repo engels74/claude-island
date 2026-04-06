@@ -5,6 +5,7 @@
 //  Overlay dropdown for session row overflow actions
 //
 
+import AppKit
 import SwiftUI
 
 // MARK: - SessionActionOverflowMenu
@@ -14,6 +15,9 @@ struct SessionActionOverflowMenu: View {
 
     let session: SessionState
     let actions: [SessionActionType]
+    let onChat: () -> Void
+    let onFocus: () -> Void
+    let onArchive: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -47,6 +51,9 @@ struct SessionActionOverflowMenu: View {
             icon: self.showCopied ? "checkmark" : "doc.on.clipboard",
             label: self.showCopied ? "Copied!" : "Copy Attach",
         ) {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(self.session.sessionID, forType: .string)
             self.showCopied = true
             Task(name: "copy-feedback") {
                 try? await Task.sleep(for: .seconds(1.5))
@@ -99,11 +106,20 @@ struct SessionActionOverflowMenu: View {
     private func actionRow(_ action: SessionActionType) -> some View {
         switch action {
         case .chat:
-            self.menuButton(icon: "bubble.left", label: "Chat") { self.onDismiss() }
+            self.menuButton(icon: "bubble.left", label: "Chat") {
+                self.onChat()
+                self.onDismiss()
+            }
         case .focus:
-            self.menuButton(icon: "terminal", label: "Focus Terminal") { self.onDismiss() }
+            self.menuButton(icon: "terminal", label: "Focus Terminal") {
+                self.onFocus()
+                self.onDismiss()
+            }
         case .archive:
-            self.menuButton(icon: "archivebox", label: "Archive") { self.onDismiss() }
+            self.menuButton(icon: "archivebox", label: "Archive") {
+                self.onArchive()
+                self.onDismiss()
+            }
         case .copyAttach:
             self.copyAttachRow
         case .delete:
