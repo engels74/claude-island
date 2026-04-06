@@ -24,6 +24,7 @@ nonisolated struct SessionState: Equatable, Identifiable, Sendable {
         pid: Int? = nil,
         tty: String? = nil,
         isInTmux: Bool = false,
+        tmuxSessionName: String? = nil,
         phase: SessionPhase = .idle,
         chatItems: [ChatHistoryItem] = [],
         toolTracker: ToolTracker = ToolTracker(),
@@ -47,6 +48,7 @@ nonisolated struct SessionState: Equatable, Identifiable, Sendable {
         self.pid = pid
         self.tty = tty
         self.isInTmux = isInTmux
+        self.tmuxSessionName = tmuxSessionName
         self.phase = phase
         self.chatItems = chatItems
         self.toolTracker = toolTracker
@@ -70,6 +72,7 @@ nonisolated struct SessionState: Equatable, Identifiable, Sendable {
     var pid: Int?
     var tty: String?
     var isInTmux: Bool
+    var tmuxSessionName: String?
 
     // MARK: - State Machine
 
