@@ -320,39 +320,41 @@ private struct InlineRenderer: View {
 
     private func renderInline(_ inline: InlineMarkup) -> SwiftUI.Text {
         if let text = inline as? Markdown.Text {
-            return SwiftUI.Text(text.string)
+            SwiftUI.Text(text.string)
                 .font(self.bodyFont)
                 .foregroundColor(self.baseColor)
         } else if let strong = inline as? Strong {
-            return SwiftUI.Text(strong.plainText)
+            SwiftUI.Text(strong.plainText)
                 .font(self.bodyFont)
                 .fontWeight(.bold)
                 .foregroundColor(self.baseColor)
         } else if let emphasis = inline as? Emphasis {
-            return SwiftUI.Text(emphasis.plainText)
+            SwiftUI.Text(emphasis.plainText)
                 .font(self.bodyFont)
                 .italic()
                 .foregroundColor(self.baseColor)
         } else if let code = inline as? InlineCode {
-            return SwiftUI.Text(code.code)
+            SwiftUI.Text(code.code)
                 .font(.system(size: self.fontSize, design: .monospaced))
                 .foregroundColor(self.baseColor)
         } else if let link = inline as? Markdown.Link {
-            return SwiftUI.Text(link.plainText)
+            SwiftUI.Text(link.plainText)
                 .font(self.bodyFont)
                 .foregroundColor(Color.blue)
                 .underline()
         } else if let strike = inline as? Strikethrough {
-            return SwiftUI.Text(strike.plainText)
+            SwiftUI.Text(strike.plainText)
                 .font(self.bodyFont)
                 .strikethrough()
                 .foregroundColor(self.baseColor)
         } else if inline is SoftBreak {
-            return SwiftUI.Text(" ")
+            SwiftUI.Text(" ")
+                .font(self.bodyFont)
         } else if inline is LineBreak {
-            return SwiftUI.Text("\n")
+            SwiftUI.Text("\n")
+                .font(self.bodyFont)
         } else {
-            return SwiftUI.Text(inline.plainText)
+            SwiftUI.Text(inline.plainText)
                 .font(self.bodyFont)
                 .foregroundColor(self.baseColor)
         }

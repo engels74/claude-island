@@ -916,5 +916,5 @@ struct PanelWidthRow: View {
 
     @State private var isExpanded = false
     @State private var isHovered = false
-    @State private var widthFraction: Double = AppSettings.chatPanelWidthFraction
+    @State private var widthFraction: Double = min(max(AppSettings.chatPanelWidthFraction, 0.5), 0.8)
 }

@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+// MARK: - CollapsibleContentView
+
 struct CollapsibleContentView<Content: View>: View {
     // MARK: Lifecycle
 
@@ -27,7 +29,7 @@ struct CollapsibleContentView<Content: View>: View {
     // MARK: Internal
 
     var body: some View {
-        if self.isExpanded || (self.measuredHeight > 0 && self.measuredHeight <= self.maxHeight) {
+        if self.isExpanded || self.measuredHeight.map({ $0 <= self.maxHeight }) ?? true {
             self.content
                 .background(
                     GeometryReader { proxy in
@@ -84,7 +86,7 @@ struct CollapsibleContentView<Content: View>: View {
     // MARK: Private
 
     @State private var isExpanded = false
-    @State private var measuredHeight: CGFloat = 0
+    @State private var measuredHeight: CGFloat?
 
     private let lineCount: Int?
     private let expandLabel: String?
