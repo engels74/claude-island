@@ -295,6 +295,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     /// Respond to a pending permission request by toolUseID
     nonisolated func respondToPermission(toolUseID: String, decision: String, reason: String? = nil) {
+        Self.logger.info("respondToPermission called: tool:\(toolUseID.prefix(12), privacy: .public) decision:\(decision, privacy: .public)")
         queue.async { [weak self] in
             self?.sendPermissionResponse(toolUseID: toolUseID, decision: decision, reason: reason)
         }
@@ -553,15 +554,25 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     nonisolated private func cleanupPendingPermissions(sessionID: String) {
-        let permissionsToClose = permissionsState.withLock { state -> [(String, PendingPermission)] in
+        let now = Date()
+        let result = permissionsState.withLock { state -> (toClose: [(String, PendingPermission)], skipped: Int) in
             let matching = state.pendingPermissions.filter { $0.value.sessionID == sessionID }
-            for (toolUseID, _) in matching {
-                state.pendingPermissions.removeValue(forKey: toolUseID)
+            var toClose: [(String, PendingPermission)] = []
+            var skipped = 0
+            for (toolUseID, pending) in matching {
+                let age = now.timeIntervalSince(pending.receivedAt)
+                if age < 2.0 {
+                    skipped += 1
+                    Self.logger.info("Skipping cleanup of recent permission (age: \(String(format: "%.1f", age), privacy: .public)s) for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+                } else {
+                    state.pendingPermissions.removeValue(forKey: toolUseID)
+                    toClose.append((toolUseID, pending))
+                }
             }
-            return matching.map { ($0.key, $0.value) }
+            return (toClose, skipped)
         }
 
-        for (toolUseID, pending) in permissionsToClose {
+        for (toolUseID, pending) in result.toClose {
             pending.disconnectSource?.cancel()
             Self.logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
             close(pending.clientSocket)
@@ -689,13 +700,16 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 131_072) { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
 
-            while Date().timeIntervalSince(startTime) < 0.2 {
+            while Date().timeIntervalSince(startTime) < 2.0 {
                 let pollResult = poll(&pollFd, 1, 10)
 
                 if pollResult > 0 && (pollFd.revents & Int16(POLLIN)) != 0 {
                     let bytesRead = read(clientSocket, baseAddress, buffer.count)
                     if bytesRead > 0 {
                         allData.append(baseAddress, count: bytesRead)
+                        if let lastByte = allData.last, lastByte == UInt8(ascii: "}") || lastByte == UInt8(ascii: "\n") {
+                            break
+                        }
                     } else if bytesRead == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
                         break
                     }
@@ -705,6 +719,11 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                     break
                 }
             }
+        }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        if elapsed > 0.5 && !allData.isEmpty {
+            Self.logger.info("Slow client read: \(allData.count) bytes in \(String(format: "%.1f", elapsed), privacy: .public)s")
         }
 
         return allData.isEmpty ? nil : allData
@@ -731,11 +750,12 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     }
 
     nonisolated private func handlePermissionRequest(event: HookEvent, clientSocket: Int32, eventHandler: HookEventHandler?) {
-        guard let toolUseID = resolveToolUseID(for: event) else {
-            Self.logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - no cache hit")
-            close(clientSocket)
-            eventHandler?(event)
-            return
+        let toolUseID: String
+        if let resolved = resolveToolUseID(for: event) {
+            toolUseID = resolved
+        } else {
+            toolUseID = UUID().uuidString
+            Self.logger.warning("Permission request missing tool_use_id for \(event.sessionID.prefix(8), privacy: .public) - generated fallback: \(toolUseID.prefix(12), privacy: .public)")
         }
 
         Self.logger.debug("Permission request - keeping socket open for \(event.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
@@ -831,8 +851,9 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         guard let pending else { return }
+        let age = Date().timeIntervalSince(pending.receivedAt)
         pending.disconnectSource?.cancel()
-        Self.logger.info("Python socket closed for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) — cleaning up stale permission")
+        Self.logger.warning("Python socket closed for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) after \(String(format: "%.1f", age), privacy: .public)s — cleaning up stale permission")
         close(pending.clientSocket)
         permissionFailureHandler?(sessionID, toolUseID)
     }
@@ -899,10 +920,14 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
         switch result {
         case .alreadyResponded:
-            Self.logger.debug("Permission already responded for toolUseId: \(toolUseID.prefix(12), privacy: .public) - skipping duplicate")
+            Self.logger.info("Permission already responded for toolUseId: \(toolUseID.prefix(12), privacy: .public) - skipping duplicate")
             return
         case .notFound:
-            Self.logger.debug("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public)")
+            let pendingCount = permissionsState.withLock { $0.pendingPermissions.count }
+            let pendingIDs = permissionsState.withLock { state in
+                state.pendingPermissions.keys.map { String($0.prefix(12)) }.joined(separator: ", ")
+            }
+            Self.logger.warning("No pending permission for toolUseId: \(toolUseID.prefix(12), privacy: .public) (pending count: \(pendingCount), IDs: [\(pendingIDs, privacy: .public)])")
             return
         case let .found(pending):
             pending.disconnectSource?.cancel()
@@ -930,6 +955,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                 writeErrno = errno
                 if writeResult < 0 {
                     Self.logger.error("Write failed with errno: \(writeErrno)")
+                } else if writeResult < data.count {
+                    Self.logger.warning("Partial write: \(writeResult)/\(data.count) bytes for tool:\(toolUseID.prefix(12), privacy: .public)")
                 } else {
                     Self.logger.debug("Write succeeded: \(writeResult) bytes")
                     writeSuccess = true
@@ -1000,6 +1027,8 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                 writeErrno = errno
                 if writeResult < 0 {
                     Self.logger.error("Write failed with errno: \(writeErrno)")
+                } else if writeResult < data.count {
+                    Self.logger.warning("Partial write: \(writeResult)/\(data.count) bytes for tool:\(pending.toolUseID.prefix(12), privacy: .public)")
                 } else {
                     Self.logger.debug("Write succeeded: \(writeResult) bytes")
                     writeSuccess = true

@@ -38,6 +38,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NotRequired, TypedDict, TypeIs, cast
 
+_DEBUG = os.environ.get("CLAUDE_ISLAND_DEBUG") == "1"
+
+
+def _log(msg: str, /) -> None:
+    """Log to stderr when CLAUDE_ISLAND_DEBUG=1. Does not affect stdout JSON."""
+    if _DEBUG:
+        print(f"[claude-island] {msg}", file=sys.stderr, flush=True)
+
 
 # TypedDict definitions for JSON structures
 class HookEventData(TypedDict, total=False):
@@ -349,15 +357,24 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.settimeout(CONNECT_TIMEOUT_SECONDS)
             sock.connect(str(SOCKET_PATH))
-            sock.sendall(json.dumps(state.to_dict()).encode())
+            _log(f"connected to {SOCKET_PATH}")
+            payload = json.dumps(state.to_dict()).encode()
+            sock.sendall(payload)
+            _log(f"sent {len(payload)} bytes (event={state.event}, status={state.status})")
             if state.status == "waiting_for_approval":
                 sock.settimeout(PERMISSION_RECV_TIMEOUT_SECONDS)
+                _log("waiting for permission response...")
                 if response := sock.recv(4096):
+                    _log(f"received: {response.decode()}")
                     parsed = cast(object, json.loads(response.decode()))
                     if is_permission_response(parsed):
                         return parsed
+                    _log(f"response failed validation: {parsed}")
+                else:
+                    _log("empty response (socket closed)")
             return None
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError) as exc:
+        _log(f"error: {exc}")
         return None
 
 
@@ -461,7 +478,7 @@ def handle_permission_response(response: PermissionResponse | None, /) -> None:
     """
     if not response:
         # No response or "ask" - let Claude Code show its normal UI
-        print("{}")
+        print("{}", flush=True)
         return
 
     decision = response.get("decision", "ask")
@@ -475,7 +492,8 @@ def handle_permission_response(response: PermissionResponse | None, /) -> None:
                     "decision": {"behavior": "allow"},
                 }
             }
-            print(json.dumps(output))
+            _log(f"allow -> {json.dumps(output)}")
+            print(json.dumps(output), flush=True)
             sys.exit(0)
 
         case "deny":
@@ -488,12 +506,14 @@ def handle_permission_response(response: PermissionResponse | None, /) -> None:
                     },
                 }
             }
-            print(json.dumps(output))
+            _log(f"deny -> {json.dumps(output)}")
+            print(json.dumps(output), flush=True)
             sys.exit(0)
 
         case _decision:
             # "ask" or unknown - let Claude Code show its normal UI
-            print("{}")
+            _log(f"unknown decision: {_decision}")
+            print("{}", flush=True)
 
 
 def main() -> None:
@@ -514,9 +534,11 @@ def main() -> None:
     # Determine status early (pure computation, no I/O)
     status, extras = determine_status(event, data)
 
+    _log(f"event={event} session={session_id[:8]} status={status} has_tool_use_id={'tool_use_id' in extras}")
+
     # Skip certain events (e.g. stale PreToolUse registration)
     if status == "skip":
-        print("{}")
+        print("{}", flush=True)
         sys.exit(0)
 
     # Resolve PID, TTY, build state
@@ -545,7 +567,7 @@ def main() -> None:
     if status == "waiting_for_approval":
         handle_permission_response(response)
     else:
-        print("{}")
+        print("{}", flush=True)
 
 
 if __name__ == "__main__":
