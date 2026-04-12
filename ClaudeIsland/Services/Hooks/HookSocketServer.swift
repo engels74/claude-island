@@ -661,7 +661,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         let handler = eventHandler
 
         // Dispatch client handling off the accept queue to prevent head-of-line blocking.
-        // readClientData polls for up to 200ms — running it here would block new connections.
+        // readClientData polls for up to 2s — running it here would block new connections.
         clientQueue.async { [weak self] in
             self?.handleClient(clientSocket, eventHandler: handler)
         }
