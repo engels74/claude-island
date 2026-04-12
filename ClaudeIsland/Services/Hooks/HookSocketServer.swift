@@ -566,6 +566,7 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                     Self.logger.info("Skipping cleanup of recent permission (age: \(String(format: "%.1f", age), privacy: .public)s) for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
                 } else {
                     state.pendingPermissions.removeValue(forKey: toolUseID)
+                    Self.markPermissionResponded(in: &state, toolUseID: toolUseID, maxCount: maxRespondedPermissions)
                     toClose.append((toolUseID, pending))
                 }
             }
