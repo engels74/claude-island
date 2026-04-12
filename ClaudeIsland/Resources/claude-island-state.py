@@ -376,8 +376,10 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
                     chunks.append(chunk)
                 response = b"".join(chunks)
                 if response:
-                    _log(f"received {len(response)} bytes: {response.decode()}")
-                    parsed = cast(object, json.loads(response.decode()))
+                    _log(
+                        f"received {len(response)} bytes: {response.decode(errors='replace')}"
+                    )
+                    parsed = cast(object, json.loads(response))
                     if is_permission_response(parsed):
                         return parsed
                     _log(f"response failed validation: {parsed}")
