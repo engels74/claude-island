@@ -112,7 +112,7 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
             // For signals, use Unix convention: 128 + signal number (e.g., SIGTERM=15 → 143, SIGKILL=9 → 137)
             let exitCode: Int32 = switch result.terminationStatus {
             case let .exited(code): code
-            case let .unhandledException(signal): 128 + signal
+            case let .signaled(signal): 128 + signal
             }
 
             let processResult = ProcessResult(

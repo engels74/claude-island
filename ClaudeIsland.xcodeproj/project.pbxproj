@@ -386,7 +386,7 @@
 			repositoryURL = "https://github.com/swiftlang/swift-subprocess";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.2.0;
+				minimumVersion = 0.4.0;
 			};
 		};
 		FD33FD712EDF32D7002A6548 /* XCRemoteSwiftPackageReference "swift-markdown" */ = {
