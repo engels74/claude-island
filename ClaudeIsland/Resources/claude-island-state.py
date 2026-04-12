@@ -384,7 +384,7 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
                 else:
                     _log("empty response (socket closed)")
             return None
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         _log(f"error: {exc}")
         return None
 
