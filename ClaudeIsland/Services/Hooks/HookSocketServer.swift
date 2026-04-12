@@ -591,6 +591,12 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
     /// Follow-up cleanup for a specific permission whose initial cleanup was skipped
     /// because it was younger than the 2-second grace window. Idempotent — no-ops if
     /// the permission has already been resolved or re-scheduled.
+    ///
+    /// Mirrors the main `cleanupPendingPermissions` path: silently closes the FD without
+    /// invoking `permissionFailureHandler`. The phase transition is driven by the Stop
+    /// hook event that triggered this cleanup; firing `permissionSocketFailed` here would
+    /// race with and potentially override that phase (e.g. transition `.idle` back to
+    /// `.waitingForApproval` if another pending tool exists in the chat history).
     nonisolated private func cleanupPendingPermissionsRetry(sessionID: String, toolUseID: String) {
         let pending = permissionsState.withLock { state -> PendingPermission? in
             guard let existing = state.pendingPermissions[toolUseID],
@@ -607,7 +613,6 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         pending.disconnectSource?.cancel()
         Self.logger.debug("Deferred cleanup of stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
         close(pending.clientSocket)
-        permissionFailureHandler?(sessionID, toolUseID)
     }
 
     /// Generate cache key from event properties
@@ -745,8 +750,14 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                         if Self.looksLikeCompleteJSON(allData) {
                             break
                         }
-                    } else if bytesRead == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
-                        // EOF or fatal read error — stop reading.
+                    } else if bytesRead == 0 {
+                        // EOF — remote closed, stop reading.
+                        break
+                    } else if errno == EINTR {
+                        // Interrupted by signal — retry (symmetric with poll() EINTR handling).
+                        continue
+                    } else if errno != EAGAIN && errno != EWOULDBLOCK {
+                        // Fatal read error — stop reading.
                         break
                     }
                     // bytesRead < 0 with EAGAIN/EWOULDBLOCK: spurious wake, loop and poll again.
