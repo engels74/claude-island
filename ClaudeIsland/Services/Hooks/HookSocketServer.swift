@@ -555,21 +555,21 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
 
     nonisolated private func cleanupPendingPermissions(sessionID: String) {
         let now = Date()
-        let result = permissionsState.withLock { state -> (toClose: [(String, PendingPermission)], skipped: Int) in
+        let result = permissionsState.withLock { state -> (toClose: [(String, PendingPermission)], deferred: [(String, TimeInterval)]) in
             let matching = state.pendingPermissions.filter { $0.value.sessionID == sessionID }
             var toClose: [(String, PendingPermission)] = []
-            var skipped = 0
+            var deferred: [(String, TimeInterval)] = []
             for (toolUseID, pending) in matching {
                 let age = now.timeIntervalSince(pending.receivedAt)
                 if age < 2.0 {
-                    skipped += 1
+                    deferred.append((toolUseID, age))
                     Self.logger.info("Skipping cleanup of recent permission (age: \(String(format: "%.1f", age), privacy: .public)s) for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
                 } else {
                     state.pendingPermissions.removeValue(forKey: toolUseID)
                     toClose.append((toolUseID, pending))
                 }
             }
-            return (toClose, skipped)
+            return (toClose, deferred)
         }
 
         for (toolUseID, pending) in result.toClose {
@@ -577,6 +577,37 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             Self.logger.debug("Cleaning up stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
             close(pending.clientSocket)
         }
+
+        // Re-schedule cleanup for permissions we skipped above so a cancelled session
+        // doesn't leave the Python hook blocked on its 300s recv timeout.
+        for (toolUseID, age) in result.deferred {
+            let delay = max(2.0 - age, 0.1)
+            queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.cleanupPendingPermissionsRetry(sessionID: sessionID, toolUseID: toolUseID)
+            }
+        }
+    }
+
+    /// Follow-up cleanup for a specific permission whose initial cleanup was skipped
+    /// because it was younger than the 2-second grace window. Idempotent — no-ops if
+    /// the permission has already been resolved or re-scheduled.
+    nonisolated private func cleanupPendingPermissionsRetry(sessionID: String, toolUseID: String) {
+        let pending = permissionsState.withLock { state -> PendingPermission? in
+            guard let existing = state.pendingPermissions[toolUseID],
+                  existing.sessionID == sessionID
+            else {
+                return nil
+            }
+            state.pendingPermissions.removeValue(forKey: toolUseID)
+            Self.markPermissionResponded(in: &state, toolUseID: toolUseID, maxCount: maxRespondedPermissions)
+            return existing
+        }
+
+        guard let pending else { return }
+        pending.disconnectSource?.cancel()
+        Self.logger.debug("Deferred cleanup of stale permission for \(sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public)")
+        close(pending.clientSocket)
+        permissionFailureHandler?(sessionID, toolUseID)
     }
 
     /// Generate cache key from event properties
@@ -719,6 +750,10 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                         break
                     }
                     // bytesRead < 0 with EAGAIN/EWOULDBLOCK: spurious wake, loop and poll again.
+                } else if pollResult > 0 && (pollFd.revents & Int16(POLLHUP | POLLERR | POLLNVAL)) != 0 {
+                    // Peer closed (HUP) or socket error (ERR/NVAL) without readable data —
+                    // break promptly to avoid spinning on an immediately-returning poll().
+                    break
                 } else if pollResult < 0 && errno != EINTR {
                     // Fatal poll error — stop. EINTR is retryable, fall through to loop.
                     break
@@ -1072,11 +1107,14 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                     totalWritten += n
                     continue
                 }
-                lastErrno = errno
                 if n == 0 {
-                    // write() returning 0 on a stream socket is unusual; treat as failure.
+                    // write() returning 0 on a stream socket is unusual and does not
+                    // set errno meaningfully. Surface an explicit EIO so logs show a
+                    // diagnosable code instead of a stale/zero value.
+                    lastErrno = EIO
                     break
                 }
+                lastErrno = errno
                 // n < 0
                 if lastErrno == EINTR {
                     continue
