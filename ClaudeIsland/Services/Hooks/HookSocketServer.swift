@@ -701,23 +701,31 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             guard let baseAddress = buffer.baseAddress else { return }
 
             while Date().timeIntervalSince(startTime) < 2.0 {
-                let pollResult = poll(&pollFd, 1, 10)
+                let pollResult = poll(&pollFd, 1, 100)
 
                 if pollResult > 0 && (pollFd.revents & Int16(POLLIN)) != 0 {
                     let bytesRead = read(clientSocket, baseAddress, buffer.count)
                     if bytesRead > 0 {
                         allData.append(baseAddress, count: bytesRead)
-                        if let lastByte = allData.last, lastByte == UInt8(ascii: "}") || lastByte == UInt8(ascii: "\n") {
+                        // Break only when the accumulated buffer parses as valid JSON.
+                        // A trailing '}' alone is not sufficient (nested objects end with '}'
+                        // mid-stream), so we validate the full payload. This prevents the
+                        // "Processing…" hang caused by truncating multi-packet JSON.
+                        if Self.looksLikeCompleteJSON(allData) {
                             break
                         }
                     } else if bytesRead == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
+                        // EOF or fatal read error — stop reading.
                         break
                     }
-                } else if pollResult == 0 && !allData.isEmpty {
-                    break
-                } else if pollResult != 0 {
+                    // bytesRead < 0 with EAGAIN/EWOULDBLOCK: spurious wake, loop and poll again.
+                } else if pollResult < 0 && errno != EINTR {
+                    // Fatal poll error — stop. EINTR is retryable, fall through to loop.
                     break
                 }
+                // pollResult == 0 (quiet period): do NOT break early. Keep waiting up to the
+                // 2s hard cap so multi-packet payloads with small inter-packet gaps are not
+                // truncated. pollResult < 0 with EINTR: retry on next iteration.
             }
         }
 
@@ -727,6 +735,16 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
         }
 
         return allData.isEmpty ? nil : allData
+    }
+
+    /// Cheap check for a complete JSON payload — trailing '}' plus successful decode attempt.
+    /// Returning true here is the only way `readClientData` exits before the 2s hard cap
+    /// (aside from EOF / fatal errors), so it must be strict about completeness.
+    nonisolated private static func looksLikeCompleteJSON(_ data: Data) -> Bool {
+        guard let last = data.last, last == UInt8(ascii: "}") || last == UInt8(ascii: "\n") else {
+            return false
+        }
+        return (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) != nil
     }
 
     nonisolated private func parseHookEvent(from data: Data) -> HookEvent? {
@@ -944,24 +962,10 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                     "Sending response: \(decision, privacy: .public) for \(pending.sessionID.prefix(8), privacy: .public) tool:\(toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
                 )
 
-            var writeSuccess = false
-            var writeErrno: Int32 = 0
-            data.withUnsafeBytes { bytes in
-                guard let baseAddress = bytes.baseAddress else {
-                    Self.logger.error("Failed to get data buffer address")
-                    return
-                }
-                let writeResult = write(pending.clientSocket, baseAddress, data.count)
-                writeErrno = errno
-                if writeResult < 0 {
-                    Self.logger.error("Write failed with errno: \(writeErrno)")
-                } else if writeResult < data.count {
-                    Self.logger.warning("Partial write: \(writeResult)/\(data.count) bytes for tool:\(toolUseID.prefix(12), privacy: .public)")
-                } else {
-                    Self.logger.debug("Write succeeded: \(writeResult) bytes")
-                    writeSuccess = true
-                }
-            }
+            let writeOutcome = Self.writeAllBytes(fd: pending.clientSocket, data: data)
+            let writeSuccess = writeOutcome.success
+            let writeErrno = writeOutcome.finalErrno
+            Self.logWriteOutcome(writeOutcome, totalBytes: data.count, toolUseID: toolUseID)
 
             // Skip close if write failed with EBADF — the fd is already invalid
             // and may have been reused by another thread
@@ -1016,24 +1020,10 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
                     "Sending response: \(decision, privacy: .public) for \(sessionID.prefix(8), privacy: .public) tool:\(pending.toolUseID.prefix(12), privacy: .public) (age: \(String(format: "%.1f", age), privacy: .public)s)"
                 )
 
-            var writeSuccess = false
-            var writeErrno: Int32 = 0
-            data.withUnsafeBytes { bytes in
-                guard let baseAddress = bytes.baseAddress else {
-                    Self.logger.error("Failed to get data buffer address")
-                    return
-                }
-                let writeResult = write(pending.clientSocket, baseAddress, data.count)
-                writeErrno = errno
-                if writeResult < 0 {
-                    Self.logger.error("Write failed with errno: \(writeErrno)")
-                } else if writeResult < data.count {
-                    Self.logger.warning("Partial write: \(writeResult)/\(data.count) bytes for tool:\(pending.toolUseID.prefix(12), privacy: .public)")
-                } else {
-                    Self.logger.debug("Write succeeded: \(writeResult) bytes")
-                    writeSuccess = true
-                }
-            }
+            let writeOutcome = Self.writeAllBytes(fd: pending.clientSocket, data: data)
+            let writeSuccess = writeOutcome.success
+            let writeErrno = writeOutcome.finalErrno
+            Self.logWriteOutcome(writeOutcome, totalBytes: data.count, toolUseID: pending.toolUseID)
 
             // Skip close if write failed with EBADF — the fd is already invalid
             // and may have been reused by another thread
@@ -1044,6 +1034,78 @@ final class HookSocketServer: @unchecked Sendable { // swiftlint:disable:this ty
             if !writeSuccess {
                 permissionFailureHandler?(sessionID, pending.toolUseID)
             }
+        }
+    }
+
+    // MARK: - Socket Write Helper
+
+    /// Outcome of a full-payload socket write attempt.
+    nonisolated private struct WriteOutcome: Sendable {
+        let success: Bool
+        let bytesWritten: Int
+        /// Value of `errno` at the point the loop stopped. Zero if success.
+        let finalErrno: Int32
+    }
+
+    /// Write `data` to `fd` in a loop, handling partial writes and retrying on
+    /// `EAGAIN`/`EWOULDBLOCK` (the socket is non-blocking — see `handleClient`).
+    /// Fails only on permanent errors, EOF (write returning 0), or exceeding the
+    /// 2-second cumulative budget.
+    nonisolated private static func writeAllBytes(fd: Int32, data: Data) -> WriteOutcome {
+        let totalBytes = data.count
+        guard totalBytes > 0 else { return WriteOutcome(success: true, bytesWritten: 0, finalErrno: 0) }
+
+        var totalWritten = 0
+        var lastErrno: Int32 = 0
+        let deadline = Date().addingTimeInterval(2.0)
+
+        data.withUnsafeBytes { bytes in
+            guard let baseAddress = bytes.baseAddress else {
+                lastErrno = EFAULT
+                return
+            }
+            while totalWritten < totalBytes {
+                let remaining = totalBytes - totalWritten
+                let cursor = baseAddress.advanced(by: totalWritten)
+                let n = write(fd, cursor, remaining)
+                if n > 0 {
+                    totalWritten += n
+                    continue
+                }
+                lastErrno = errno
+                if n == 0 {
+                    // write() returning 0 on a stream socket is unusual; treat as failure.
+                    break
+                }
+                // n < 0
+                if lastErrno == EINTR {
+                    continue
+                }
+                if lastErrno == EAGAIN || lastErrno == EWOULDBLOCK {
+                    if Date() >= deadline { break }
+                    var pollFd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+                    // Short poll so we honor the overall deadline without long stalls.
+                    let pollResult = poll(&pollFd, 1, 100)
+                    if pollResult < 0, errno != EINTR { lastErrno = errno; break }
+                    continue
+                }
+                break
+            }
+        }
+
+        let success = totalWritten == totalBytes
+        return WriteOutcome(success: success, bytesWritten: totalWritten, finalErrno: success ? 0 : lastErrno)
+    }
+
+    nonisolated private static func logWriteOutcome(_ outcome: WriteOutcome, totalBytes: Int, toolUseID: String) {
+        if outcome.success {
+            Self.logger.debug("Write succeeded: \(outcome.bytesWritten) bytes")
+        } else if outcome.bytesWritten == 0 {
+            Self.logger.error("Write failed with errno: \(outcome.finalErrno)")
+        } else {
+            Self.logger.error(
+                "Partial write \(outcome.bytesWritten)/\(totalBytes) bytes (errno: \(outcome.finalErrno)) for tool:\(toolUseID.prefix(12), privacy: .public)"
+            )
         }
     }
 }
