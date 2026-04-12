@@ -360,12 +360,23 @@ def send_event(state: SessionState, /) -> PermissionResponse | None:
             _log(f"connected to {SOCKET_PATH}")
             payload = json.dumps(state.to_dict()).encode()
             sock.sendall(payload)
-            _log(f"sent {len(payload)} bytes (event={state.event}, status={state.status})")
+            _log(
+                f"sent {len(payload)} bytes (event={state.event}, status={state.status})"
+            )
             if state.status == "waiting_for_approval":
                 sock.settimeout(PERMISSION_RECV_TIMEOUT_SECONDS)
                 _log("waiting for permission response...")
-                if response := sock.recv(4096):
-                    _log(f"received: {response.decode()}")
+                # Accumulate bytes until the Swift side closes the socket (EOF).
+                # SOCK_STREAM may split the JSON payload across multiple recv()
+                # calls, and longer `reason` strings can exceed a single 4KB
+                # chunk. Swift's sendPermissionResponse always close(2)s the
+                # client fd after writing, so EOF is the authoritative terminator.
+                chunks: list[bytes] = []
+                while chunk := sock.recv(4096):
+                    chunks.append(chunk)
+                response = b"".join(chunks)
+                if response:
+                    _log(f"received {len(response)} bytes: {response.decode()}")
                     parsed = cast(object, json.loads(response.decode()))
                     if is_permission_response(parsed):
                         return parsed
@@ -534,7 +545,9 @@ def main() -> None:
     # Determine status early (pure computation, no I/O)
     status, extras = determine_status(event, data)
 
-    _log(f"event={event} session={session_id[:8]} status={status} has_tool_use_id={'tool_use_id' in extras}")
+    _log(
+        f"event={event} session={session_id[:8]} status={status} has_tool_use_id={'tool_use_id' in extras}"
+    )
 
     # Skip certain events (e.g. stale PreToolUse registration)
     if status == "skip":
