@@ -106,6 +106,13 @@ enum NotificationSound: String, CaseIterable {
     }
 }
 
+// MARK: - ChatViewMode
+
+enum ChatViewMode: String, CaseIterable {
+    case terminal = "Terminal"
+    case chat = "Chat"
+}
+
 // MARK: - AppSettings
 
 enum AppSettings {
@@ -244,6 +251,32 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.verboseMode) }
     }
 
+    // MARK: - Chat Panel Width
+
+    static var chatPanelWidthFraction: Double {
+        get {
+            let value = defaults.double(forKey: Keys.chatPanelWidthFraction)
+            return value > 0 ? value : 0.5
+        }
+        set { defaults.set(newValue, forKey: Keys.chatPanelWidthFraction) }
+    }
+
+    // MARK: - Chat View Mode
+
+    static var chatViewMode: ChatViewMode {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.chatViewMode),
+                  let mode = ChatViewMode(rawValue: rawValue)
+            else {
+                return .terminal
+            }
+            return mode
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.chatViewMode)
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -261,6 +294,8 @@ enum AppSettings {
         static let tokenShowResetTime = "tokenShowResetTime"
         static let moduleLayoutConfig = "moduleLayoutConfig"
         static let verboseMode = "verboseMode"
+        static let chatPanelWidthFraction = "chatPanelWidthFraction"
+        static let chatViewMode = "chatViewMode"
     }
 
     private static let defaults = UserDefaults.standard

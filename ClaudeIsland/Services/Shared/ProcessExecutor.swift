@@ -108,11 +108,16 @@ nonisolated struct ProcessExecutor: ProcessExecuting, Sendable {
             let stdout = result.standardOutput ?? ""
             let stderr = result.standardError
 
-            // Extract exit code from TerminationStatus enum
-            // For signals, use Unix convention: 128 + signal number (e.g., SIGTERM=15 → 143, SIGKILL=9 → 137)
-            let exitCode: Int32 = switch result.terminationStatus {
-            case let .exited(code): code
-            case let .signaled(signal): 128 + signal
+            // Extract exit code from TerminationStatus
+            // For signals, use Unix convention: 128 + signal number (e.g., SIGTERM=15 -> 143, SIGKILL=9 -> 137)
+            let exitCode: Int32 = if result.terminationStatus.isSuccess {
+                0
+            } else if case let .exited(code) = result.terminationStatus {
+                code
+            } else if case let .signaled(signal) = result.terminationStatus {
+                128 + signal
+            } else {
+                1
             }
 
             let processResult = ProcessResult(
