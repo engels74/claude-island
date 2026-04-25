@@ -51,16 +51,16 @@ jobs:
 
           # Update MARKETING_VERSION directly in project.pbxproj
           # (agvtool doesn't work when Info.plist uses $(MARKETING_VERSION) variable references)
-          sed -i '' "s/MARKETING_VERSION = .*;/MARKETING_VERSION = $VERSION;/g" ClaudeIsland.xcodeproj/project.pbxproj
+          sed -i '' "s/MARKETING_VERSION = .*;/MARKETING_VERSION = $VERSION;/g" ClaudeAtoll.xcodeproj/project.pbxproj
 
           # Update CURRENT_PROJECT_VERSION directly in project.pbxproj
-          sed -i '' "s/CURRENT_PROJECT_VERSION = .*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" ClaudeIsland.xcodeproj/project.pbxproj
+          sed -i '' "s/CURRENT_PROJECT_VERSION = .*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" ClaudeAtoll.xcodeproj/project.pbxproj
 
           echo "✅ Set MARKETING_VERSION=$VERSION, CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
 
           # Commit version changes back to repository
-          if git diff --quiet ClaudeIsland.xcodeproj/project.pbxproj; then
+          if git diff --quiet ClaudeAtoll.xcodeproj/project.pbxproj; then
             echo "Version already matches tag, no commit needed"
           else
             # Configure git
@@ -68,7 +68,7 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
 
             # Commit version change (--no-verify bypasses pre-commit hooks)
-            git add ClaudeIsland.xcodeproj/project.pbxproj
+            git add ClaudeAtoll.xcodeproj/project.pbxproj
             git commit --no-verify -m "chore: bump version to $VERSION [skip ci]"
 
             # Push to main branch
@@ -110,19 +110,19 @@ jobs:
         run: |
           RELEASE_VERSION="${{ steps.version.outputs.version }}"
           # Find the actual DMG created by create-release.sh (uses Info.plist version)
-          ACTUAL_DMG=$(ls -1 releases/ClaudeIsland-*.dmg 2>/dev/null | head -1)
+          ACTUAL_DMG=$(ls -1 releases/ClaudeAtoll-*.dmg 2>/dev/null | head -1)
           if [ -z "$ACTUAL_DMG" ]; then
             echo "ERROR: No DMG found in releases/"
             exit 1
           fi
-          TARGET_DMG="releases/ClaudeIsland-${RELEASE_VERSION}.dmg"
+          TARGET_DMG="releases/ClaudeAtoll-${RELEASE_VERSION}.dmg"
           if [ "$ACTUAL_DMG" != "$TARGET_DMG" ]; then
             echo "Renaming $ACTUAL_DMG -> $TARGET_DMG"
             mv "$ACTUAL_DMG" "$TARGET_DMG"
             # Also rename in appcast directory if exists
             ACTUAL_APPCAST_DMG="releases/appcast/$(basename "$ACTUAL_DMG")"
             if [ -f "$ACTUAL_APPCAST_DMG" ]; then
-              mv "$ACTUAL_APPCAST_DMG" "releases/appcast/ClaudeIsland-${RELEASE_VERSION}.dmg"
+              mv "$ACTUAL_APPCAST_DMG" "releases/appcast/ClaudeAtoll-${RELEASE_VERSION}.dmg"
             fi
           fi
           echo "dmg_path=$TARGET_DMG" >> $GITHUB_OUTPUT
@@ -147,7 +147,7 @@ jobs:
           fi
 
           # Get minimum system version from Info.plist
-          MIN_SYS=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "build/export/Claude Island.app/Contents/Info.plist" 2>/dev/null || echo "15.6")
+          MIN_SYS=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "build/export/Claude Atoll.app/Contents/Info.plist" 2>/dev/null || echo "15.6")
           echo "min_system=$MIN_SYS" >> $GITHUB_OUTPUT
 
       - name: Output build info
@@ -162,7 +162,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-dmg
-          path: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
+          path: releases/ClaudeAtoll-${{ steps.version.outputs.version }}.dmg
           retention-days: 7
 
       - name: Create GitHub Release
@@ -170,7 +170,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
-          files: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
+          files: releases/ClaudeAtoll-${{ steps.version.outputs.version }}.dmg
           generate_release_notes: true
 
       - name: Upload appcast artifact
@@ -265,13 +265,13 @@ jobs:
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ secrets.WEBSITE_PAT }}
-          repository: engels74/claude-island-web
+          repository: engels74/claude-atoll-web
           event-type: update-appcast
           client-payload: |
             {
               "version": "${{ needs.build.outputs.version }}",
               "build_number": "${{ needs.build.outputs.build_number }}",
-              "download_url": "https://github.com/engels74/claude-island/releases/download/${{ needs.build.outputs.version }}/ClaudeIsland-${{ needs.build.outputs.version }}.dmg",
+              "download_url": "https://github.com/engels74/claude-atoll/releases/download/${{ needs.build.outputs.version }}/ClaudeAtoll-${{ needs.build.outputs.version }}.dmg",
               "ed_signature": "${{ needs.build.outputs.ed_signature }}",
               "file_size": "${{ needs.build.outputs.dmg_size }}",
               "min_system_version": "${{ needs.build.outputs.min_system }}"

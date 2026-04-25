@@ -85,15 +85,15 @@ jobs:
         id: version
         run: |
           VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" \
-            "build/export/Claude Island.app/Contents/Info.plist")
+            "build/export/Claude Atoll.app/Contents/Info.plist")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Built version: $VERSION"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v7
         with:
-          name: claude-island-dmg
-          path: releases/ClaudeIsland-${{ steps.version.outputs.version }}.dmg
+          name: claude-atoll-dmg
+          path: releases/ClaudeAtoll-${{ steps.version.outputs.version }}.dmg
           retention-days: 30
 
   virustotal-scan:
@@ -108,7 +108,7 @@ jobs:
       - name: Download DMG artifact
         uses: actions/download-artifact@v8
         with:
-          name: claude-island-dmg
+          name: claude-atoll-dmg
 
       - name: Scan with VirusTotal
         uses: crazy-max/ghaction-virustotal@v5

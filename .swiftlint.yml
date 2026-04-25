@@ -1,8 +1,8 @@
-# SwiftLint configuration for Claude Island
+# SwiftLint configuration for Claude Atoll
 
 # Only lint the main source directory
 included:
-  - ClaudeIsland
+  - ClaudeAtoll
 
 # Exclude build artifacts and generated files
 excluded:

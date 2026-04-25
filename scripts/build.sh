@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Claude Island with ad-hoc signing
+# Build Claude Atoll with ad-hoc signing
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,17 +12,17 @@ check_version_sync() {
     LATEST_TAG=$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null || true)
     LATEST_TAG="${LATEST_TAG#v}"
     if [ -n "$LATEST_TAG" ]; then
-        CURRENT_VERSION=$(cd "$PROJECT_DIR" && agvtool what-marketing-version -terse1 2>/dev/null) || true
+        CURRENT_VERSION=$(sed -n 's/.*MARKETING_VERSION = \([^;]*\);.*/\1/p' "$PROJECT_DIR/ClaudeAtoll.xcodeproj/project.pbxproj" | head -1)
         if [ -n "$CURRENT_VERSION" ] && [ "$LATEST_TAG" != "$CURRENT_VERSION" ]; then
             echo "⚠️  Warning: Local version ($CURRENT_VERSION) differs from latest tag ($LATEST_TAG)"
-            echo "   Run: agvtool new-marketing-version $LATEST_TAG"
+            echo "   Update MARKETING_VERSION in ClaudeAtoll.xcodeproj/project.pbxproj"
             echo ""
         fi
     fi
 }
 check_version_sync
 
-echo "=== Building Claude Island (Ad-Hoc Signed) ==="
+echo "=== Building Claude Atoll (Ad-Hoc Signed) ==="
 echo ""
 
 # Clean previous builds
@@ -35,7 +35,7 @@ cd "$PROJECT_DIR"
 echo "Building..."
 XCODEBUILD_OPTS=(
     build
-    -scheme ClaudeIsland
+    -scheme ClaudeAtoll
     -configuration Release
     -derivedDataPath "$BUILD_DIR/DerivedData"
     CODE_SIGN_IDENTITY=-
@@ -51,11 +51,11 @@ else
 fi
 
 # Copy app to expected location
-APP_OUTPUT="$BUILD_DIR/DerivedData/Build/Products/Release/Claude Island.app"
+APP_OUTPUT="$BUILD_DIR/DerivedData/Build/Products/Release/Claude Atoll.app"
 cp -R "$APP_OUTPUT" "$EXPORT_PATH/"
 
 echo ""
 echo "=== Build Complete ==="
-echo "App exported to: $EXPORT_PATH/Claude Island.app"
+echo "App exported to: $EXPORT_PATH/Claude Atoll.app"
 echo ""
 echo "Next: Run ./scripts/create-release.sh --skip-notarization to create DMG"

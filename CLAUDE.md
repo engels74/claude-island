@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Claude Island is a macOS menu bar app (Swift 6.2, macOS 15.6+) that brings Dynamic Island-style notifications to Claude Code CLI sessions. It installs hooks into `~/.claude/hooks/` that communicate session state via a Unix socket. The app listens for events and displays them in a notch overlay with approve/deny buttons for tool permission requests.
+Claude Atoll is a macOS menu bar app (Swift 6.2, macOS 15.6+) that brings Dynamic Island-style notifications to Claude Code CLI sessions. It installs hooks into `~/.claude/hooks/` that communicate session state via a Unix socket. The app listens for events and displays them in a notch overlay with approve/deny buttons for tool permission requests.
 
 ## Build & Development Commands
 
@@ -13,13 +13,13 @@ Claude Island is a macOS menu bar app (Swift 6.2, macOS 15.6+) that brings Dynam
 ./scripts/build.sh
 
 # Build via Xcode directly
-xcodebuild -scheme ClaudeIsland -configuration Release build
+xcodebuild -scheme ClaudeAtoll -configuration Release build
 
 # Lint (strict mode — warnings are errors)
-swiftlint lint --strict ClaudeIsland/
+swiftlint lint --strict ClaudeAtoll/
 
 # Auto-format
-swiftformat ClaudeIsland/
+swiftformat ClaudeAtoll/
 
 # Run all pre-commit checks
 prek run --all-files
@@ -51,7 +51,7 @@ HookSocketServer (Unix socket, receives JSON from Python hook)
 
 ### Key Layers
 
-- **App/** — Entry point (`ClaudeIslandApp` @main), `AppDelegate` (lifecycle, hook install, window setup), `WindowManager`
+- **App/** — Entry point (`ClaudeAtollApp` @main), `AppDelegate` (lifecycle, hook install, window setup), `WindowManager`
 - **Core/** — `NotchViewModel` (@Observable UI state), `ModuleRegistry`/`ModuleLayoutEngine` (plugin-based notch modules), `AppSettings` (UserDefaults wrapper)
 - **Services/** — The business logic layer:
   - `State/SessionStore` (actor) — central state, all mutations here
@@ -67,8 +67,8 @@ HookSocketServer (Unix socket, receives JSON from Python hook)
 
 ### IPC & Data Flow
 
-- **Hook → App**: Python script (`claude-island-state.py` bundled in Resources) sends JSON over Unix socket to `HookSocketServer`
-- **Chat History**: Parsed from JSONL files at `~/.claude/cwd/.claude-island/conversation-{sessionID}.jsonl` by `ConversationParser` (incremental tail-based parsing for large files)
+- **Hook → App**: Python script (`claude-atoll-state.py` bundled in Resources) sends JSON over Unix socket to `HookSocketServer`
+- **Chat History**: Parsed from JSONL files at `~/.claude/cwd/.claude-atoll/conversation-{sessionID}.jsonl` by `ConversationParser` (incremental tail-based parsing for large files)
 - **Permission Approval**: `ToolApprovalHandler` sends keystrokes to the correct tmux pane via `TmuxController`
 - **Token Tracking**: `ClaudeAPIService` reads OAuth token from Keychain (`CLIOAuthKeychainGate`) and calls `api.anthropic.com`
 
@@ -94,7 +94,7 @@ The notch UI uses a plugin architecture via the `NotchModule` protocol. Each mod
 Use `os.Logger` exclusively — never `print()`. SwiftLint enforces this via `no_print_statements` custom rule. Each component has a static nonisolated logger:
 
 ```swift
-nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeIsland", category: "ComponentName")
+nonisolated static let logger = Logger(subsystem: "com.engels74.ClaudeAtoll", category: "ComponentName")
 ```
 
 ### Code Organization
@@ -129,7 +129,7 @@ Three GitHub Actions workflows:
 
 - **code-quality.yml** — Runs `prek` checks (SwiftFormat, SwiftLint, shellcheck, markdownlint, ruff) on push/PR to main
 - **ci.yml** — Builds app via `build.sh`, creates DMG, optional VirusTotal scan
-- **release.yml** — Triggered by semver tag push (e.g., `1.0.0`); builds, creates DMG, creates GitHub release, updates website appcast via repository dispatch to `engels74/claude-island-web`
+- **release.yml** — Triggered by semver tag push (e.g., `1.0.0`); builds, creates DMG, creates GitHub release, updates website appcast via repository dispatch to `engels74/claude-atoll-web`
 
 Pre-commit hooks skip SwiftFormat/SwiftLint in CI (handled separately by the code-quality workflow). The `no-commit-to-branch` hook prevents direct commits to main.
 

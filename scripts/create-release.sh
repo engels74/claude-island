@@ -10,15 +10,15 @@ RELEASE_DIR="$PROJECT_DIR/releases"
 KEYS_DIR="$PROJECT_DIR/.sparkle-keys"
 
 # GitHub repository (owner/repo format)
-GITHUB_REPO="engels74/claude-island"
+GITHUB_REPO="engels74/claude-atoll"
 
 # Website repo for auto-updating appcast
-WEBSITE_DIR="${CLAUDE_ISLAND_WEBSITE:-$PROJECT_DIR/../ClaudeIsland-website}"
+WEBSITE_DIR="${CLAUDE_ATOLL_WEBSITE:-$PROJECT_DIR/../claude-atoll-web}"
 WEBSITE_PUBLIC="$WEBSITE_DIR/public"
 
-APP_PATH="$EXPORT_PATH/Claude Island.app"
-APP_NAME="ClaudeIsland"
-KEYCHAIN_PROFILE="ClaudeIsland"
+APP_PATH="$EXPORT_PATH/Claude Atoll.app"
+APP_NAME="ClaudeAtoll"
+KEYCHAIN_PROFILE="ClaudeAtoll"
 
 # Parse command line flags
 SKIP_NOTARIZATION=false
@@ -135,17 +135,17 @@ fi
 if command -v create-dmg &> /dev/null; then
     echo "Using create-dmg for prettier output..."
     create-dmg \
-        --volname "Claude Island" \
+        --volname "Claude Atoll" \
         --window-size 600 400 \
         --icon-size 100 \
-        --icon "Claude Island.app" 150 200 \
+        --icon "Claude Atoll.app" 150 200 \
         --app-drop-link 450 200 \
-        --hide-extension "Claude Island.app" \
+        --hide-extension "Claude Atoll.app" \
         "$DMG_PATH" \
         "$APP_PATH"
 else
     echo "Using hdiutil (install create-dmg for prettier DMG: brew install create-dmg)"
-    hdiutil create -volname "Claude Island" \
+    hdiutil create -volname "Claude Atoll" \
         -srcfolder "$APP_PATH" \
         -ov -format UDZO \
         "$DMG_PATH"
@@ -194,7 +194,7 @@ else
 
     POSSIBLE_PATHS=(
         "$BUILD_DIR/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
-        "$HOME/Library/Developer/Xcode/DerivedData/ClaudeIsland-*/SourcePackages/artifacts/sparkle/Sparkle/bin"
+        "$HOME/Library/Developer/Xcode/DerivedData/ClaudeAtoll-*/SourcePackages/artifacts/sparkle/Sparkle/bin"
     )
 
     for path_pattern in "${POSSIBLE_PATHS[@]}"; do
@@ -261,7 +261,7 @@ if [ "$SKIP_GITHUB" = false ]; then
     else
         # Build release notes based on notarization status
         if [ "$SKIP_NOTARIZATION" = true ]; then
-            RELEASE_NOTES="## Claude Island v$VERSION
+            RELEASE_NOTES="## Claude Atoll v$VERSION
 
 ### Installation
 
@@ -269,20 +269,20 @@ if [ "$SKIP_GITHUB" = false ]; then
 
 **Option 1:** System Settings → Privacy & Security → Click \"Open Anyway\"
 
-**Option 2:** Terminal: \`xattr -d com.apple.quarantine \"/Applications/Claude Island.app\"\`
+**Option 2:** Terminal: \`xattr -d com.apple.quarantine \"/Applications/Claude Atoll.app\"\`
 
 ### Auto-updates
 After first launch, auto-updates via Sparkle work normally."
         else
-            RELEASE_NOTES="## Claude Island v$VERSION
+            RELEASE_NOTES="## Claude Atoll v$VERSION
 
 ### Installation
 1. Download \`$APP_NAME-$VERSION.dmg\`
-2. Open the DMG and drag Claude Island to Applications
-3. Launch Claude Island from Applications
+2. Open the DMG and drag Claude Atoll to Applications
+3. Launch Claude Atoll from Applications
 
 ### Auto-updates
-After installation, Claude Island will automatically check for updates."
+After installation, Claude Atoll will automatically check for updates."
         fi
 
         # Check if release already exists
@@ -293,7 +293,7 @@ After installation, Claude Island will automatically check for updates."
             echo "Creating release v$VERSION..."
             gh release create "v$VERSION" "$DMG_PATH" \
                 --repo "$GITHUB_REPO" \
-                --title "Claude Island v$VERSION" \
+                --title "Claude Atoll v$VERSION" \
                 --notes "$RELEASE_NOTES"
         fi
 

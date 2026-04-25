@@ -1,4 +1,4 @@
-# Pre-commit configuration for Claude Island
+# Pre-commit configuration for Claude Atoll
 # Install: prek install --hook-type pre-commit --hook-type pre-push
 # Run all: prek run --all-files
 
@@ -69,9 +69,9 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^ClaudeIsland/Resources/.*\.py$
+        files: ^ClaudeAtoll/Resources/.*\.py$
       - id: ruff-format
-        files: ^ClaudeIsland/Resources/.*\.py$
+        files: ^ClaudeAtoll/Resources/.*\.py$
 
   # Markdownlint - Markdown consistency
   - repo: https://github.com/igorshubovych/markdownlint-cli
