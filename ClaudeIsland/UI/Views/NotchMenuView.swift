@@ -134,6 +134,18 @@ struct NotchMenuView: View {
 
                         AccessibilityRow(accessibilityManager: self.accessibilityManager)
 
+                        Divider()
+                            .background(Color.white.opacity(0.08))
+                            .padding(.vertical, 4)
+
+                        ProjectsSettingsView()
+
+                        SessionActionsSettingsView()
+
+                        Divider()
+                            .background(Color.white.opacity(0.08))
+                            .padding(.vertical, 4)
+
                         MenuToggleRow(
                             icon: "text.line.first.and.arrowforward",
                             label: "Verbose Mode",
