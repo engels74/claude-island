@@ -21,6 +21,7 @@ final class AccessibilityPermissionManager {
         self.checkPermission()
         // If permission is already granted (returning user), start event monitors immediately
         EventMonitors.shared.startMonitorsIfPermitted()
+        HotkeyManager.shared.startIfPermitted()
     }
 
     // MARK: Internal
@@ -56,9 +57,10 @@ final class AccessibilityPermissionManager {
         if previousState != newState {
             Self.logger.warning("Accessibility permission CHANGED: \(previousState) -> \(newState)")
 
-            // Permission just granted — start deferred event monitors
+            // Permission just granted — start deferred event monitors and hotkey tap
             if newState {
                 EventMonitors.shared.startMonitorsIfPermitted()
+                HotkeyManager.shared.startIfPermitted()
             }
         }
     }
@@ -180,9 +182,10 @@ final class AccessibilityPermissionManager {
         if previousState != self.isAccessibilityEnabled {
             Self.logger.warning("Permission detected on activation: \(previousState) -> \(self.isAccessibilityEnabled)")
 
-            // Permission just granted on activation — start deferred event monitors
+            // Permission just granted on activation — start deferred event monitors and hotkey tap
             if self.isAccessibilityEnabled {
                 EventMonitors.shared.startMonitorsIfPermitted()
+                HotkeyManager.shared.startIfPermitted()
             }
         }
     }

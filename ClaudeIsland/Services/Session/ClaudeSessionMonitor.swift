@@ -174,6 +174,10 @@ final class ClaudeSessionMonitor {
         if event.event == "PostToolUse", let toolUseID = event.toolUseID {
             HookSocketServer.shared.cancelPendingPermission(toolUseID: toolUseID)
         }
+
+        if event.event == "SessionStart" {
+            ProjectStore.shared.recordUsage(path: event.cwd)
+        }
     }
 
     /// Handle permission socket failure - unified async handler
