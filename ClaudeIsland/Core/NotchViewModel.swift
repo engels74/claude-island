@@ -23,6 +23,7 @@ enum NotchOpenReason {
     case click
     case hover
     case notification
+    case sessionCreated
     case boot
     case unknown
 }
@@ -72,6 +73,8 @@ final class NotchViewModel {
     var openReason: NotchOpenReason = .unknown
     var contentType: NotchContentType = .instances
     var isHovering = false
+    var focusInputOnAppear = false
+    var chatPanelWidthFraction: Double = AppSettings.chatPanelWidthFraction
 
     // MARK: - Geometry
 
@@ -116,7 +119,7 @@ final class NotchViewModel {
         case .chat:
             // Large size for chat view
             return CGSize(
-                width: min(self.screenRect.width * 0.5, 600),
+                width: min(self.screenRect.width * self.chatPanelWidthFraction, self.screenRect.width * 0.8),
                 height: 580,
             )
         case .menu:

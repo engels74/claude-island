@@ -74,6 +74,20 @@ nonisolated enum SessionEvent: Sendable {
 
     /// History load completed
     case historyLoaded(HistoryLoadedPayload)
+
+    // MARK: - Launch Events (from TmuxSessionCreator)
+
+    /// A new session is being launched
+    case sessionLaunching(SessionLaunchPayload)
+
+    /// Launch progress updated
+    case launchProgressUpdated(sessionID: String, progress: LaunchProgress)
+
+    /// Launch completed successfully (hook merged)
+    case launchCompleted(sessionID: String)
+
+    /// Launch failed
+    case launchFailed(sessionID: String, error: LaunchError)
 }
 
 // MARK: - HistoryLoadedPayload
@@ -102,6 +116,16 @@ nonisolated struct FileUpdatePayload: Sendable {
     let completedToolIDs: Set<String>
     let toolResults: [String: ConversationParser.ToolResult]
     let structuredResults: [String: ToolResultData]
+}
+
+// MARK: - SessionLaunchPayload
+
+nonisolated struct SessionLaunchPayload: Sendable {
+    let sessionID: String
+    let sessionName: String
+    let cwd: String
+    let prompt: String
+    let commandTemplate: String
 }
 
 // MARK: - ToolCompletionResult
@@ -233,6 +257,12 @@ nonisolated extension SessionEvent {
             payload.sessionID
         case let .historyLoaded(payload):
             payload.sessionID
+        case let .sessionLaunching(payload):
+            payload.sessionID
+        case let .launchProgressUpdated(sessionID, _),
+             let .launchCompleted(sessionID),
+             let .launchFailed(sessionID, _):
+            sessionID
         }
     }
 }
@@ -272,6 +302,14 @@ nonisolated extension SessionEvent: CustomStringConvertible {
             "subagentToolCompleted(session: \(sessionID.prefix(8)), tool: \(toolID.prefix(12)), status: \(status))"
         case let .subagentStopped(sessionID, taskToolID):
             "subagentStopped(session: \(sessionID.prefix(8)), task: \(taskToolID.prefix(12)))"
+        case let .sessionLaunching(payload):
+            "sessionLaunching(session: \(payload.sessionID.prefix(8)), name: \(payload.sessionName))"
+        case let .launchProgressUpdated(sessionID, progress):
+            "launchProgressUpdated(session: \(sessionID.prefix(8)), progress: \(progress))"
+        case let .launchCompleted(sessionID):
+            "launchCompleted(session: \(sessionID.prefix(8)))"
+        case let .launchFailed(sessionID, error):
+            "launchFailed(session: \(sessionID.prefix(8)), error: \(error))"
         }
     }
 }

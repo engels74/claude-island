@@ -1,0 +1,52 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-04-review-repairs.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Fix Critical Chunk 1 Issues",
+      "status": "pending",
+      "description": "Fix notch open reason (.sessionCreated), wire onCancel/onRetry/onDismiss callbacks, log merge completion.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Window/SessionLauncherPanel.swift\", \"ClaudeIsland/UI/Views/ClaudeInstancesView.swift\", \"ClaudeIsland/Services/State/SessionStore.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"sessionCreated reason used\", \"callbacks wired\", \"merge logged\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Fix Critical Chunk 3 Issues (CGEvent Tap + Action Slots)",
+      "status": "pending",
+      "description": "Fix dangling Mutex pointer in CGEvent tap, make visible actions driven by sessionActionOrder.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Services/HotkeyManager.swift\", \"ClaudeIsland/UI/Views/ClaudeInstancesView.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"Unmanaged self for tap\", \"dynamic action slots\", \"DispatchQueue.main.async\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Fix Important Chunk 1 Issues",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "Fix launching priority (0 not 2), command preview variables, validation, pulsing indicator.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ClaudeInstancesView.swift\", \"ClaudeIsland/UI/Views/SessionLauncherView.swift\", \"ClaudeIsland/UI/Views/NotchMenuView.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"priority 0\", \"4 variables resolved\", \"validation message\", \"pulsing ring\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Fix Important Chunk 2 Issues",
+      "status": "pending",
+      "description": "Fix NSOpenPanel z-order, 'Not found' subtitle, directory picker section headers.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ProjectsSettingsView.swift\", \"ClaudeIsland/UI/Views/DirectoryPickerView.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"z-order workaround\", \"Not found subtitle\", \"section headers\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Fix Important Chunk 3 Issues",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "Reserved shortcuts, conflict detection, tap health check, orphan cleanup, accessibility warning.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/KeyRecorderView.swift\", \"ClaudeIsland/Services/HotkeyManager.swift\", \"ClaudeIsland/UI/Views/ShortcutsSettingsView.swift\", \"ClaudeIsland/App/AppDelegate.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"Cmd+Tab and Cmd+backtick reserved\", \"conflict detection\", \"tap health\", \"orphan cleanup\", \"a11y warning\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: Minor Issues Batch Cleanup",
+      "status": "pending",
+      "blockedBy": [1, 2, 3, 4, 5],
+      "description": "Header + button, arrow wrap, continuous slider, session display title.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ClaudeInstancesView.swift\", \"ClaudeIsland/UI/Views/DirectoryPickerView.swift\", \"ClaudeIsland/UI/Views/NotchMenuView.swift\", \"ClaudeIsland/UI/Views/ShortcutsSettingsView.swift\"], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"header + button\", \"wrap around\", \"continuous slider\", \"display title\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Final Lint + Format Pass",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "Run SwiftFormat and SwiftLint, fix any violations.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"swiftformat --lint ClaudeIsland/ && swiftlint lint --strict ClaudeIsland/\", \"acceptanceCriteria\": [\"swiftformat clean\", \"swiftlint clean\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-04T16:00:00Z"
+}

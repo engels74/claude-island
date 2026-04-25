@@ -54,11 +54,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApplication.shared.setActivationPolicy(.accessory)
 
+        // Initialize HotkeyManager and start if accessibility already granted
+        _ = HotkeyManager.shared
+        HotkeyManager.shared.startIfPermitted()
+
+        Task(name: "cleanup-orphaned-bindings") {
+            await HotkeyManager.shared.cleanupOrphanedBindings()
+        }
+
+        // Wire session removal to hotkey cleanup
+        Task(name: "wire-session-removed") {
+            await SessionStore.shared.setOnSessionRemoved { sessionID in
+                Task(name: "cleanup-shortcut") { @MainActor in
+                    HotkeyManager.shared.removeShortcut(forSession: sessionID)
+                }
+            }
+        }
+
         // Check accessibility permission on launch
         self.checkAccessibilityPermission()
 
         self.windowManager = WindowManager()
         _ = self.windowManager?.setupNotchWindow()
+
+        SessionLauncherPanel.shared.viewModel = self.windowManager?.windowController?.viewModel
 
         self.screenObserver = ScreenObserver { [weak self] in
             self?.handleScreenChange()

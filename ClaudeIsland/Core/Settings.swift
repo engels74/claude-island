@@ -106,6 +106,25 @@ enum NotificationSound: String, CaseIterable {
     }
 }
 
+// MARK: - SessionActionType
+
+enum SessionActionType: String, Codable, CaseIterable, Sendable {
+    case chat
+    case focus
+    case archive
+    case copyAttach
+    case delete
+    case pinProject
+    case assignShortcut
+}
+
+// MARK: - ChatViewMode
+
+enum ChatViewMode: String, CaseIterable {
+    case terminal = "Terminal"
+    case chat = "Chat"
+}
+
 // MARK: - AppSettings
 
 enum AppSettings {
@@ -244,6 +263,108 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Keys.verboseMode) }
     }
 
+    // MARK: - Claude Command Template
+
+    static var claudeCommandTemplate: String {
+        get { defaults.string(forKey: Keys.claudeCommandTemplate) ?? "claude" }
+        set { defaults.set(newValue, forKey: Keys.claudeCommandTemplate) }
+    }
+
+    // MARK: - Last Used Directory
+
+    static var lastUsedDirectory: String? {
+        get { defaults.string(forKey: Keys.lastUsedDirectory) }
+        set { defaults.set(newValue, forKey: Keys.lastUsedDirectory) }
+    }
+
+    // MARK: - Projects
+
+    static var projects: [ProjectEntry] {
+        get {
+            guard let data = defaults.data(forKey: Keys.projects) else { return [] }
+            return (try? JSONDecoder().decode([ProjectEntry].self, from: data)) ?? []
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.projects)
+            }
+        }
+    }
+
+    // MARK: - Chat Panel Width
+
+    static var chatPanelWidthFraction: Double {
+        get {
+            let value = defaults.double(forKey: Keys.chatPanelWidthFraction)
+            return value > 0 ? value : 0.5
+        }
+        set { defaults.set(newValue, forKey: Keys.chatPanelWidthFraction) }
+    }
+
+    // MARK: - Global Shortcut
+
+    static var globalShortcut: KeyCombo? {
+        get {
+            guard let data = defaults.data(forKey: Keys.globalShortcut) else { return nil }
+            return try? JSONDecoder().decode(KeyCombo.self, from: data)
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.globalShortcut)
+            } else {
+                defaults.removeObject(forKey: Keys.globalShortcut)
+            }
+        }
+    }
+
+    // MARK: - Session Shortcuts
+
+    static var sessionShortcuts: [String: KeyCombo] {
+        get {
+            guard let data = defaults.data(forKey: Keys.sessionShortcuts) else { return [:] }
+            return (try? JSONDecoder().decode([String: KeyCombo].self, from: data)) ?? [:]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionShortcuts)
+            }
+        }
+    }
+
+    // MARK: - Session Action Order
+
+    static var sessionActionOrder: [SessionActionType] {
+        get {
+            guard let data = defaults.data(forKey: Keys.sessionActionOrder) else {
+                return [.chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut]
+            }
+            return (try? JSONDecoder().decode([SessionActionType].self, from: data)) ?? [
+                .chat, .focus, .archive, .copyAttach, .delete, .pinProject, .assignShortcut,
+            ]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionActionOrder)
+            }
+        }
+    }
+
+    // MARK: - Chat View Mode
+
+    static var chatViewMode: ChatViewMode {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.chatViewMode),
+                  let mode = ChatViewMode(rawValue: rawValue)
+            else {
+                return .terminal
+            }
+            return mode
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.chatViewMode)
+        }
+    }
+
     // MARK: Private
 
     // MARK: - Keys
@@ -261,6 +382,14 @@ enum AppSettings {
         static let tokenShowResetTime = "tokenShowResetTime"
         static let moduleLayoutConfig = "moduleLayoutConfig"
         static let verboseMode = "verboseMode"
+        static let claudeCommandTemplate = "claudeCommandTemplate"
+        static let lastUsedDirectory = "lastUsedDirectory"
+        static let chatPanelWidthFraction = "chatPanelWidthFraction"
+        static let projects = "projects"
+        static let globalShortcut = "globalShortcut"
+        static let sessionShortcuts = "sessionShortcuts"
+        static let sessionActionOrder = "sessionActionOrder"
+        static let chatViewMode = "chatViewMode"
     }
 
     private static let defaults = UserDefaults.standard

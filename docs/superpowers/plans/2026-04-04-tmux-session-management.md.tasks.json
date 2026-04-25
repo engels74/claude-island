@@ -1,0 +1,122 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-04-tmux-session-management.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: SessionPhase .launching + SessionEvent Launch Cases",
+      "status": "completed",
+      "description": "Extend state machine with .launching phase and 4 launch event types.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Models/SessionPhase.swift\", \"ClaudeIsland/Models/SessionEvent.swift\", \"ClaudeIsland/Models/SessionState.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"launching phase exists\", \"LaunchError enum exists\", \"all switches updated\", \"4 event cases added\", \"tmuxSessionName field added\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Settings Keys for Chunks 1 & 4",
+      "status": "completed",
+      "description": "Add UserDefaults keys for claudeCommandTemplate, lastUsedDirectory, chatPanelWidthFraction.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Core/Settings.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"claudeCommandTemplate key\", \"lastUsedDirectory key\", \"chatPanelWidthFraction key with zero guard\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: SessionStore Launch Event Handling + Merge",
+      "status": "completed",
+      "blockedBy": [1, 2],
+      "description": "Wire 4 launch events into SessionStore, manage pendingLaunches, implement TmuxTargetFinder merge.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Services/State/SessionStore.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"pendingLaunches dictionary\", \"4 launch event handlers\", \"async merge with reentrancy guard\", \"cleanup in processSessionEnd\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: TmuxSessionCreator Service",
+      "status": "completed",
+      "blockedBy": [1, 2, 3],
+      "description": "Create actor that orchestrates tmux session creation + Claude launch + hook waiting.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Services/Tmux/TmuxSessionCreator.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"launch method validates prerequisites\", \"sanitizes session name\", \"creates tmux session\", \"waits for hook\", \"sends prompt\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: SessionLauncherPanel (NSPanel)",
+      "status": "completed",
+      "blockedBy": [4],
+      "description": "Create floating NSPanel with frosted glass, dismiss behavior, animation.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Windows/SessionLauncherPanel.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"borderless non-activating panel\", \"visual effect view\", \"escape and click-outside dismiss\", \"scale+fade animation\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: SessionLauncherView (SwiftUI)",
+      "status": "completed",
+      "blockedBy": [5],
+      "description": "SwiftUI launcher with prompt, name, directory picker, command preview.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/SessionLauncherView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"auto-focused prompt field\", \"Tab reveals name field\", \"minimal directory picker\", \"live command preview\", \"auto-generates session name\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: NewSessionRow + ClaudeInstancesView Updates",
+      "status": "completed",
+      "blockedBy": [1, 6],
+      "description": "Dashed New Session row, .launching phase rendering, cancel/retry/dismiss buttons.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/NewSessionRow.swift\", \"ClaudeIsland/UI/Views/ClaudeInstancesView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"dashed row at bottom\", \"replaces empty state\", \"launching in phasePriority\", \"pulsing ring indicator\", \"cancel/retry/dismiss buttons\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: NotchMenuView Claude Command + NotchViewModel + AppDelegate",
+      "status": "completed",
+      "blockedBy": [2, 5, 6, 7],
+      "description": "Claude Command settings, sessionCreated reason, launcher panel wiring.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/NotchMenuView.swift\", \"ClaudeIsland/Core/NotchViewModel.swift\", \"ClaudeIsland/App/AppDelegate.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Claude Command expandable row\", \"sessionCreated reason\", \"launcher panel created in AppDelegate\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: Chat View — Configurable Panel Width",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "Panel width slider in settings, wired to NotchViewModel openedSize.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Core/NotchViewModel.swift\", \"ClaudeIsland/UI/Views/NotchMenuView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"chatPanelWidthFraction property\", \"slider 50-80%\", \"openedSize uses fraction\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: Markdown Renderer Enhancements",
+      "status": "completed",
+      "description": "Task lists, code block headers+copy, tables, tighter spacing.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Components/MarkdownRenderer.swift\", \"ClaudeIsland/UI/Views/ChatView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"task list checkboxes\", \"code block language+copy\", \"parseTable enabled\", \"Grid table rendering\", \"spacing reduced\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: ProjectEntry + ProjectStore + Settings",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "Project directory management with auto-population from sessions.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Models/ProjectEntry.swift\", \"ClaudeIsland/Services/ProjectStore.swift\", \"ClaudeIsland/Core/Settings.swift\", \"ClaudeIsland/Services/Session/ClaudeSessionMonitor.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"ProjectEntry model\", \"ProjectStore with CRUD\", \"auto-pruning at 20\", \"recordUsage on SessionStart\"]}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 12: Projects Settings + Directory Picker",
+      "status": "completed",
+      "blockedBy": [8, 11],
+      "description": "Projects settings UI and upgraded directory picker for launcher.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/ProjectsSettingsView.swift\", \"ClaudeIsland/UI/Views/DirectoryPickerView.swift\", \"ClaudeIsland/UI/Views/NotchMenuView.swift\", \"ClaudeIsland/UI/Views/SessionLauncherView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"expandable projects section\", \"hover actions\", \"NSOpenPanel integration\", \"DirectoryPickerView standalone\", \"keyboard navigation\"]}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 13: KeyCombo + HotkeyManager + Settings",
+      "status": "completed",
+      "blockedBy": [8, 11, 12],
+      "description": "Global hotkey infrastructure with CGEvent tap.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Models/KeyCombo.swift\", \"ClaudeIsland/Services/HotkeyManager.swift\", \"ClaudeIsland/Core/Settings.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"KeyCombo model\", \"HotkeyManager with CGEvent tap\", \"Mutex-protected dictionary\", \"deferred start\", \"settings keys\"]}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 14: KeyRecorderView + Shortcuts Settings",
+      "status": "completed",
+      "blockedBy": [13],
+      "description": "Reusable key recorder and shortcuts settings section.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/KeyRecorderView.swift\", \"ClaudeIsland/UI/Views/ShortcutsSettingsView.swift\", \"ClaudeIsland/UI/Views/NotchMenuView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"recording state\", \"modifier validation\", \"reserved shortcut check\", \"global section\", \"sessions section\"]}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 15: Session Action Overflow Menu + Customizable Actions",
+      "status": "completed",
+      "blockedBy": [14],
+      "description": "Overflow menu, all 7 actions, customizable visible slots.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/SessionActionOverflowMenu.swift\", \"ClaudeIsland/UI/Views/SessionActionsSettingsView.swift\", \"ClaudeIsland/UI/Views/ClaudeInstancesView.swift\", \"ClaudeIsland/Services/Tmux/TmuxController.swift\", \"ClaudeIsland/UI/Views/NotchMenuView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"overflow button\", \"7 actions\", \"copy attach\", \"delete with confirm\", \"reorderable settings\"]}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 16: Session Removal Unification + HotkeyManager Wiring",
+      "status": "completed",
+      "blockedBy": [13, 14, 15],
+      "description": "Unify session removal, wire HotkeyManager cleanup, focus-session shortcuts.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/Services/State/SessionStore.swift\", \"ClaudeIsland/App/AppDelegate.swift\", \"ClaudeIsland/Core/NotchViewModel.swift\", \"ClaudeIsland/UI/Views/ChatView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"unified removal via processSessionEnd\", \"onSessionRemoved callback\", \"HotkeyManager wired\", \"focusInputOnAppear works\"]}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 17: Final Integration + Lint + Build Verification",
+      "status": "completed",
+      "blockedBy": [8, 9, 10, 11, 12, 13, 14, 15, 16],
+      "description": "SwiftLint, SwiftFormat, Release build verification.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"swiftlint lint --strict ClaudeIsland/ && xcodebuild -scheme ClaudeIsland -configuration Release build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"swiftlint passes strict\", \"swiftformat no changes\", \"release build succeeds\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-04T13:00:00Z"
+}

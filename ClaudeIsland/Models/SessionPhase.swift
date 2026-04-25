@@ -70,6 +70,27 @@ nonisolated extension PermissionContext: Equatable {
 }
 // swiftformat:enable all
 
+// MARK: - LaunchProgress
+
+nonisolated enum LaunchProgress: Sendable, Equatable {
+    case creatingTmuxSession
+    case startingClaude
+    case waitingForHook
+    case sendingPrompt
+    case failed(LaunchError)
+}
+
+// MARK: - LaunchError
+
+nonisolated enum LaunchError: Error, Sendable, Equatable {
+    case tmuxNotInstalled
+    case claudeNotInstalled
+    case directoryNotFound(String)
+    case tmuxSessionCreationFailed(String)
+    case claudeStartTimeout
+    case promptSendFailed(String)
+}
+
 // MARK: - SessionPhase
 
 /// Explicit session phases - the state machine
@@ -89,6 +110,9 @@ nonisolated enum SessionPhase: Sendable {
     /// Context is being compacted (auto or manual)
     case compacting
 
+    /// Session is being launched via TmuxSessionCreator
+    case launching(LaunchProgress)
+
     /// Session has ended
     case ended
 
@@ -102,6 +126,8 @@ nonisolated enum SessionPhase: Sendable {
         case .waitingForApproval,
              .waitingForInput:
             true
+        case .launching:
+            false
         default:
             false
         }
@@ -113,6 +139,8 @@ nonisolated enum SessionPhase: Sendable {
         case .processing,
              .compacting:
             true
+        case .launching:
+            false
         default:
             false
         }
@@ -164,6 +192,7 @@ nonisolated enum SessionPhase: Sendable {
         case waitingForInput
         case waitingForApproval
         case compacting
+        case launching
         case ended
 
         // MARK: Internal
@@ -175,6 +204,7 @@ nonisolated enum SessionPhase: Sendable {
                  (.waitingForInput, .waitingForInput),
                  (.waitingForApproval, .waitingForApproval),
                  (.compacting, .compacting),
+                 (.launching, .launching),
                  (.ended, .ended):
                 true
             default:
@@ -197,6 +227,8 @@ nonisolated enum SessionPhase: Sendable {
             [.processing, .idle, .waitingForInput, .waitingForApproval]
         case .compacting:
             [.processing, .idle, .waitingForInput]
+        case .launching:
+            [.idle, .launching]
         case .ended:
             []
         }
@@ -214,6 +246,8 @@ nonisolated extension SessionPhase: Equatable {
         case let (.waitingForApproval(ctx1), .waitingForApproval(ctx2)):
             ctx1 == ctx2
         case (.compacting, .compacting): true
+        case let (.launching(p1), .launching(p2)):
+            p1 == p2
         case (.ended, .ended): true
         default: false
         }
@@ -235,6 +269,8 @@ nonisolated extension SessionPhase: CustomStringConvertible {
             "waitingForApproval(\(ctx.toolName))"
         case .compacting:
             "compacting"
+        case let .launching(progress):
+            "launching(\(progress))"
         case .ended:
             "ended"
         }

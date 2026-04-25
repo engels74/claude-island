@@ -320,8 +320,9 @@ struct SessionStateDots: View {
         case .processing,
              .compacting: 1
         case .waitingForInput: 2
+        case .launching: 3
         case .idle,
-             .ended: 3
+             .ended: 4
         }
     }
 
@@ -338,6 +339,8 @@ struct SessionStateDots: View {
             TerminalColors.prompt
         case .waitingForInput:
             TerminalColors.green
+        case .launching:
+            TerminalColors.cyan
         case .idle,
              .ended:
             Color.white.opacity(0.25)

@@ -59,7 +59,6 @@ struct ChatView: View {
                 // Approval bar, interactive prompt, or Input bar
                 if let tool = approvalTool {
                     if tool == "AskUserQuestion" {
-                        // Interactive tools - show prompt to answer in terminal
                         self.interactivePromptBar
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .move(edge: .bottom)),
@@ -163,6 +162,12 @@ struct ChatView: View {
                 }
             }
         }
+        .onChange(of: self.viewModel.focusInputOnAppear) { _, newValue in
+            if newValue {
+                self.isInputFocused = true
+                self.viewModel.focusInputOnAppear = false
+            }
+        }
         .onAppear {
             // Auto-focus input when chat opens and tmux messaging is available
             self.focusInputTask?.cancel()
@@ -205,6 +210,10 @@ struct ChatView: View {
     @State private var keyEventMonitor: Any?
     @FocusState private var isInputFocused: Bool
 
+    // swiftformat:disable:next wrapAttributes
+    @AppStorage("chatViewMode")
+    private var chatViewMode: String = ChatViewMode.terminal.rawValue
+
     // MARK: - Header
 
     @State private var isHeaderHovered = false
@@ -213,6 +222,10 @@ struct ChatView: View {
 
     /// Background color for fade gradients
     private let fadeColor = Color(red: 0.00, green: 0.00, blue: 0.00)
+
+    private var currentMode: ChatViewMode {
+        ChatViewMode(rawValue: self.chatViewMode) ?? .terminal
+    }
 
     /// Access to chat history from @Observable manager for SwiftUI observation
     private var chatManagerHistory: [ChatHistoryItem] {
@@ -262,33 +275,37 @@ struct ChatView: View {
     }
 
     private var chatHeader: some View {
-        Button {
-            self.viewModel.exitChat()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(self.isHeaderHovered ? 1.0 : 0.6))
-                    .frame(width: 24, height: 24)
+        HStack(spacing: 8) {
+            Button {
+                self.viewModel.exitChat()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(self.isHeaderHovered ? 1.0 : 0.6))
+                        .frame(width: 24, height: 24)
 
-                Text(self.session.displayTitle)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(self.isHeaderHovered ? 1.0 : 0.85))
-                    .lineLimit(1)
-
-                Spacer()
+                    Text(self.session.displayTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(self.isHeaderHovered ? 1.0 : 0.85))
+                        .lineLimit(1)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(self.isHeaderHovered ? Color.white.opacity(0.08) : Color.clear),
-            )
+            .buttonStyle(.plain)
+            .onHover { self.isHeaderHovered = $0 }
+
+            Spacer()
+
+            Picker("", selection: self.$chatViewMode) {
+                Text("Terminal").tag(ChatViewMode.terminal.rawValue)
+                Text("Chat").tag(ChatViewMode.chat.rawValue)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 140)
+            .labelsHidden()
         }
-        .buttonStyle(.plain)
-        .onHover { self.isHeaderHovered = $0 }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(Color.black.opacity(0.2))
         .overlay(alignment: .bottom) {
             LinearGradient(
@@ -297,10 +314,10 @@ struct ChatView: View {
                 endPoint: .bottom,
             )
             .frame(height: 24)
-            .offset(y: 24) // Push below header
+            .offset(y: 24)
             .allowsHitTesting(false)
         }
-        .zIndex(1) // Render above message list
+        .zIndex(1)
     }
 
     // MARK: - Loading State
@@ -334,7 +351,7 @@ struct ChatView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: self.currentMode == .terminal ? 8 : 12) {
                     // Invisible anchor at bottom (first due to flip)
                     Color.clear
                         .frame(height: 1)
@@ -352,13 +369,24 @@ struct ChatView: View {
                     }
 
                     ForEach(self.history.reversed()) { item in
-                        MessageItemView(item: item, sessionID: self.sessionID)
-                            .padding(.horizontal, 16)
-                            .scaleEffect(x: 1, y: -1)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                                removal: .opacity,
-                            ))
+                        Group {
+                            switch self.currentMode {
+                            case .terminal:
+                                TerminalModeView(
+                                    item: item,
+                                    onApprove: { self.approvePermission() },
+                                    onDeny: { self.denyPermission() },
+                                )
+                            case .chat:
+                                ChatModeView(item: item, sessionID: self.sessionID)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .scaleEffect(x: 1, y: -1)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                            removal: .opacity,
+                        ))
                     }
                 }
                 .padding(.top, 20)
@@ -740,68 +768,6 @@ struct ChatView: View {
     }
 }
 
-// MARK: - MessageItemView
-
-struct MessageItemView: View {
-    let item: ChatHistoryItem
-    let sessionID: String
-
-    var body: some View {
-        switch self.item.type {
-        case let .user(text):
-            UserMessageView(text: text)
-        case let .assistant(text):
-            AssistantMessageView(text: text)
-        case let .toolCall(tool):
-            ToolCallView(tool: tool, sessionID: self.sessionID)
-        case let .thinking(text):
-            ThinkingView(text: text)
-        case .interrupted:
-            InterruptedMessageView()
-        }
-    }
-}
-
-// MARK: - UserMessageView
-
-struct UserMessageView: View {
-    let text: String
-
-    var body: some View {
-        HStack {
-            Spacer(minLength: 60)
-
-            MarkdownText(self.text, color: .white, fontSize: 13)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.white.opacity(0.15)),
-                )
-        }
-    }
-}
-
-// MARK: - AssistantMessageView
-
-struct AssistantMessageView: View {
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            // White dot indicator
-            Circle()
-                .fill(Color.white.opacity(0.6))
-                .frame(width: 6, height: 6)
-                .padding(.top, 5)
-
-            MarkdownText(self.text, color: .white.opacity(0.9), fontSize: 13)
-
-            Spacer(minLength: 60)
-        }
-    }
-}
-
 // MARK: - ProcessingIndicatorView
 
 struct ProcessingIndicatorView: View {
@@ -837,216 +803,6 @@ struct ProcessingIndicatorView: View {
     private let baseTexts = ["Processing", "Working"]
     private let color = Color(red: 0.85, green: 0.47, blue: 0.34) // Claude orange
     private let baseText: String
-}
-
-// MARK: - ToolCallView
-
-struct ToolCallView: View {
-    // MARK: Internal
-
-    let tool: ToolCallItem
-    let sessionID: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(self.statusColor.opacity(self.tool.status == .running || self.tool.status == .waitingForApproval ? self.pulseOpacity : 0.6))
-                    .frame(width: 6, height: 6)
-                    .id(self.tool.status) // Forces view recreation, cancelling repeatForever animation
-                    .onAppear {
-                        if self.tool.status == .running || self.tool.status == .waitingForApproval {
-                            self.startPulsing()
-                        }
-                    }
-
-                // Tool name (formatted for MCP tools, verbose when enabled)
-                Text(self.verboseToolName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(self.textColor)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                if self.tool.name == "Task" && !self.tool.subagentTools.isEmpty {
-                    let taskDesc = self.tool.input["description"] ?? "Running agent..."
-                    Text("\(taskDesc) (\(self.tool.subagentTools.count) tools)")
-                        .font(.system(size: 11))
-                        .foregroundColor(self.textColor.opacity(0.7))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                } else if self.tool.name == "AgentOutputTool", let desc = agentDescription {
-                    let blocking = self.tool.input["block"] == "true"
-                    Text(blocking ? "Waiting: \(desc)" : desc)
-                        .font(.system(size: 11))
-                        .foregroundColor(self.textColor.opacity(0.7))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                } else if MCPToolFormatter.isMCPTool(self.tool.name) && !self.tool.input.isEmpty {
-                    Text(MCPToolFormatter.formatArgs(self.tool.input))
-                        .font(.system(size: 11))
-                        .foregroundColor(self.textColor.opacity(0.7))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                } else {
-                    Text(self.tool.statusDisplay.text)
-                        .font(.system(size: 11))
-                        .foregroundColor(self.textColor.opacity(0.7))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                Spacer()
-
-                // Expand indicator (only for expandable tools)
-                if self.canExpand && self.tool.status != .running && self.tool.status != .waitingForApproval {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.3))
-                        .rotationEffect(.degrees(self.isExpanded ? 90 : 0))
-                        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.isExpanded)
-                }
-            }
-
-            if self.verboseMode && self.tool.status != .running && self.tool.status != .waitingForApproval {
-                if let preview = self.outputPreview {
-                    Text(preview)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.35))
-                        .lineLimit(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 12)
-                        .padding(.top, 2)
-                }
-            }
-
-            // Subagent tools list (for Task tools)
-            if self.tool.name == "Task" && !self.tool.subagentTools.isEmpty {
-                SubagentToolsList(tools: self.tool.subagentTools)
-                    .padding(.leading, 12)
-                    .padding(.top, 2)
-            }
-
-            // Result content (Edit always shows, others when expanded)
-            // Edit tools bypass hasResult check - fallback in ToolResultContent renders from input params
-            if self.showContent && self.tool.status != .running && self.tool.name != "Task" && (self.hasResult || self.tool.name == "Edit") {
-                ToolResultContent(tool: self.tool)
-                    .padding(.leading, 12)
-                    .padding(.top, 4)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            // Edit tools show diff from input even while running
-            if self.tool.name == "Edit" && self.tool.status == .running {
-                EditInputDiffView(input: self.tool.input)
-                    .padding(.leading, 12)
-                    .padding(.top, 4)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(self.canExpand && self.isHovering ? Color.white.opacity(0.05) : Color.clear),
-        )
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            self.isHovering = hovering
-        }
-        .onTapGesture {
-            if self.canExpand {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    self.isExpanded.toggle()
-                }
-            }
-        }
-        .animation(.easeOut(duration: 0.15), value: self.isHovering)
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.isExpanded)
-    }
-
-    // MARK: Private
-
-    // swiftformat:disable:next wrapAttributes
-    @AppStorage("verboseMode")
-    private var verboseMode = false
-    @State private var pulseOpacity = 0.6
-    @State private var isExpanded = false
-    @State private var isHovering = false
-
-    private var statusColor: Color {
-        switch self.tool.status {
-        case .running:
-            Color.white
-        case .waitingForApproval:
-            Color.orange
-        case .success:
-            Color.green
-        case .error,
-             .interrupted:
-            Color.red
-        }
-    }
-
-    private var textColor: Color {
-        switch self.tool.status {
-        case .running:
-            .white.opacity(0.6)
-        case .waitingForApproval:
-            Color.orange.opacity(0.9)
-        case .success:
-            .white.opacity(0.7)
-        case .error,
-             .interrupted:
-            Color.red.opacity(0.8)
-        }
-    }
-
-    private var hasResult: Bool {
-        self.tool.result != nil || self.tool.structuredResult != nil
-    }
-
-    /// Whether the tool can be expanded (has result, NOT Task tools, NOT Edit tools)
-    private var canExpand: Bool {
-        self.tool.name != "Task" && self.tool.name != "Edit" && self.hasResult
-    }
-
-    private var showContent: Bool {
-        self.tool.name == "Edit" || self.isExpanded
-    }
-
-    private var verboseToolName: String {
-        let formatted = MCPToolFormatter.formatToolName(self.tool.name)
-        if self.verboseMode {
-            return ToolStatusDisplay.verboseToolLabel(for: formatted, input: self.tool.input)
-        }
-        return formatted
-    }
-
-    private var outputPreview: String? {
-        guard let result = self.tool.result, !result.isEmpty else { return nil }
-        let lines = result.components(separatedBy: "\n")
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .prefix(3)
-            .map { String($0.prefix(80)) }
-        return lines.joined(separator: "\n")
-    }
-
-    private var agentDescription: String? {
-        guard self.tool.name == "AgentOutputTool",
-              let agentID = tool.input["agentId"],
-              let sessionDescriptions = ChatHistoryManager.shared.agentDescriptions[sessionID]
-        else {
-            return nil
-        }
-        return sessionDescriptions[agentID]
-    }
-
-    private func startPulsing() {
-        withAnimation(
-            .easeInOut(duration: 0.6)
-                .repeatForever(autoreverses: true),
-        ) {
-            self.pulseOpacity = 0.15
-        }
-    }
 }
 
 // MARK: - SubagentToolsList
@@ -1129,11 +885,11 @@ struct SubagentToolRow: View {
 
     private var statusColor: Color {
         switch self.tool.status {
-        case .running,
-             .waitingForApproval: .orange
-        case .success: .green
+        case .running: .white
+        case .waitingForApproval: Color(red: 0.824, green: 0.6, blue: 0.133)
+        case .success: Color(red: 0.247, green: 0.725, blue: 0.314)
         case .error,
-             .interrupted: .red
+             .interrupted: Color(red: 0.973, green: 0.318, blue: 0.286)
         }
     }
 
@@ -1194,71 +950,6 @@ struct SubagentToolsSummary: View {
             counts[tool.name, default: 0] += 1
         }
         return counts.sorted { $0.value > $1.value }
-    }
-}
-
-// MARK: - ThinkingView
-
-struct ThinkingView: View {
-    // MARK: Internal
-
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Circle()
-                .fill(Color.gray.opacity(0.5))
-                .frame(width: 6, height: 6)
-                .padding(.top, 4)
-
-            Text(self.isExpanded ? self.text : String(self.text.prefix(80)) + (self.canExpand ? "..." : ""))
-                .font(.system(size: 11))
-                .foregroundColor(.gray)
-                .italic()
-                .lineLimit(self.isExpanded ? nil : 1)
-                .multilineTextAlignment(.leading)
-
-            Spacer()
-
-            if self.canExpand {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.5))
-                    .rotationEffect(.degrees(self.isExpanded ? 90 : 0))
-                    .padding(.top, 3)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if self.canExpand {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    self.isExpanded.toggle()
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
-    }
-
-    // MARK: Private
-
-    @State private var isExpanded = false
-
-    private var canExpand: Bool {
-        self.text.count > 80
-    }
-}
-
-// MARK: - InterruptedMessageView
-
-struct InterruptedMessageView: View {
-    var body: some View {
-        HStack {
-            Text("Interrupted")
-                .font(.system(size: 13))
-                .foregroundColor(.red)
-            Spacer()
-        }
     }
 }
 

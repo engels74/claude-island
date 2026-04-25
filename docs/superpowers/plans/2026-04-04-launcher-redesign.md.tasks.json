@@ -1,0 +1,32 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-04-launcher-redesign.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Rewrite SessionLauncherView",
+      "status": "pending",
+      "description": "Full rewrite of SessionLauncherView with minimal Raycast-style layout.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/SessionLauncherView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -3\", \"acceptanceCriteria\": [\"auto-focused prompt\", \"focus border\", \"Tab reveals name\", \"directory row\", \"dropdown toggle\", \"Esc priority chain\", \"conditional bottom bar\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Refactor DirectoryPickerView as Dropdown",
+      "status": "pending",
+      "description": "Refactor DirectoryPickerView from inline list to dropdown-styled expandable section.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/DirectoryPickerView.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -3\", \"acceptanceCriteria\": [\"new init interface\", \"dark dropdown styling\", \"section headers\", \"arrow key nav\", \"Browse row\", \"empty state\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Remove Esc Monitor from SessionLauncherPanel",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "Remove local Esc key monitor from panel since SwiftUI handles it now.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Window/SessionLauncherPanel.swift\"], \"verifyCommand\": \"xcodebuild -scheme ClaudeIsland -configuration Debug build 2>&1 | tail -3\", \"acceptanceCriteria\": [\"local monitor removed\", \"cancelOperation removed\", \"global click-outside still works\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Lint + Format Pass",
+      "status": "pending",
+      "blockedBy": [1, 2, 3],
+      "description": "Run SwiftFormat and SwiftLint on modified files.\n\n```json:metadata\n{\"files\": [\"ClaudeIsland/UI/Views/SessionLauncherView.swift\", \"ClaudeIsland/UI/Views/DirectoryPickerView.swift\", \"ClaudeIsland/UI/Window/SessionLauncherPanel.swift\"], \"verifyCommand\": \"swiftformat --lint ClaudeIsland/\", \"acceptanceCriteria\": [\"swiftformat clean\", \"swiftlint clean\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-04T23:30:00Z"
+}
