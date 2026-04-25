@@ -28,7 +28,7 @@ struct InlineColorPicker: View {
             .cornerRadius(6)
 
             HStack {
-                Text("Hex:")
+                Text(String(localized: "Hex:"))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.5))
                 Text("#\(self.selectedColor.hexString)")

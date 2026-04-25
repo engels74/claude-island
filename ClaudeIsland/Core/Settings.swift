@@ -16,12 +16,21 @@ enum TokenTrackingMode: String, CaseIterable {
 
     // MARK: Internal
 
+    var displayName: String {
+        switch self {
+        case .disabled:
+            String(localized: "Disabled")
+        case .api:
+            "API"
+        }
+    }
+
     var description: String {
         switch self {
         case .disabled:
-            "Token tracking is off"
+            String(localized: "Token tracking is off")
         case .api:
-            "Fetches real quota from Claude API"
+            String(localized: "Fetches real quota from Claude API")
         }
     }
 }
@@ -35,6 +44,17 @@ enum RingDisplay: String, CaseIterable {
 
     // MARK: Internal
 
+    var displayName: String {
+        switch self {
+        case .session:
+            String(localized: "Session")
+        case .weekly:
+            String(localized: "Weekly")
+        case .both:
+            String(localized: "Both")
+        }
+    }
+
     var showSession: Bool {
         self == .session || self == .both
     }
@@ -46,11 +66,11 @@ enum RingDisplay: String, CaseIterable {
     var description: String {
         switch self {
         case .session:
-            "Show 5-hour session usage only"
+            String(localized: "Show 5-hour session usage only")
         case .weekly:
-            "Show 7-day weekly usage only"
+            String(localized: "Show 7-day weekly usage only")
         case .both:
-            "Show both session and weekly usage"
+            String(localized: "Show both session and weekly usage")
         }
     }
 }
@@ -65,15 +85,26 @@ enum SoundSuppression: String, CaseIterable {
 
     // MARK: Internal
 
+    var displayName: String {
+        switch self {
+        case .never:
+            String(localized: "Never")
+        case .whenFocused:
+            String(localized: "When Focused")
+        case .whenVisible:
+            String(localized: "When Visible")
+        }
+    }
+
     /// Description for UI display
     var description: String {
         switch self {
         case .never:
-            "Sound always plays"
+            String(localized: "Sound always plays")
         case .whenFocused:
-            "Suppresses audio when Claude Island or the terminal is active"
+            String(localized: "Suppresses audio when Claude Island or the terminal is active")
         case .whenVisible:
-            "Suppresses audio when the terminal is visible (≥50% unobscured)"
+            String(localized: "Suppresses audio when the terminal is visible (≥50% unobscured)")
         }
     }
 }
@@ -99,6 +130,41 @@ enum NotificationSound: String, CaseIterable {
     case basso = "Basso"
 
     // MARK: Internal
+
+    var displayName: String {
+        switch self {
+        case .none:
+            String(localized: "None")
+        case .pop:
+            "Pop"
+        case .ping:
+            "Ping"
+        case .tink:
+            "Tink"
+        case .glass:
+            String(localized: "Glass")
+        case .blow:
+            String(localized: "Blow")
+        case .bottle:
+            String(localized: "Bottle")
+        case .frog:
+            String(localized: "Frog")
+        case .funk:
+            String(localized: "Funk")
+        case .hero:
+            String(localized: "Hero")
+        case .morse:
+            String(localized: "Morse")
+        case .purr:
+            String(localized: "Purr")
+        case .sosumi:
+            "Sosumi"
+        case .submarine:
+            String(localized: "Submarine")
+        case .basso:
+            String(localized: "Basso")
+        }
+    }
 
     /// The system sound name to use with NSSound, or nil for no sound
     var soundName: String? {

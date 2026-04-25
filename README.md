@@ -17,6 +17,9 @@
       <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
     </a>
   </p>
+  <p align="center">
+    <a href="README.zh-CN.md">中文</a> | English
+  </p>
   <h3 align="center">Claude Island</h3>
   <p align="center">
     A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions.

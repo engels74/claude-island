@@ -53,11 +53,11 @@ struct ClaudeInstancesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 8) {
-            Text("No sessions")
+            Text(String(localized: "No sessions"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
 
-            Text("Run claude in terminal")
+            Text(String(localized: "Run claude in terminal"))
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.25))
         }
@@ -194,12 +194,12 @@ struct InstanceRow: View {
 
     private var phaseStatusText: String {
         switch self.session.phase {
-        case .processing: "Processing..."
-        case .compacting: "Compacting..."
-        case .waitingForInput: "Ready"
-        case .waitingForApproval: "Waiting for approval"
-        case .idle: "Idle"
-        case .ended: "Ended"
+        case .processing: String(localized: "Processing...")
+        case .compacting: String(localized: "Compacting...")
+        case .waitingForInput: String(localized: "Ready")
+        case .waitingForApproval: String(localized: "Waiting for approval")
+        case .idle: String(localized: "Idle")
+        case .ended: String(localized: "Ended")
         }
     }
 
@@ -219,7 +219,7 @@ struct InstanceRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         if self.isEditing {
-                            TextField("Session name", text: self.$editingName)
+                            TextField(String(localized: "Session name"), text: self.$editingName)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white)
@@ -252,7 +252,7 @@ struct InstanceRow: View {
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundColor(TerminalColors.amber.opacity(0.9))
                             if self.isInteractiveTool {
-                                Text("Needs your input")
+                                Text(String(localized: "Needs your input"))
                                     .font(.system(size: 11))
                                     .foregroundColor(.white.opacity(0.5))
                                     .lineLimit(1)
@@ -281,7 +281,7 @@ struct InstanceRow: View {
                             }
                         case "user":
                             HStack(spacing: 4) {
-                                Text("You:")
+                                Text(String(localized: "You:"))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(.white.opacity(0.5))
                                 if let msg = self.session.lastMessage {
@@ -413,7 +413,7 @@ struct InlineApprovalButtons: View {
             Button {
                 self.onReject()
             } label: {
-                Text("Deny")
+                Text(String(localized: "Deny"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .padding(.horizontal, 10)
@@ -428,7 +428,7 @@ struct InlineApprovalButtons: View {
             Button {
                 self.onApprove()
             } label: {
-                Text("Allow")
+                Text(String(localized: "Allow"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.black)
                     .padding(.horizontal, 10)
@@ -505,7 +505,7 @@ struct CompactTerminalButton: View {
             HStack(spacing: 2) {
                 Image(systemName: "terminal")
                     .font(.system(size: 8, weight: .medium))
-                Text("Go to Terminal")
+                Text(String(localized: "Go to Terminal"))
                     .font(.system(size: 10, weight: .medium))
             }
             .foregroundColor(self.isEnabled ? .white.opacity(0.9) : .white.opacity(0.3))
@@ -533,7 +533,7 @@ struct TerminalButton: View {
             HStack(spacing: 3) {
                 Image(systemName: "terminal")
                     .font(.system(size: 9, weight: .medium))
-                Text("Terminal")
+                Text(String(localized: "Terminal"))
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(self.isEnabled ? .black : .white.opacity(0.4))

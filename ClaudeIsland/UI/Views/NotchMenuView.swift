@@ -42,7 +42,7 @@ struct NotchMenuView: View {
                         // Back button
                         MenuRow(
                             icon: "chevron.left",
-                            label: "Back",
+                            label: String(localized: "Back"),
                         ) {
                             self.viewModel.toggleMenu()
                         }
@@ -59,7 +59,7 @@ struct NotchMenuView: View {
 
                         MenuToggleRow(
                             icon: "arrow.up.left.and.arrow.down.right",
-                            label: "Notch Auto-Expand",
+                            label: String(localized: "Notch Auto-Expand"),
                             isOn: self.notchAutoExpand,
                         ) {
                             self.notchAutoExpand.toggle()
@@ -67,7 +67,7 @@ struct NotchMenuView: View {
 
                         MenuRow(
                             icon: "rectangle.split.3x1",
-                            label: "Notch Layout",
+                            label: String(localized: "Notch Layout"),
                         ) {
                             self.showLayoutSettings = true
                         }
@@ -86,7 +86,7 @@ struct NotchMenuView: View {
                         // System settings
                         MenuToggleRow(
                             icon: "power",
-                            label: "Launch at Login",
+                            label: String(localized: "Launch at Login"),
                             isOn: self.launchAtLogin,
                         ) {
                             do {
@@ -104,7 +104,7 @@ struct NotchMenuView: View {
 
                         MenuToggleRow(
                             icon: "arrow.triangle.2.circlepath",
-                            label: "Hooks",
+                            label: String(localized: "Hooks"),
                             isOn: self.hooksInstalled,
                         ) {
                             // Cancel any in-flight installation tasks first (both local and AppDelegate's)
@@ -136,7 +136,7 @@ struct NotchMenuView: View {
 
                         MenuToggleRow(
                             icon: "text.line.first.and.arrowforward",
-                            label: "Verbose Mode",
+                            label: String(localized: "Verbose Mode"),
                             isOn: self.verboseMode,
                         ) {
                             self.verboseMode.toggle()
@@ -151,14 +151,14 @@ struct NotchMenuView: View {
 
                         MenuRow(
                             icon: "list.bullet.rectangle",
-                            label: "What's New",
+                            label: String(localized: "What's New"),
                         ) {
                             self.showWhatsNew = true
                         }
 
                         MenuRow(
                             icon: "star",
-                            label: "Star on GitHub",
+                            label: String(localized: "Star on GitHub"),
                         ) {
                             if let url = URL(string: "https://github.com/engels74/claude-island") {
                                 NSWorkspace.shared.open(url)
@@ -171,7 +171,7 @@ struct NotchMenuView: View {
 
                         MenuRow(
                             icon: "xmark.circle",
-                            label: "Quit",
+                            label: String(localized: "Quit"),
                             isDestructive: true,
                         ) {
                             NSApplication.shared.terminate(nil)
@@ -340,23 +340,23 @@ struct UpdateRow: View {
     private var label: String {
         switch self.updateManager.state {
         case .idle:
-            "Check for Updates"
+            String(localized: "Check for Updates")
         case .checking:
-            "Checking..."
+            String(localized: "Checking...")
         case .upToDate:
-            "Check for Updates"
+            String(localized: "Check for Updates")
         case .found:
-            "Download Update"
+            String(localized: "Download Update")
         case .downloading:
-            "Downloading..."
+            String(localized: "Downloading...")
         case .extracting:
-            "Extracting..."
+            String(localized: "Extracting...")
         case .readyToInstall:
-            "Install & Relaunch"
+            String(localized: "Install & Relaunch")
         case .installing:
-            "Installing..."
+            String(localized: "Installing...")
         case .error:
-            "Update failed"
+            String(localized: "Update failed")
         }
     }
 
@@ -408,7 +408,7 @@ struct UpdateRow: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(TerminalColors.green)
-                Text("Up to date")
+                Text(String(localized: "Up to date"))
                     .font(.system(size: 11))
                     .foregroundColor(TerminalColors.green)
             }
@@ -462,7 +462,7 @@ struct UpdateRow: View {
             }
 
         case .error:
-            Text("Retry")
+            Text(String(localized: "Retry"))
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.5))
         }
@@ -499,7 +499,7 @@ struct AccessibilityRow: View {
                 .foregroundColor(self.textColor)
                 .frame(width: 16)
 
-            Text("Accessibility")
+            Text(String(localized: "Accessibility"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(self.textColor)
 
@@ -510,12 +510,12 @@ struct AccessibilityRow: View {
                     .fill(TerminalColors.green)
                     .frame(width: 6, height: 6)
 
-                Text("On")
+                Text(String(localized: "On"))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.4))
             } else {
                 Button(action: self.handleEnableAction) {
-                    Text("Enable")
+                    Text(String(localized: "Enable"))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.black)
                         .padding(.horizontal, 10)
@@ -628,7 +628,7 @@ struct MenuToggleRow: View {
                     .fill(self.isOn ? TerminalColors.green : Color.white.opacity(0.3))
                     .frame(width: 6, height: 6)
 
-                Text(self.isOn ? "On" : "Off")
+                Text(self.isOn ? String(localized: "On") : String(localized: "Off"))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.4))
             }
@@ -672,7 +672,7 @@ struct TokenTrackingRow: View {
                         .foregroundColor(self.textColor)
                         .frame(width: 16)
 
-                    Text("Token Tracking")
+                    Text(String(localized: "Token Tracking"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(self.textColor)
 
@@ -742,9 +742,9 @@ struct TokenTrackingRow: View {
     }
 
     private var modeSelector: some View {
-        Picker("Mode", selection: self.$tokenMode) {
+        Picker(String(localized: "Mode"), selection: self.$tokenMode) {
             ForEach(TokenTrackingMode.allCases, id: \.self) { mode in
-                Text(mode.rawValue).tag(mode)
+                Text(mode.displayName).tag(mode)
             }
         }
         .pickerStyle(.segmented)
@@ -760,7 +760,7 @@ struct TokenTrackingRow: View {
     private var apiSettings: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: self.$useCLIOAuth) {
-                Text("Use CLI OAuth")
+                Text(String(localized: "Use CLI OAuth"))
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.7))
             }
@@ -775,11 +775,11 @@ struct TokenTrackingRow: View {
 
             if !self.useCLIOAuth {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Session Key")
+                    Text(String(localized: "Session Key"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.5))
 
-                    SecureField("Paste session key", text: self.$sessionKey)
+                    SecureField(String(localized: "Paste session key"), text: self.$sessionKey)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                         .onSubmit {
@@ -796,7 +796,7 @@ struct TokenTrackingRow: View {
     private var displaySettings: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show when minimized", isOn: self.$showRingsMinimized)
+                Toggle(String(localized: "Show when minimized"), isOn: self.$showRingsMinimized)
                     .font(.system(size: 12))
                     .toggleStyle(.switch)
                     .controlSize(.mini)
@@ -805,9 +805,9 @@ struct TokenTrackingRow: View {
                     }
 
                 if self.showRingsMinimized {
-                    Picker("Display", selection: self.$ringDisplay) {
+                    Picker(String(localized: "Display"), selection: self.$ringDisplay) {
                         ForEach(RingDisplay.allCases, id: \.self) { display in
-                            Text(display.rawValue).tag(display)
+                            Text(display.displayName).tag(display)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -820,7 +820,7 @@ struct TokenTrackingRow: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Toggle("Show reset time", isOn: self.$showResetTime)
+                Toggle(String(localized: "Show reset time"), isOn: self.$showResetTime)
                     .font(.system(size: 12))
                     .toggleStyle(.switch)
                     .controlSize(.mini)
@@ -829,7 +829,7 @@ struct TokenTrackingRow: View {
                     }
 
                 if self.showResetTime, let resetTime = self.tokenTrackingManager.sessionResetTime {
-                    Text("Resets \(resetTime.formatted(date: .omitted, time: .shortened))")
+                    Text(String(localized: "Resets \(resetTime.formatted(date: .omitted, time: .shortened))"))
                         .font(.system(size: 10))
                         .foregroundColor(TerminalColors.green)
                         .padding(.leading, 20)

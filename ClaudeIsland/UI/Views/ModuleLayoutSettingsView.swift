@@ -30,19 +30,19 @@ struct ModuleLayoutSettingsView: View {
 
                 HStack(alignment: .top, spacing: 12) {
                     ModuleColumnView(
-                        title: "Left",
+                        title: String(localized: "Left"),
                         modules: self.$leftModules,
                         registry: self.layoutEngine.registry,
                     ) { id, beforeID in self.handleDrop(id: id, targetSide: .left, beforeID: beforeID) }
                     ModuleColumnView(
-                        title: "Right",
+                        title: String(localized: "Right"),
                         modules: self.$rightModules,
                         registry: self.layoutEngine.registry,
                     ) { id, beforeID in self.handleDrop(id: id, targetSide: .right, beforeID: beforeID) }
                 }
 
                 ModuleColumnView(
-                    title: "Hidden",
+                    title: String(localized: "Hidden"),
                     modules: self.$hiddenModules,
                     registry: self.layoutEngine.registry,
                 ) { id, beforeID in self.handleDrop(id: id, targetSide: .hidden, beforeID: beforeID) }
@@ -72,7 +72,7 @@ struct ModuleLayoutSettingsView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 10, weight: .medium))
-                    Text("Layout")
+                    Text(String(localized: "Layout"))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.7))
@@ -85,7 +85,7 @@ struct ModuleLayoutSettingsView: View {
                 self.layoutEngine.resetToDefaults()
                 self.loadFromConfig()
             } label: {
-                Text("Reset")
+                Text(String(localized: "Reset"))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -196,7 +196,7 @@ private struct ModuleColumnView: View {
                     .frame(maxWidth: .infinity, minHeight: self.modules.isEmpty ? 32 : 16)
                     .overlay {
                         if self.modules.isEmpty {
-                            Text("None")
+                            Text(String(localized: "None"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.2))
                         }

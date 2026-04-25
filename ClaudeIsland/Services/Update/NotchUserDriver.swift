@@ -56,7 +56,7 @@ final class UpdateManager {
         if let updater = AppDelegate.shared?.updater {
             updater.checkForUpdates()
         } else {
-            self.state = .error(message: "Updater not initialized")
+            self.state = .error(message: String(localized: "Updater not initialized"))
         }
     }
 

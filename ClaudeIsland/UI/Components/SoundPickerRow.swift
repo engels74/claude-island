@@ -30,13 +30,13 @@ struct SoundPickerRow: View {
                         .foregroundColor(self.textColor)
                         .frame(width: 16)
 
-                    Text("Notification Sound")
+                    Text(String(localized: "Notification Sound"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(self.textColor)
 
                     Spacer()
 
-                    Text(self.selectedSound.rawValue)
+                    Text(self.selectedSound.displayName)
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.4))
                         .lineLimit(1)
@@ -118,7 +118,7 @@ private struct SoundOptionRowInline: View {
                     .fill(self.isSelected ? TerminalColors.green : Color.white.opacity(0.2))
                     .frame(width: 6, height: 6)
 
-                Text(self.sound.rawValue)
+                Text(self.sound.displayName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(self.isHovered ? 1.0 : 0.7))
 

@@ -29,13 +29,13 @@ struct SuppressionPickerRow: View {
                         .foregroundColor(self.textColor)
                         .frame(width: 16)
 
-                    Text("Sound Suppression")
+                    Text(String(localized: "Sound Suppression"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(self.textColor)
 
                     Spacer()
 
-                    Text(self.selectedSuppression.rawValue)
+                    Text(self.selectedSuppression.displayName)
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.4))
                         .lineLimit(1)
@@ -111,7 +111,7 @@ private struct SuppressionOptionRowInline: View {
                     .frame(width: 6, height: 6)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(self.suppression.rawValue)
+                    Text(self.suppression.displayName)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white.opacity(self.isHovered ? 1.0 : 0.7))
 
