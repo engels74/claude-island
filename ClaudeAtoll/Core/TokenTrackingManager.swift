@@ -513,7 +513,7 @@ extension TokenTrackingManager {
 
     /// Load cached CLI OAuth JSON blob (never prompts).
     func loadCLIOAuthCache() -> Data? {
-        self.readKeychainData(service: Self.keychainService, account: Self.cliOAuthCacheAccount)
+        self.readKeychainData(service: Self.keychainService, account: Self.cliOAuthCacheAccount, allowUserInteraction: false)
     }
 
     /// Delete the cached CLI OAuth data.

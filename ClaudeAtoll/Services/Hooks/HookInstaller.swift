@@ -48,10 +48,15 @@ enum HookInstaller {
         if let bundled = Bundle.main.url(forResource: "claude-atoll-state", withExtension: "py") {
             do {
                 try FileManager.default.atomicCopy(from: bundled, to: pythonScript)
-                try? FileManager.default.setAttributes(
-                    [.posixPermissions: 0o755],
-                    ofItemAtPath: pythonScript.path,
-                )
+                do {
+                    try FileManager.default.setAttributes(
+                        [.posixPermissions: 0o755],
+                        ofItemAtPath: pythonScript.path,
+                    )
+                } catch {
+                    Self.logger.error("Failed to set executable permission on hook script: \(error.localizedDescription)")
+                    return
+                }
                 didInstallHookScript = true
             } catch {
                 Self.logger.error("Failed to install hook script: \(error.localizedDescription)")
@@ -285,11 +290,14 @@ extension FileManager {
             return true
         }
 
-        guard let newData = try? JSONSerialization.data(
-            withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys],
-        )
-        else {
+        let newData: Data
+        do {
+            newData = try JSONSerialization.data(
+                withJSONObject: json,
+                options: [.prettyPrinted, .sortedKeys],
+            )
+        } catch {
+            SettingsIO.logger.error("Failed to serialize \(fileURL.lastPathComponent): \(error.localizedDescription)")
             return false
         }
 
