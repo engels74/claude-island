@@ -178,6 +178,13 @@ final class TokenTrackingManager {
 
     // MARK: Private
 
+    private enum KeychainReadResult {
+        case found(Data)
+        case notFound
+        case failed(OSStatus)
+        case invalidResult
+    }
+
     nonisolated private static let logger = Logger(subsystem: "com.engels74.ClaudeAtoll", category: "TokenTrackingManager")
 
     private static let keychainService = "com.engels74.ClaudeAtoll"
@@ -209,122 +216,6 @@ final class TokenTrackingManager {
                 try? await Task.sleep(for: .seconds(interval))
             }
         }
-    }
-
-    /// Migrate session key from UserDefaults to Keychain (one-time migration)
-    private func migrateSessionKeyFromDefaults() {
-        // If Keychain already has a value, skip migration
-        if self.loadSessionKey() != nil { return }
-
-        // Check if UserDefaults has a value to migrate
-        let defaults = UserDefaults.standard
-        if let existingKey = defaults.string(forKey: Self.sessionKeyDefaultsKey), !existingKey.isEmpty {
-            if self.saveSessionKey(existingKey) {
-                defaults.removeObject(forKey: Self.sessionKeyDefaultsKey)
-                Self.logger.info("Migrated session key from UserDefaults to Keychain")
-            } else {
-                Self.logger.error("Failed to migrate session key to Keychain, keeping UserDefaults entry")
-            }
-            return
-        }
-
-        if let existingKey = self.legacyDefaultsSessionKey(), !existingKey.isEmpty {
-            if self.saveSessionKey(existingKey) {
-                self.removeLegacyDefaultsSessionKey()
-                Self.logger.info("Migrated session key from legacy UserDefaults domain to Keychain")
-            } else {
-                Self.logger.error("Failed to migrate legacy UserDefaults session key to Keychain, keeping legacy entry")
-            }
-        }
-    }
-
-    private func migrateKeychainItemsFromLegacyService() {
-        self.copyLegacyKeychainItemIfNeeded(account: Self.sessionKeyAccount, label: "session key")
-        self.copyLegacyKeychainItemIfNeeded(account: Self.cliOAuthCacheAccount, label: "CLI OAuth cache")
-    }
-
-    private func copyLegacyKeychainItemIfNeeded(account: String, label: String) {
-        guard self.readKeychainData(service: Self.keychainService, account: account) == nil,
-              let legacyData = self.readKeychainData(service: Self.legacyKeychainService, account: account, allowUserInteraction: false)
-        else {
-            return
-        }
-
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.keychainService,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: legacyData,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        if status == errSecSuccess {
-            Self.logger.info("Copied legacy \(label) Keychain item to Claude Atoll service")
-            return
-        }
-
-        if status == errSecDuplicateItem {
-            let updateQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: Self.keychainService,
-                kSecAttrAccount as String: account,
-            ]
-            let updateAttributes: [String: Any] = [
-                kSecValueData as String: legacyData,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            ]
-            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
-            if updateStatus == errSecSuccess {
-                Self.logger.info("Updated existing \(label) Keychain item with legacy data")
-            } else {
-                Self.logger.error("Failed to update existing \(label) Keychain item with legacy data: \(updateStatus)")
-            }
-            return
-        }
-
-        Self.logger.error("Failed to copy legacy \(label) Keychain item: \(status)")
-    }
-
-    private func legacyDefaultsSessionKey() -> String? {
-        UserDefaults.standard.persistentDomain(forName: Self.legacyDefaultsDomain)?[Self.sessionKeyDefaultsKey] as? String
-    }
-
-    private func removeLegacyDefaultsSessionKey() {
-        guard var domain = UserDefaults.standard.persistentDomain(forName: Self.legacyDefaultsDomain) else {
-            return
-        }
-
-        domain.removeValue(forKey: Self.sessionKeyDefaultsKey)
-        if domain.isEmpty {
-            UserDefaults.standard.removePersistentDomain(forName: Self.legacyDefaultsDomain)
-        } else {
-            UserDefaults.standard.setPersistentDomain(domain, forName: Self.legacyDefaultsDomain)
-        }
-    }
-
-    private func readKeychainData(service: String, account: String, allowUserInteraction: Bool = true) -> Data? {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        if !allowUserInteraction {
-            let context = LAContext()
-            context.interactionNotAllowed = true
-            query[kSecUseAuthenticationContext as String] = context
-        }
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-
-        return data
     }
 
     private func refreshFromAPI(interaction: InteractionContext) async throws(TokenTrackingError) {
@@ -400,6 +291,176 @@ final class TokenTrackingManager {
             percentage: response.sevenDay.utilization,
             resetTime: response.sevenDay.resetsAt,
         )
+    }
+}
+
+// MARK: - Migration and Keychain Helpers
+
+private extension TokenTrackingManager {
+    /// Migrate session key from UserDefaults to Keychain (one-time migration)
+    private func migrateSessionKeyFromDefaults() {
+        // If Keychain already has a value, skip migration
+        switch self.readKeychainDataResult(service: Self.keychainService, account: Self.sessionKeyAccount) {
+        case let .found(data):
+            if let key = String(data: data, encoding: .utf8), !key.isEmpty {
+                return
+            }
+
+        case .notFound:
+            break
+
+        case let .failed(status):
+            Self.logger.warning("Skipping session key defaults migration because Keychain read failed: \(status)")
+            return
+
+        case .invalidResult:
+            Self.logger.warning("Skipping session key defaults migration because Keychain returned a non-data result")
+            return
+        }
+
+        // Check if UserDefaults has a value to migrate
+        let defaults = UserDefaults.standard
+        if let existingKey = defaults.string(forKey: Self.sessionKeyDefaultsKey), !existingKey.isEmpty {
+            if self.saveSessionKey(existingKey) {
+                defaults.removeObject(forKey: Self.sessionKeyDefaultsKey)
+                Self.logger.info("Migrated session key from UserDefaults to Keychain")
+            } else {
+                Self.logger.error("Failed to migrate session key to Keychain, keeping UserDefaults entry")
+            }
+            return
+        }
+
+        if let existingKey = self.legacyDefaultsSessionKey(), !existingKey.isEmpty {
+            if self.saveSessionKey(existingKey) {
+                self.removeLegacyDefaultsSessionKey()
+                Self.logger.info("Migrated session key from legacy UserDefaults domain to Keychain")
+            } else {
+                Self.logger.error("Failed to migrate legacy UserDefaults session key to Keychain, keeping legacy entry")
+            }
+        }
+    }
+
+    private func migrateKeychainItemsFromLegacyService() {
+        self.copyLegacyKeychainItemIfNeeded(account: Self.sessionKeyAccount, label: "session key")
+        self.copyLegacyKeychainItemIfNeeded(account: Self.cliOAuthCacheAccount, label: "CLI OAuth cache")
+    }
+
+    private func copyLegacyKeychainItemIfNeeded(account: String, label: String) {
+        switch self.readKeychainDataResult(service: Self.keychainService, account: account) {
+        case .found:
+            return
+
+        case .notFound:
+            break
+
+        case let .failed(status):
+            Self.logger.warning("Skipping legacy \(label) Keychain migration because Claude Atoll item could not be read: \(status)")
+            return
+
+        case .invalidResult:
+            Self.logger.warning("Skipping legacy \(label) Keychain migration because Claude Atoll item returned a non-data result")
+            return
+        }
+
+        let legacyData: Data
+        switch self.readKeychainDataResult(service: Self.legacyKeychainService, account: account, allowUserInteraction: false) {
+        case let .found(data):
+            legacyData = data
+
+        case .notFound:
+            return
+
+        case let .failed(status):
+            Self.logger.warning("Skipping legacy \(label) Keychain migration because legacy item could not be read: \(status)")
+            return
+
+        case .invalidResult:
+            Self.logger.warning("Skipping legacy \(label) Keychain migration because legacy item returned a non-data result")
+            return
+        }
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Self.keychainService,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: legacyData,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status == errSecSuccess {
+            Self.logger.info("Copied legacy \(label) Keychain item to Claude Atoll service")
+            return
+        }
+
+        if status == errSecDuplicateItem {
+            Self.logger.warning("Skipped copying legacy \(label) Keychain item because a Claude Atoll item already exists")
+            return
+        }
+
+        Self.logger.error("Failed to copy legacy \(label) Keychain item: \(status)")
+    }
+
+    private func legacyDefaultsSessionKey() -> String? {
+        UserDefaults.standard.persistentDomain(forName: Self.legacyDefaultsDomain)?[Self.sessionKeyDefaultsKey] as? String
+    }
+
+    private func removeLegacyDefaultsSessionKey() {
+        guard var domain = UserDefaults.standard.persistentDomain(forName: Self.legacyDefaultsDomain) else {
+            return
+        }
+
+        domain.removeValue(forKey: Self.sessionKeyDefaultsKey)
+        if domain.isEmpty {
+            UserDefaults.standard.removePersistentDomain(forName: Self.legacyDefaultsDomain)
+        } else {
+            UserDefaults.standard.setPersistentDomain(domain, forName: Self.legacyDefaultsDomain)
+        }
+    }
+
+    private func readKeychainData(service: String, account: String, allowUserInteraction: Bool = true) -> Data? {
+        guard case let .found(data) = self.readKeychainDataResult(
+            service: service,
+            account: account,
+            allowUserInteraction: allowUserInteraction,
+        )
+        else {
+            return nil
+        }
+
+        return data
+    }
+
+    private func readKeychainDataResult(service: String, account: String, allowUserInteraction: Bool = true) -> KeychainReadResult {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        if !allowUserInteraction {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data else {
+                return .invalidResult
+            }
+            return .found(data)
+
+        case errSecItemNotFound:
+            return .notFound
+
+        default:
+            return .failed(status)
+        }
     }
 }
 
