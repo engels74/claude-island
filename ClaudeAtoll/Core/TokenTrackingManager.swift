@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LocalAuthentication
 import os.log
 
 // MARK: - InteractionContext
@@ -181,8 +182,10 @@ final class TokenTrackingManager {
 
     private static let keychainService = "com.engels74.ClaudeAtoll"
     private static let legacyKeychainService = "com.engels74.ClaudeIsland"
+    private static let legacyDefaultsDomain = "com.engels74.ClaudeIsland"
     private static let sessionKeyAccount = "token-api-session-key"
     private static let cliOAuthCacheAccount = "cli-oauth-cache"
+    private static let sessionKeyDefaultsKey = "tokenApiSessionKey"
 
     private var refreshTask: Task<Void, Never>?
     private var periodicRefreshTask: Task<Void, Never>?
@@ -215,13 +218,22 @@ final class TokenTrackingManager {
 
         // Check if UserDefaults has a value to migrate
         let defaults = UserDefaults.standard
-        let legacyKey = "tokenApiSessionKey"
-        if let existingKey = defaults.string(forKey: legacyKey), !existingKey.isEmpty {
+        if let existingKey = defaults.string(forKey: Self.sessionKeyDefaultsKey), !existingKey.isEmpty {
             if self.saveSessionKey(existingKey) {
-                defaults.removeObject(forKey: legacyKey)
+                defaults.removeObject(forKey: Self.sessionKeyDefaultsKey)
                 Self.logger.info("Migrated session key from UserDefaults to Keychain")
             } else {
                 Self.logger.error("Failed to migrate session key to Keychain, keeping UserDefaults entry")
+            }
+            return
+        }
+
+        if let existingKey = self.legacyDefaultsSessionKey(), !existingKey.isEmpty {
+            if self.saveSessionKey(existingKey) {
+                self.removeLegacyDefaultsSessionKey()
+                Self.logger.info("Migrated session key from legacy UserDefaults domain to Keychain")
+            } else {
+                Self.logger.error("Failed to migrate legacy UserDefaults session key to Keychain, keeping legacy entry")
             }
         }
     }
@@ -233,7 +245,7 @@ final class TokenTrackingManager {
 
     private func copyLegacyKeychainItemIfNeeded(account: String, label: String) {
         guard self.readKeychainData(service: Self.keychainService, account: account) == nil,
-              let legacyData = self.readKeychainData(service: Self.legacyKeychainService, account: account)
+              let legacyData = self.readKeychainData(service: Self.legacyKeychainService, account: account, allowUserInteraction: false)
         else {
             return
         }
@@ -273,14 +285,37 @@ final class TokenTrackingManager {
         Self.logger.error("Failed to copy legacy \(label) Keychain item: \(status)")
     }
 
-    private func readKeychainData(service: String, account: String) -> Data? {
-        let query: [String: Any] = [
+    private func legacyDefaultsSessionKey() -> String? {
+        UserDefaults.standard.persistentDomain(forName: Self.legacyDefaultsDomain)?[Self.sessionKeyDefaultsKey] as? String
+    }
+
+    private func removeLegacyDefaultsSessionKey() {
+        guard var domain = UserDefaults.standard.persistentDomain(forName: Self.legacyDefaultsDomain) else {
+            return
+        }
+
+        domain.removeValue(forKey: Self.sessionKeyDefaultsKey)
+        if domain.isEmpty {
+            UserDefaults.standard.removePersistentDomain(forName: Self.legacyDefaultsDomain)
+        } else {
+            UserDefaults.standard.setPersistentDomain(domain, forName: Self.legacyDefaultsDomain)
+        }
+    }
+
+    private func readKeychainData(service: String, account: String, allowUserInteraction: Bool = true) -> Data? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+
+        if !allowUserInteraction {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

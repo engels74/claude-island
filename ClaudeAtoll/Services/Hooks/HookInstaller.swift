@@ -35,6 +35,7 @@ enum HookInstaller {
         let pythonScript = hooksDir.appendingPathComponent(Self.hookScriptName)
         let legacyPythonScript = hooksDir.appendingPathComponent(Self.legacyHookScriptName)
         let settings = claudeDir.appendingPathComponent("settings.json")
+        var didInstallHookScript = false
 
         // Check for cancellation before file operations
         guard !Task.isCancelled else { return }
@@ -51,7 +52,7 @@ enum HookInstaller {
                     [.posixPermissions: 0o755],
                     ofItemAtPath: pythonScript.path,
                 )
-                try? FileManager.default.removeItem(at: legacyPythonScript)
+                didInstallHookScript = true
             } catch {
                 Self.logger.error("Failed to install hook script: \(error.localizedDescription)")
             }
@@ -71,6 +72,9 @@ enum HookInstaller {
             return
         }
         await self.updateSettings(at: settings)
+        if didInstallHookScript {
+            try? FileManager.default.removeItem(at: legacyPythonScript)
+        }
     }
 
     /// Check if hooks are currently installed
