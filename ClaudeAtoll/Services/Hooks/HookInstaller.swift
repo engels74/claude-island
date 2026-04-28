@@ -58,6 +58,12 @@ enum HookInstaller {
             }
         }
 
+        let hasHookScript = didInstallHookScript || FileManager.default.fileExists(atPath: pythonScript.path)
+        if !hasHookScript {
+            Self.logger.warning("Skipping hook settings update - hook script was not installed")
+            return
+        }
+
         // Check for cancellation before async runtime detection
         guard !Task.isCancelled else { return }
 
