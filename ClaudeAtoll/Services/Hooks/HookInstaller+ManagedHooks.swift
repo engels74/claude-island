@@ -109,6 +109,32 @@ extension HookInstaller {
         return false
     }
 
+    /// Remove managed hooks from entries while preserving unrelated user hooks.
+    static func removeClaudeAtollHooks(from entries: inout [[String: Any]]) {
+        entries.removeAll { self.isLegacyDirectEntry($0) }
+
+        var indicesToRemove = [Int]()
+        for i in entries.indices {
+            guard var entryHooks = entries[i]["hooks"] as? [[String: Any]] else { continue }
+            let originalCount = entryHooks.count
+
+            entryHooks.removeAll { hook in
+                self.isManagedHookCommand(hook["command"] as? String)
+            }
+            guard entryHooks.count != originalCount else { continue }
+
+            if entryHooks.isEmpty {
+                indicesToRemove.append(i)
+            } else {
+                entries[i]["hooks"] = entryHooks
+            }
+        }
+
+        for index in indicesToRemove.reversed() {
+            entries.remove(at: index)
+        }
+    }
+
     /// Deduplicate managed entries by matcher, merging user hooks from duplicates.
     /// Returns updated entries and set of seen matchers.
     private static func deduplicateClaudeAtollEntries(

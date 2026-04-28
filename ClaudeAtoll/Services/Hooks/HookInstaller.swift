@@ -77,8 +77,8 @@ enum HookInstaller {
         if case .unavailable? = self.detectedRuntime {
             return
         }
-        await self.updateSettings(at: settings)
-        if didInstallHookScript {
+        let didUpdateSettings = await self.updateSettings(at: settings)
+        if didInstallHookScript, didUpdateSettings {
             try? FileManager.default.removeItem(at: legacyPythonScript)
         }
     }
@@ -118,17 +118,14 @@ enum HookInstaller {
             try? FileManager.default.removeItem(at: hooksDir.appendingPathComponent(scriptName))
         }
 
-        await self.withLockedSettings(at: settings) { json in
+        _ = await self.withLockedSettings(at: settings) { json in
             guard var hooks = json["hooks"] as? [String: Any] else {
                 return
             }
 
             for (event, value) in hooks {
                 if var entries = value as? [[String: Any]] {
-                    // Remove both modern wrapped format and legacy direct format entries
-                    entries.removeAll { entry in
-                        self.containsClaudeAtollCommand(entry)
-                    }
+                    self.removeClaudeAtollHooks(from: &entries)
 
                     if entries.isEmpty {
                         hooks.removeValue(forKey: event)
@@ -185,13 +182,12 @@ enum HookInstaller {
     private static func withLockedSettings(
         at settingsURL: URL,
         body: (inout [String: Any]) -> Void,
-    ) async {
+    ) async -> Bool {
         let maxRetries = 5
         let fd = open(settingsURL.path + ".lock", O_CREAT | O_WRONLY | O_CLOEXEC, 0o644)
 
         guard fd >= 0 else {
-            FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
-            return
+            return FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
         }
         defer {
             flock(fd, LOCK_UN)
@@ -207,7 +203,7 @@ enum HookInstaller {
             Self.logger.warning("Could not acquire settings lock after \(maxRetries) retries; proceeding without lock")
         }
 
-        FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
+        return FileManager.default.readModifyWriteJSON(at: settingsURL, body: body)
     }
 
     /// Detect the best available Python runtime
@@ -221,7 +217,7 @@ enum HookInstaller {
         }
     }
 
-    private static func updateSettings(at settingsURL: URL) async {
+    private static func updateSettings(at settingsURL: URL) async -> Bool {
         guard let runtime = detectedRuntime,
               let command = PythonRuntimeDetector.shared.getCommand(
                   for: "~/.claude/hooks/\(hookScriptName)",
@@ -229,12 +225,12 @@ enum HookInstaller {
               )
         else {
             self.logger.warning("Skipping hook settings update - no suitable Python runtime")
-            return
+            return false
         }
 
         Self.logger.info("Using hook command: \(command)")
 
-        await self.withLockedSettings(at: settingsURL) { json in
+        return await self.withLockedSettings(at: settingsURL) { json in
             var hooks = json["hooks"] as? [String: Any] ?? [:]
             let hookEvents = self.buildHookConfigurations(command: command)
 
@@ -269,7 +265,7 @@ private enum SettingsIO {
 extension FileManager {
     /// Read a JSON file, apply a mutation via `body`, and atomic-write it back.
     /// Skips the write if `body` made no changes or the result is an empty object with no existing file.
-    func readModifyWriteJSON(at fileURL: URL, body: (inout [String: Any]) -> Void) {
+    func readModifyWriteJSON(at fileURL: URL, body: (inout [String: Any]) -> Void) -> Bool {
         let fileExisted = fileExists(atPath: fileURL.path)
         var json: [String: Any] = [:]
         let originalData: Data?
@@ -286,7 +282,7 @@ extension FileManager {
 
         // Don't create a new file just to write an empty object
         if !fileExisted, json.isEmpty {
-            return
+            return true
         }
 
         guard let newData = try? JSONSerialization.data(
@@ -294,18 +290,20 @@ extension FileManager {
             options: [.prettyPrinted, .sortedKeys],
         )
         else {
-            return
+            return false
         }
 
         // Skip write if content is unchanged
         if let originalData, newData == originalData {
-            return
+            return true
         }
 
         do {
             try self.atomicWrite(newData, to: fileURL)
+            return true
         } catch {
             SettingsIO.logger.error("Failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)")
+            return false
         }
     }
 
