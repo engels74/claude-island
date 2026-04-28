@@ -274,11 +274,32 @@ extension FileManager {
         let fileExisted = fileExists(atPath: fileURL.path)
         var json: [String: Any] = [:]
         let originalData: Data?
-        if fileExisted,
-           let data = try? Data(contentsOf: fileURL),
-           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            json = existing
-            originalData = data
+
+        if fileExisted {
+            let data: Data
+            do {
+                data = try Data(contentsOf: fileURL)
+            } catch {
+                SettingsIO.logger.error(
+                    "Skipping JSON update for \(fileURL.lastPathComponent): failed to read existing file: \(error.localizedDescription)",
+                )
+                return false
+            }
+
+            do {
+                let object = try JSONSerialization.jsonObject(with: data)
+                guard let existing = object as? [String: Any] else {
+                    SettingsIO.logger.error("Skipping JSON update for \(fileURL.lastPathComponent): existing file is not a JSON object")
+                    return false
+                }
+                json = existing
+                originalData = data
+            } catch {
+                SettingsIO.logger.error(
+                    "Skipping JSON update for \(fileURL.lastPathComponent): failed to parse existing JSON: \(error.localizedDescription)",
+                )
+                return false
+            }
         } else {
             originalData = nil
         }

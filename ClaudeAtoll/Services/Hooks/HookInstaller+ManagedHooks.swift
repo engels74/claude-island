@@ -205,11 +205,29 @@ extension HookInstaller {
         HookInstallerManagedHooksLogger.logger.info("Merged \(userHooks.count) user hook(s) from duplicate entry in \(eventName)")
     }
 
-    /// Update managed command in hooks array
+    /// Update a single managed command in hooks array, removing duplicate managed hooks
     private static func updateClaudeAtollCommand(in hooks: inout [[String: Any]], to command: String) {
-        for j in hooks.indices where self.isManagedHookCommand(hooks[j]["command"] as? String) {
-            hooks[j]["command"] = command
+        let retainedIndex = hooks.firstIndex { hook in
+            guard let hookCommand = hook["command"] as? String else { return false }
+            return hookCommand.contains(Self.hookScriptName)
+        } ?? hooks.firstIndex { hook in
+            self.isManagedHookCommand(hook["command"] as? String)
         }
+
+        guard let retainedIndex else { return }
+
+        var updatedHooks = [[String: Any]]()
+        updatedHooks.reserveCapacity(hooks.count)
+        for (index, hook) in hooks.enumerated() {
+            if index == retainedIndex {
+                var updatedHook = hook
+                updatedHook["command"] = command
+                updatedHooks.append(updatedHook)
+            } else if !self.isManagedHookCommand(hook["command"] as? String) {
+                updatedHooks.append(hook)
+            }
+        }
+        hooks = updatedHooks
     }
 
     /// Check if entry is a legacy direct format (type: command at top level, not wrapped in hooks)
