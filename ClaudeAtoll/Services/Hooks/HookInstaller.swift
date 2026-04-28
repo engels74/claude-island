@@ -47,15 +47,15 @@ enum HookInstaller {
         if let bundled = Bundle.main.url(forResource: "claude-atoll-state", withExtension: "py") {
             do {
                 try FileManager.default.atomicCopy(from: bundled, to: pythonScript)
+                try? FileManager.default.setAttributes(
+                    [.posixPermissions: 0o755],
+                    ofItemAtPath: pythonScript.path,
+                )
+                try? FileManager.default.removeItem(at: legacyPythonScript)
             } catch {
                 Self.logger.error("Failed to install hook script: \(error.localizedDescription)")
             }
-            try? FileManager.default.setAttributes(
-                [.posixPermissions: 0o755],
-                ofItemAtPath: pythonScript.path,
-            )
         }
-        try? FileManager.default.removeItem(at: legacyPythonScript)
 
         // Check for cancellation before async runtime detection
         guard !Task.isCancelled else { return }

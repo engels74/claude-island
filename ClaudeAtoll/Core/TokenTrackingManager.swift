@@ -246,11 +246,31 @@ final class TokenTrackingManager {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         let status = SecItemAdd(addQuery as CFDictionary, nil)
-        if status == errSecSuccess || status == errSecDuplicateItem {
+        if status == errSecSuccess {
             Self.logger.info("Copied legacy \(label) Keychain item to Claude Atoll service")
-        } else {
-            Self.logger.error("Failed to copy legacy \(label) Keychain item: \(status)")
+            return
         }
+
+        if status == errSecDuplicateItem {
+            let updateQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Self.keychainService,
+                kSecAttrAccount as String: account,
+            ]
+            let updateAttributes: [String: Any] = [
+                kSecValueData as String: legacyData,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            ]
+            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
+            if updateStatus == errSecSuccess {
+                Self.logger.info("Updated existing \(label) Keychain item with legacy data")
+            } else {
+                Self.logger.error("Failed to update existing \(label) Keychain item with legacy data: \(updateStatus)")
+            }
+            return
+        }
+
+        Self.logger.error("Failed to copy legacy \(label) Keychain item: \(status)")
     }
 
     private func readKeychainData(service: String, account: String) -> Data? {
