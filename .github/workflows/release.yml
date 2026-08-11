@@ -25,7 +25,7 @@ jobs:
       has_sparkle: ${{ steps.sparkle-key.outputs.has_key }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
