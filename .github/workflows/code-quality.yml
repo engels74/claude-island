@@ -55,7 +55,7 @@ jobs:
           enable-cache: true
 
       - name: Run prek checks
-        uses: j178/prek-action@v2
+        uses: j178/prek-action@v3.0.0
         with:
           extra-args: --all-files --hook-stage manual
         env:
